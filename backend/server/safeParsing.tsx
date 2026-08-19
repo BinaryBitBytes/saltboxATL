@@ -6,3 +6,5 @@ if (!result.success) {
 }
 
 const order: ReceivingOrder = result.data;
+
+export default order;
