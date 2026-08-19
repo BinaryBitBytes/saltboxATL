@@ -1,0 +1,54 @@
+{
+    "PO_#":{
+        "Purchase_Order_Number": "String",
+        "Date_PO_Generated": "String"
+    },
+    "Order":{
+        "ID": "Number",
+        "Date_Received": "String",
+        "Vendor": "String",
+        "Order_#": "String",
+        "Carrier": "String",
+        "Receiver_Name": "String",
+        "Pallet_Count": "Number",
+        "Shipment_Contents":{
+            "Pallet_Receiving": "Object",
+            "Current_Pallet_Working":{
+                "Working_On": ["Pallet_Receiving"],
+                "Pallet_Contents":{
+                    "Total_SKU_Count":"Number",
+                    "Expected_SKU_Count": "Number",
+                    "Total_Case_Count_Pallet":"Number",
+                    "Expected_Case_Count":"Number",
+                    "Is_Partialed":"Boolean",
+                    "Partialed_By_Receiver": "Null",
+                    "Case_Item":{
+                        "UPC_#": "Number",
+                        "SKU_#":"Number",
+                        "Batch_#":"Null",
+                        "Quantity_In_Case":"Number",
+                        "Description":"String",
+                        "Is_Fiber_Item": {
+                            "Fiber":"Boolean",
+                            "Connection_Type":["Connections"],
+                            "Fiber_Strand_Count":["StrandCounnt"],
+                            "Fiber_Lenth_Meters": "Number"
+                        },
+                        "Putaway_Room":["Rooms"],
+                        "Putaway_Location":["Locations"]
+                    }
+                }
+            }
+            
+        },
+        "Outbound_Shipped":{
+            "ID":"Number",
+            "ShippingAssociate":"String",
+            "CarrierCorrespondentName":"String",
+            "Date_Outbound":"String",
+            "Contents_Outbound":{
+                
+            }
+        }
+    }
+}
