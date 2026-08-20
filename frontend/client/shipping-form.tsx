@@ -12,7 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/frontend/client/field";
 import { ScanInput } from "@/frontend/client/scan-input";
+import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
 import { NonEmptyStringSchema } from "@/lib/inventory-schema";
+import { LIMITS } from "@/lib/validation/limits";
 import { matchesScan } from "@/lib/scan-code";
 
 const ShippingHeaderSchema = z.object({
@@ -37,6 +39,8 @@ export function ShippingForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [picks, setPicks] = useState<PickDraft[]>([]);
+  const [confirmLargeInput, setConfirmLargeInput] = useState(false);
+  const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const form = useForm<ShippingHeader>({
     resolver: zodResolver(ShippingHeaderSchema),
     defaultValues: {
@@ -48,6 +52,7 @@ export function ShippingForm({
     },
   });
 
+  const pickTotal = picks.reduce((sum, pick) => sum + pick.quantity, 0);
   const pickMap = useMemo(
     () => new Map(picks.map((pick) => [pick.inventoryItemId, pick.quantity])),
     [picks],
@@ -74,6 +79,12 @@ export function ShippingForm({
           const result = await createShippingOrder({
             ...values,
             picks,
+            ...largeInputPayload(
+              pickTotal,
+              confirmLargeInput,
+              confirmationQuantity,
+              LIMITS.largePickTotal,
+            ),
           });
           if (!result.ok) {
             setError(result.error);
@@ -188,6 +199,15 @@ export function ShippingForm({
       </div>
 
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <LargeInputConfirm
+        total={pickTotal}
+        threshold={LIMITS.largePickTotal}
+        label="shipment quantity"
+        confirmed={confirmLargeInput}
+        onConfirmedChange={setConfirmLargeInput}
+        confirmationQuantity={confirmationQuantity}
+        onConfirmationQuantityChange={setConfirmationQuantity}
+      />
       <div>
         <Button type="submit" disabled={pending || inventory.every((row) => row.quantity <= 0)}>
           {pending ? "Shipping…" : "Ship selected inventory"}

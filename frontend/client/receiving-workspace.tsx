@@ -24,6 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { ScanInput } from "@/frontend/client/scan-input";
+import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import { LIMITS } from "@/lib/validation/limits";
 import { useReceivingSession } from "@/frontend/client/receiving-session";
 import { cn } from "@/lib/utils";
 import type { ScanPayload } from "@/lib/scan-code";
@@ -154,7 +156,17 @@ export function ReceivingWorkspace({
         </CardContent>
       </Card>
 
-      {editable ? <ReceivingActions orderId={order.id} /> : null}
+      {editable ? (
+        <ReceivingActions
+          orderId={order.id}
+          totalUnits={order.pallets.reduce(
+            (sum, pallet) =>
+              sum +
+              pallet.cases.reduce((caseSum, item) => caseSum + item.quantityInCase, 0),
+            0,
+          )}
+        />
+      ) : null}
     </div>
   );
 }
@@ -280,6 +292,8 @@ function WorkingCaseForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [confirmLargeInput, setConfirmLargeInput] = useState(false);
+  const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const form = useForm<CaseFormValues>({
     resolver: zodResolver(CaseFormSchema),
     defaultValues: {
@@ -302,6 +316,10 @@ function WorkingCaseForm({
     name: "putawayRoomId",
   });
   const isFiber = useWatch({ control: form.control, name: "isFiber" });
+  const quantityInCase = useWatch({
+    control: form.control,
+    name: "quantityInCase",
+  });
   const roomLocations = useMemo(
     () =>
       locations.filter(
@@ -393,6 +411,11 @@ function WorkingCaseForm({
                         : null,
                     }
                   : null,
+                ...largeInputPayload(
+                  Number(values.quantityInCase),
+                  confirmLargeInput,
+                  confirmationQuantity,
+                ),
               });
               if (!result.ok) {
                 setError(result.error);
@@ -510,6 +533,15 @@ function WorkingCaseForm({
               </NativeSelect>
             </Field>
           </div>
+          <LargeInputConfirm
+            total={Number(quantityInCase) || 0}
+            threshold={LIMITS.largeQuantity}
+            label="case quantity"
+            confirmed={confirmLargeInput}
+            onConfirmedChange={setConfirmLargeInput}
+            confirmationQuantity={confirmationQuantity}
+            onConfirmationQuantityChange={setConfirmationQuantity}
+          />
           <ErrorText error={error} />
           <Button type="submit" disabled={pending}>
             {pending ? "Adding…" : "Add case to pallet"}
@@ -520,20 +552,45 @@ function WorkingCaseForm({
   );
 }
 
-function ReceivingActions({ orderId }: { orderId: string }) {
+function ReceivingActions({
+  orderId,
+  totalUnits,
+}: {
+  orderId: string;
+  totalUnits: number;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [confirmLargeInput, setConfirmLargeInput] = useState(false);
+  const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const clear = useReceivingSession((state) => state.clear);
 
   return (
+    <div className="grid gap-3">
+      <LargeInputConfirm
+        total={totalUnits}
+        threshold={LIMITS.largeQuantity}
+        label="receiving total"
+        confirmed={confirmLargeInput}
+        onConfirmedChange={setConfirmLargeInput}
+        confirmationQuantity={confirmationQuantity}
+        onConfirmationQuantityChange={setConfirmationQuantity}
+      />
     <div className="flex flex-wrap items-center gap-2">
       <Button
         disabled={pending}
         onClick={() => {
           setError(null);
           startTransition(async () => {
-            const result = await completeReceiving(orderId);
+            const result = await completeReceiving(
+              orderId,
+              largeInputPayload(
+                totalUnits,
+                confirmLargeInput,
+                confirmationQuantity,
+              ),
+            );
             if (!result.ok) {
               setError(result.error);
               return;
@@ -566,6 +623,7 @@ function ReceivingActions({ orderId }: { orderId: string }) {
         Cancel order
       </Button>
       <ErrorText error={error} />
+    </div>
     </div>
   );
 }

@@ -14,6 +14,11 @@ import {
   type PublicUser,
   type UserRole,
 } from "@/lib/inventory-schema";
+import {
+  PasswordSchema,
+  PersonNameSchema,
+  EmailSchema,
+} from "@/lib/validation/fields";
 import { roleLabel } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,9 +41,9 @@ import { Badge } from "@/components/ui/badge";
 import { Field, NativeSelect } from "@/frontend/client/field";
 
 const CreateUserFormSchema = z.object({
-  name: z.string().trim().min(1),
-  email: z.email(),
-  password: z.string().min(8),
+  name: PersonNameSchema,
+  email: EmailSchema,
+  password: PasswordSchema,
   role: z.enum(USER_ROLES),
 });
 

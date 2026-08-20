@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/frontend/client/field";
 import { localDateTimeValue, toIsoDateTime } from "@/lib/format";
+import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import { LIMITS } from "@/lib/validation/limits";
 
 const ReceivingFormSchema = z.object({
   poNumber: NonEmptyStringSchema,
@@ -35,6 +37,8 @@ export default function ReceivingForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [confirmLargeInput, setConfirmLargeInput] = useState(false);
+  const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
 
   const form = useForm<ReceivingFormValues>({
     resolver: zodResolver(ReceivingFormSchema),
@@ -64,6 +68,12 @@ export default function ReceivingForm({
         notes: values.notes,
         receivedAt: toIsoDateTime(values.receivedAtLocal),
         poGeneratedAt: toIsoDateTime(values.poGeneratedAtLocal),
+        ...largeInputPayload(
+          Number(values.loadPalletCount),
+          confirmLargeInput,
+          confirmationQuantity,
+          LIMITS.largePalletCount,
+        ),
       });
 
       if (!result.ok) {
@@ -77,6 +87,10 @@ export default function ReceivingForm({
   });
 
   const errors = form.formState.errors;
+  const loadPalletCount = useWatch({
+    control: form.control,
+    name: "loadPalletCount",
+  });
 
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
@@ -146,6 +160,15 @@ export default function ReceivingForm({
       <Field label="Notes" htmlFor="notes" error={errors.notes?.message}>
         <Textarea id="notes" rows={3} {...form.register("notes")} />
       </Field>
+      <LargeInputConfirm
+        total={Number(loadPalletCount) || 0}
+        threshold={LIMITS.largePalletCount}
+        label="pallet count"
+        confirmed={confirmLargeInput}
+        onConfirmedChange={setConfirmLargeInput}
+        confirmationQuantity={confirmationQuantity}
+        onConfirmationQuantityChange={setConfirmationQuantity}
+      />
       {serverError ? (
         <p className="text-xs text-destructive">{serverError}</p>
       ) : null}

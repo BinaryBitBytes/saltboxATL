@@ -10,11 +10,10 @@ import {
   type Permission,
 } from "@/lib/auth/permissions";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
-import { PublicUserSchema, type PublicUser, type User } from "@/lib/inventory-schema";
+import type { PublicUser } from "@/lib/inventory-schema";
+import { toPublicUser } from "@/lib/validation/user-security";
 
-export function toPublicUser(user: User): PublicUser {
-  return PublicUserSchema.parse(user);
-}
+export { toPublicUser } from "@/lib/validation/user-security";
 
 export const getSessionUser = cache(async (): Promise<PublicUser | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
@@ -71,5 +70,5 @@ export function withCreatedBy(
     rawData && typeof rawData === "object" && !Array.isArray(rawData)
       ? (rawData as Record<string, unknown>)
       : {};
-  return { ...base, createdBy: user.name };
+  return { ...base, createdBy: user.name, passwordHash: undefined, password: undefined };
 }

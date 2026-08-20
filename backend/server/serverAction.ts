@@ -16,13 +16,14 @@ import {
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
 import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
+import { ValidationError } from "@/lib/validation/errors";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
 function fail(error: unknown): ActionResult<never> {
-  if (error instanceof ServiceError) {
+  if (error instanceof ServiceError || error instanceof ValidationError) {
     return { ok: false, error: error.message };
   }
   if (error instanceof Error) {
@@ -101,10 +102,11 @@ export async function addReceivingCase(
 
 export async function completeReceiving(
   orderId: string,
+  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
     await requireApiPermission("receive");
-    const data = await completeReceivingOrder(orderId);
+    const data = await completeReceivingOrder(orderId, confirmation);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     return { ok: true, data };

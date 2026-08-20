@@ -4,13 +4,13 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { flattenError } from "zod";
 import {
+  asAuthError,
   createUserRecord,
   authenticateUser,
   updateUserRecord,
 } from "@/backend/server/auth-service";
 import { requireApiPermission } from "@/backend/server/dal";
 import { deleteSession, createSession } from "@/backend/server/session";
-import { ServiceError } from "@/backend/server/inventory-service";
 import { safeRedirectPath } from "@/lib/auth/permissions";
 import { LoginInputSchema, type PublicUser } from "@/lib/inventory-schema";
 
@@ -51,8 +51,9 @@ export async function loginAction(
     const user = await authenticateUser(parsed.data.email, parsed.data.password);
     await createSession(user);
   } catch (error) {
-    if (error instanceof ServiceError) {
-      return { error: error.message };
+    const message = asAuthError(error);
+    if (message) {
+      return { error: message };
     }
     return { error: "Unable to sign in." };
   }
@@ -74,8 +75,9 @@ export async function createManagedUser(
     revalidatePath("/users");
     return { ok: true, data };
   } catch (error) {
-    if (error instanceof ServiceError) {
-      return { ok: false, error: error.message };
+    const message = asAuthError(error);
+    if (message) {
+      return { ok: false, error: message };
     }
     return { ok: false, error: "Unable to create user." };
   }
@@ -90,8 +92,9 @@ export async function updateManagedUser(
     revalidatePath("/users");
     return { ok: true, data };
   } catch (error) {
-    if (error instanceof ServiceError) {
-      return { ok: false, error: error.message };
+    const message = asAuthError(error);
+    if (message) {
+      return { ok: false, error: message };
     }
     return { ok: false, error: "Unable to update user." };
   }

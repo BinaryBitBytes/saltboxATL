@@ -29,6 +29,16 @@ import {
 } from "@/backend/server/inventory-ops";
 import { readSystem, updateSystem } from "@/backend/server/store";
 import { matchesScan, parseScanCode } from "@/lib/scan-code";
+import { LIMITS } from "@/lib/validation/limits";
+import {
+  assertLargeInputConfirmed,
+  sumQuantities,
+} from "@/lib/validation/large-input";
+import {
+  assertActiveLocation,
+  assertPutawayReady,
+  assertUniquePicks,
+} from "@/lib/validation/inventory-guards";
 
 export class ServiceError extends Error {
   constructor(
@@ -181,6 +191,13 @@ export async function createReceivingOrderRecord(
     throw new ServiceError(parsed.error);
   }
 
+  assertLargeInputConfirmed(
+    parsed.data.loadPalletCount,
+    parsed.data,
+    LIMITS.largePalletCount,
+    "pallet count",
+  );
+
   const now = nowIso();
   const order: ReceivingOrder = {
     id: createId(),
@@ -279,13 +296,20 @@ export async function addCaseToPallet(
       throw new ServiceError("Pallet not found on this receiving order.", 404);
     }
 
+    assertLargeInputConfirmed(
+      parsed.data.quantityInCase,
+      parsed.data,
+      LIMITS.largeQuantity,
+      "case quantity",
+    );
+
     if (parsed.data.putawayLocationId) {
-      const location = system.locations.find(
-        (entry) => entry.id === parsed.data.putawayLocationId,
+      const location = assertActiveLocation(
+        system.locations.find(
+          (entry) => entry.id === parsed.data.putawayLocationId,
+        ),
+        "putaway",
       );
-      if (!location) {
-        throw new ServiceError("Putaway location was not found.");
-      }
       if (
         parsed.data.putawayRoomId &&
         parsed.data.putawayRoomId !== location.roomId
@@ -325,6 +349,7 @@ export async function addCaseToPallet(
 
 export async function completeReceivingOrder(
   orderId: string,
+  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
@@ -336,6 +361,14 @@ export async function completeReceivingOrder(
         "Receive at least one case before completing this order.",
       );
     }
+    assertPutawayReady(cases);
+    const totalUnits = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
+    assertLargeInputConfirmed(
+      totalUnits,
+      confirmation,
+      LIMITS.largeQuantity,
+      "receiving total",
+    );
 
     const now = nowIso();
     const result = putAwayCases(system.inventoryItems, cases, now);
@@ -375,7 +408,28 @@ export async function createShippingOrderRecord(
     throw new ServiceError(parsed.error);
   }
 
+  assertUniquePicks(parsed.data.picks);
+  assertLargeInputConfirmed(
+    sumQuantities(parsed.data.picks),
+    parsed.data,
+    LIMITS.largePickTotal,
+    "shipment quantity",
+  );
+
   return updateSystem((system) => {
+    for (const pick of parsed.data.picks) {
+      const item = system.inventoryItems.find(
+        (entry) => entry.id === pick.inventoryItemId,
+      );
+      if (!item) {
+        throw new ServiceError("One of the selected inventory lines no longer exists.");
+      }
+      assertActiveLocation(
+        system.locations.find((entry) => entry.id === item.locationId),
+        "shipping",
+      );
+    }
+
     const now = nowIso();
     const { remaining, shippedCases, changes } = pickFromInventory(
       system.inventoryItems,
@@ -495,8 +549,15 @@ export async function getTransactionRows(): Promise<InventoryTransactionRow[]> {
 export async function lookupInventoryByCode(
   code: string,
 ): Promise<InventoryRow[]> {
+  const trimmed = code.trim();
+  if (!trimmed) {
+    throw new ServiceError("Query parameter `code` is required.");
+  }
+  if (trimmed.length > LIMITS.notes) {
+    throw new ServiceError("Scan code is too long.");
+  }
   const system = await readSystem();
-  return lookupInventory(system, code);
+  return lookupInventory(system, trimmed);
 }
 
 export async function createAdjustmentRecord(rawData: unknown) {
@@ -509,6 +570,13 @@ export async function createAdjustmentRecord(rawData: unknown) {
   if (!["overage", "shortage", "damage"].includes(input.type)) {
     throw new ServiceError("Adjustment type must be overage, shortage, or damage.");
   }
+
+  assertLargeInputConfirmed(
+    input.quantity,
+    input,
+    LIMITS.largeQuantity,
+    "adjustment quantity",
+  );
 
   return updateSystem((system) => {
     const now = nowIso();
@@ -565,17 +633,17 @@ export async function createAdjustmentRecord(rawData: unknown) {
           "Overage of a new line requires a SKU and putaway location.",
         );
       }
-      const location = system.locations.find(
-        (entry) => entry.id === input.locationId,
+      const location = assertActiveLocation(
+        system.locations.find(
+          (entry) => entry.id === input.locationId,
+        ),
+        "overage putaway",
       );
-      if (!location) {
-        throw new ServiceError("Location was not found.", 404);
-      }
       const created = addQuantity(system.inventoryItems, {
         sku,
         upc,
         batch,
-        locationId: input.locationId,
+        locationId: location.id,
         quantity: input.quantity,
         description: input.description,
         now,

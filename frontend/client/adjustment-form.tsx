@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { ScanInput } from "@/frontend/client/scan-input";
+import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import { LIMITS } from "@/lib/validation/limits";
 import { matchesScan, type ScanPayload } from "@/lib/scan-code";
 
 const AdjustmentFormSchema = z.object({
@@ -47,6 +49,8 @@ export function AdjustmentForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [scannedCode, setScannedCode] = useState<string | undefined>();
+  const [confirmLargeInput, setConfirmLargeInput] = useState(false);
+  const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const damagedLocationId =
     locations.find((location) => location.code === "DMG-01")?.id ?? "";
 
@@ -70,6 +74,7 @@ export function AdjustmentForm({
   }, [form, selectedItemId]);
 
   const type = useWatch({ control: form.control, name: "type" });
+  const quantity = useWatch({ control: form.control, name: "quantity" });
   const selectedId = useWatch({
     control: form.control,
     name: "inventoryItemId",
@@ -114,6 +119,11 @@ export function AdjustmentForm({
                   values.type === "damage" && values.moveDamaged
                     ? damagedLocationId || undefined
                     : undefined,
+                ...largeInputPayload(
+                  Number(values.quantity),
+                  confirmLargeInput,
+                  confirmationQuantity,
+                ),
               });
               if (!result.ok) {
                 setError(result.error);
@@ -129,6 +139,8 @@ export function AdjustmentForm({
                 moveDamaged: true,
               });
               setScannedCode(undefined);
+              setConfirmLargeInput(false);
+              setConfirmationQuantity("");
               router.refresh();
             });
           })}
@@ -196,6 +208,15 @@ export function AdjustmentForm({
               Move damaged units to DMG-01 instead of writing them off
             </label>
           ) : null}
+          <LargeInputConfirm
+            total={Number(quantity) || 0}
+            threshold={LIMITS.largeQuantity}
+            label="adjustment quantity"
+            confirmed={confirmLargeInput}
+            onConfirmedChange={setConfirmLargeInput}
+            confirmationQuantity={confirmationQuantity}
+            onConfirmationQuantityChange={setConfirmationQuantity}
+          />
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <Button type="submit" disabled={pending}>
             {pending ? "Saving…" : "Post adjustment"}
