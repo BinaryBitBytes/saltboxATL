@@ -23,3 +23,7 @@ export function toIsoDateTime(value: string | undefined): string | undefined {
 export function uniqueSkuCount(items: { sku: string }[]): number {
   return new Set(items.map((item) => item.sku)).size;
 }
+
+export function formatSignedInt(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}

@@ -8,6 +8,7 @@ import {
   createReceivingOrderRecord,
   createRoomRecord,
   createShippingOrderRecord,
+  createAdjustmentRecord,
   addCaseToPallet,
   addPalletToOrder,
   setWorkingPallet,
@@ -35,6 +36,7 @@ function revalidateInventory() {
   revalidatePath("/inventory");
   revalidatePath("/shipping");
   revalidatePath("/locations");
+  revalidatePath("/transactions");
 }
 
 export async function createReceivingOrder(
@@ -148,6 +150,21 @@ export async function createLocation(
     const data = await createLocationRecord(rawData);
     revalidatePath("/locations");
     return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function createAdjustment(
+  rawData: unknown,
+): Promise<ActionResult<{ sku: string; quantityDelta: number }>> {
+  try {
+    const data = await createAdjustmentRecord(rawData);
+    revalidateInventory();
+    return {
+      ok: true,
+      data: { sku: data.sku, quantityDelta: data.quantityDelta },
+    };
   } catch (error) {
     return fail(error);
   }

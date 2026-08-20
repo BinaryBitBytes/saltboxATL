@@ -1,5 +1,6 @@
 import {
   CaseItemInputSchema,
+  CreateAdjustmentInputSchema,
   CreateLocationInputSchema,
   CreateReceivingOrderInputSchema,
   CreateRoomInputSchema,
@@ -8,6 +9,8 @@ import {
   type CaseItem,
   type InventoryRow,
   type InventorySystem,
+  type InventoryTransaction,
+  type InventoryTransactionRow,
   type Location,
   type Pallet,
   type ReceivingOrder,
@@ -17,11 +20,15 @@ import {
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
+  addQuantity,
+  applyAdjustment,
   pickFromInventory,
   putAwayCases,
   recountPallet,
+  type StockChange,
 } from "@/backend/server/inventory-ops";
 import { readSystem, updateSystem } from "@/backend/server/store";
+import { matchesScan, parseScanCode } from "@/lib/scan-code";
 
 export class ServiceError extends Error {
   constructor(
@@ -50,6 +57,77 @@ export function enrichInventory(
       roomName: room?.name ?? "Unknown room",
     };
   });
+}
+
+export function enrichTransactions(
+  system: InventorySystem,
+): InventoryTransactionRow[] {
+  const rooms = new Map(system.rooms.map((room) => [room.id, room]));
+  const locations = new Map(
+    system.locations.map((location) => [location.id, location]),
+  );
+
+  return system.transactions.map((entry) => {
+    const location = entry.locationId
+      ? locations.get(entry.locationId)
+      : undefined;
+    const destination = entry.destinationLocationId
+      ? locations.get(entry.destinationLocationId)
+      : undefined;
+    const room = location ? rooms.get(location.roomId) : undefined;
+    return {
+      ...entry,
+      locationCode: location?.code ?? "—",
+      roomName: room?.name ?? "—",
+      destinationLocationCode: destination?.code ?? null,
+    };
+  });
+}
+
+const MAX_TRANSACTIONS = 5000;
+
+function appendTransactions(
+  system: InventorySystem,
+  type: InventoryTransaction["type"],
+  changes: StockChange[],
+  extra: Omit<Partial<InventoryTransaction>, "type"> & {
+    occurredAt: string;
+  },
+) {
+  for (const change of changes) {
+    system.transactions.unshift({
+      id: createId(),
+      type,
+      occurredAt: extra.occurredAt,
+      sku: change.sku,
+      upc: change.upc,
+      batch: change.batch,
+      inventoryItemId: change.inventoryItemId,
+      locationId: change.locationId,
+      destinationLocationId:
+        change.destinationLocationId ?? extra.destinationLocationId ?? null,
+      quantityDelta: change.quantityDelta,
+      quantityBefore: change.quantityBefore,
+      quantityAfter: change.quantityAfter,
+      reason: extra.reason,
+      referenceType: extra.referenceType,
+      referenceId: extra.referenceId,
+      scannedCode: extra.scannedCode,
+      createdBy: extra.createdBy,
+      notes: extra.notes,
+    });
+  }
+  if (system.transactions.length > MAX_TRANSACTIONS) {
+    system.transactions.length = MAX_TRANSACTIONS;
+  }
+}
+
+export function lookupInventory(
+  system: InventorySystem,
+  code: string,
+): InventoryRow[] {
+  const parsed = parseScanCode(code);
+  return enrichInventory(system).filter((item) => matchesScan(item, parsed));
 }
 
 function requireOrder(system: InventorySystem, orderId: string): ReceivingOrder {
@@ -259,11 +337,16 @@ export async function completeReceivingOrder(
       );
     }
 
-    system.inventoryItems = putAwayCases(
-      system.inventoryItems,
-      cases,
-      nowIso(),
-    );
+    const now = nowIso();
+    const result = putAwayCases(system.inventoryItems, cases, now);
+    system.inventoryItems = result.items;
+    appendTransactions(system, "receiving", result.changes, {
+      occurredAt: now,
+      referenceType: "receiving-order",
+      referenceId: order.id,
+      createdBy: order.receiverName,
+      reason: `Receiving ${order.orderNumber}`,
+    });
     order.status = "completed";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
@@ -294,7 +377,7 @@ export async function createShippingOrderRecord(
 
   return updateSystem((system) => {
     const now = nowIso();
-    const { remaining, shippedCases } = pickFromInventory(
+    const { remaining, shippedCases, changes } = pickFromInventory(
       system.inventoryItems,
       parsed.data.picks,
       now,
@@ -331,6 +414,13 @@ export async function createShippingOrderRecord(
     };
 
     system.inventoryItems = remaining;
+    appendTransactions(system, "shipping", changes, {
+      occurredAt: now,
+      referenceType: "shipping-order",
+      referenceId: order.id,
+      createdBy: parsed.data.shipperName,
+      reason: `Shipment ${parsed.data.shipmentNumber}`,
+    });
     system.shippingOrders.unshift(order);
     return order;
   });
@@ -395,4 +485,148 @@ export async function createLocationRecord(
 export async function getInventoryRows(): Promise<InventoryRow[]> {
   const system = await readSystem();
   return enrichInventory(system);
+}
+
+export async function getTransactionRows(): Promise<InventoryTransactionRow[]> {
+  const system = await readSystem();
+  return enrichTransactions(system);
+}
+
+export async function lookupInventoryByCode(
+  code: string,
+): Promise<InventoryRow[]> {
+  const system = await readSystem();
+  return lookupInventory(system, code);
+}
+
+export async function createAdjustmentRecord(rawData: unknown) {
+  const parsed = parseWithSchema(CreateAdjustmentInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  const input = parsed.data;
+  if (!["overage", "shortage", "damage"].includes(input.type)) {
+    throw new ServiceError("Adjustment type must be overage, shortage, or damage.");
+  }
+
+  return updateSystem((system) => {
+    const now = nowIso();
+    const scanned = input.scannedCode
+      ? parseScanCode(input.scannedCode)
+      : parseScanCode(input.upc || input.sku || "");
+    const sku = input.sku || scanned.sku;
+    const upc = input.upc || scanned.upc;
+    const batch = input.batch ?? scanned.batch ?? null;
+    const adjustmentId = createId();
+
+    let target = undefined as (typeof system.inventoryItems)[number] | undefined;
+    if (input.inventoryItemId) {
+      target = system.inventoryItems.find(
+        (item) => item.id === input.inventoryItemId,
+      );
+      if (!target) {
+        throw new ServiceError("Inventory line not found.", 404);
+      }
+    }
+
+    if (!target) {
+      const matches = system.inventoryItems.filter((item) => {
+        if (input.locationId && item.locationId !== input.locationId) {
+          return false;
+        }
+        if (input.batch !== undefined && input.batch !== item.batch) {
+          return false;
+        }
+        return matchesScan(item, {
+          raw: input.scannedCode || sku || upc || "",
+          sku,
+          upc,
+          batch: batch ?? undefined,
+        });
+      });
+
+      if (matches.length === 1) {
+        target = matches[0];
+      } else if (matches.length > 1) {
+        const onHand = matches.filter((item) => item.quantity > 0);
+        target = onHand.length === 1 ? onHand[0] : undefined;
+        if (!target) {
+          throw new ServiceError(
+            "Multiple matching inventory lines. Choose a specific location.",
+          );
+        }
+      }
+    }
+
+    if (!target && input.type === "overage") {
+      if (!sku || !input.locationId) {
+        throw new ServiceError(
+          "Overage of a new line requires a SKU and putaway location.",
+        );
+      }
+      const location = system.locations.find(
+        (entry) => entry.id === input.locationId,
+      );
+      if (!location) {
+        throw new ServiceError("Location was not found.", 404);
+      }
+      const created = addQuantity(system.inventoryItems, {
+        sku,
+        upc,
+        batch,
+        locationId: input.locationId,
+        quantity: input.quantity,
+        description: input.description,
+        now,
+      });
+      system.inventoryItems = created.items;
+      appendTransactions(system, "overage", [created.change], {
+        occurredAt: now,
+        reason: input.reason,
+        notes: input.notes,
+        createdBy: input.createdBy,
+        scannedCode: input.scannedCode,
+        referenceType: "adjustment",
+        referenceId: adjustmentId,
+      });
+      return created.change;
+    }
+
+    if (!target) {
+      throw new ServiceError(
+        "No matching inventory line. Scan a barcode/QR or select a SKU and location.",
+      );
+    }
+
+    if (input.type === "damage" && input.moveDamagedToLocationId) {
+      const damagedLocation = system.locations.find(
+        (location) => location.id === input.moveDamagedToLocationId,
+      );
+      if (!damagedLocation) {
+        throw new ServiceError("Damaged hold location was not found.");
+      }
+    }
+
+    const result = applyAdjustment({
+      items: system.inventoryItems,
+      target,
+      type: input.type,
+      quantity: input.quantity,
+      now,
+      damagedLocationId:
+        input.type === "damage" ? input.moveDamagedToLocationId : undefined,
+    });
+    system.inventoryItems = result.items;
+    appendTransactions(system, input.type, result.changes, {
+      occurredAt: now,
+      reason: input.reason,
+      notes: input.notes,
+      createdBy: input.createdBy,
+      scannedCode: input.scannedCode,
+      referenceType: "adjustment",
+      referenceId: adjustmentId,
+    });
+    return result.changes[0];
+  });
 }

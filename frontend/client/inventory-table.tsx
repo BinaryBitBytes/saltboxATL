@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import type { InventoryRow } from "@/lib/inventory-schema";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -18,6 +19,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
+import { ScanInput } from "@/frontend/client/scan-input";
+import { ProductCodes } from "@/frontend/client/product-codes";
+import { matchesScan } from "@/lib/scan-code";
 
 const features = tableFeatures({});
 const columnHelper = createColumnHelper<typeof features, InventoryRow>();
@@ -53,8 +57,17 @@ async function fetchInventory(): Promise<InventoryRow[]> {
   return json.data;
 }
 
-export function InventoryTable({ initialRows }: { initialRows: InventoryRow[] }) {
+export function InventoryTable({
+  initialRows,
+  selectedItemId,
+  onSelectItem,
+}: {
+  initialRows: InventoryRow[];
+  selectedItemId?: string;
+  onSelectItem?: (id: string) => void;
+}) {
   const [query, setQuery] = useState("");
+  const [codesFor, setCodesFor] = useState<string | null>(null);
   const inventoryQuery = useQuery({
     queryKey: ["inventory"],
     queryFn: fetchInventory,
@@ -63,32 +76,47 @@ export function InventoryTable({ initialRows }: { initialRows: InventoryRow[] })
 
   const filtered = useMemo(() => {
     const rows = inventoryQuery.data ?? EMPTY_ROWS;
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim();
     if (!needle) return rows;
     return rows.filter((row) =>
-      [row.sku, row.upc, row.description, row.batch, row.locationCode, row.roomName]
+      matchesScan(row, { raw: needle, sku: needle, upc: needle }) ||
+      [row.description, row.locationCode, row.roomName]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
-        .includes(needle),
+        .includes(needle.toLowerCase()),
     );
   }, [inventoryQuery.data, query]);
 
   const table = useTable({
     features,
     columns,
-    data: filtered.length ? filtered : query ? filtered : inventoryQuery.data ?? EMPTY_ROWS,
+    data: filtered,
     getRowId: (row) => row.id,
   });
 
   const rows = table.getRowModel().rows;
+  const selectedRow = (inventoryQuery.data ?? EMPTY_ROWS).find(
+    (row) => row.id === (codesFor || selectedItemId),
+  );
 
   return (
     <div className="grid gap-3">
+      <ScanInput
+        onScan={(payload) => {
+          const next = payload.upc || payload.sku || payload.raw;
+          setQuery(next);
+          const match = (inventoryQuery.data ?? EMPTY_ROWS).find((row) =>
+            matchesScan(row, payload),
+          );
+          if (match) onSelectItem?.(match.id);
+        }}
+        placeholder="Scan barcode/QR or search SKU, UPC, location"
+      />
       <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search SKU, UPC, location, or description"
+        placeholder="Filter inventory"
       />
       <Table>
         <TableHeader>
@@ -101,29 +129,57 @@ export function InventoryTable({ initialRows }: { initialRows: InventoryRow[] })
                   )}
                 </TableHead>
               ))}
+              <TableHead>Codes</TableHead>
             </TableRow>
           ))}
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length} className="text-muted-foreground">
+              <TableCell colSpan={columns.length + 1} className="text-muted-foreground">
                 No inventory matches.
               </TableCell>
             </TableRow>
           ) : (
             rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow
+                key={row.id}
+                data-state={selectedItemId === row.id ? "selected" : undefined}
+                onClick={() => onSelectItem?.(row.id)}
+                className="cursor-pointer"
+              >
                 {row.getAllCells().map((cell) => (
                   <TableCell key={cell.id}>
                     <table.FlexRender cell={cell} />
                   </TableCell>
                 ))}
+                <TableCell>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setCodesFor((current) =>
+                        current === row.id ? null : row.id,
+                      );
+                    }}
+                  >
+                    {codesFor === row.id ? "Hide" : "Show"}
+                  </Button>
+                </TableCell>
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
+      {selectedRow ? (
+        <ProductCodes
+          sku={selectedRow.sku}
+          upc={selectedRow.upc}
+          batch={selectedRow.batch}
+        />
+      ) : null}
     </div>
   );
 }

@@ -4,11 +4,13 @@ import { createId, nowIso } from "@/backend/server/helperUtils";
 const ROOM_RECEIVING = "11111111-1111-4111-8111-111111111111";
 const ROOM_FIBER = "22222222-2222-4222-8222-222222222222";
 const ROOM_WAREHOUSE = "33333333-3333-4333-8333-333333333333";
+const ROOM_DAMAGED = "44444444-4444-4444-8444-444444444444";
 
 const LOC_DOCK = "aaaa1111-1111-4111-8111-111111111111";
 const LOC_FIBER = "aaaa2222-2222-4222-8222-222222222222";
 const LOC_A0101 = "aaaa3333-3333-4333-8333-333333333333";
 const LOC_A0102 = "aaaa4444-4444-4444-8444-444444444444";
+export const LOC_DAMAGED = "aaaa5555-5555-4555-8555-555555555555";
 
 function sampleItem(
   sku: string,
@@ -53,6 +55,11 @@ export function createSeedSystem(): InventorySystem {
         name: "Warehouse A",
         description: "Primary putaway floor",
       },
+      {
+        id: ROOM_DAMAGED,
+        name: "Damaged Hold",
+        description: "Quarantine for damaged product",
+      },
     ],
     locations: [
       {
@@ -83,6 +90,13 @@ export function createSeedSystem(): InventorySystem {
         description: "Aisle A, bay 01, level 02",
         isActive: true,
       },
+      {
+        id: LOC_DAMAGED,
+        code: "DMG-01",
+        roomId: ROOM_DAMAGED,
+        description: "Damaged / quarantine cage",
+        isActive: true,
+      },
     ],
     inventoryItems: [
       sampleItem(
@@ -108,5 +122,28 @@ export function createSeedSystem(): InventorySystem {
         "B2026-08",
       ),
     ],
+    transactions: [],
   };
+}
+
+export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
+  if (!system.transactions) system.transactions = [];
+
+  if (!system.rooms.some((room) => room.id === ROOM_DAMAGED)) {
+    system.rooms.push({
+      id: ROOM_DAMAGED,
+      name: "Damaged Hold",
+      description: "Quarantine for damaged product",
+    });
+  }
+  if (!system.locations.some((location) => location.code === "DMG-01")) {
+    system.locations.push({
+      id: LOC_DAMAGED,
+      code: "DMG-01",
+      roomId: ROOM_DAMAGED,
+      description: "Damaged / quarantine cage",
+      isActive: true,
+    });
+  }
+  return system;
 }
