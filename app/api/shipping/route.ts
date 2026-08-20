@@ -1,5 +1,5 @@
 import {
-  createReceivingOrderRecord,
+  createShippingOrderRecord,
   listSystem,
 } from "@/backend/server/inventory-service";
 import { jsonError, jsonOk } from "@/backend/server/http";
@@ -7,7 +7,7 @@ import { jsonError, jsonOk } from "@/backend/server/http";
 export async function GET() {
   try {
     const system = await listSystem();
-    return jsonOk(system.receivingOrders);
+    return jsonOk(system.shippingOrders);
   } catch (error) {
     return jsonError(error);
   }
@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const data = await createReceivingOrderRecord(body);
+    const data = await createShippingOrderRecord(body);
     return jsonOk(data, 201);
   } catch (error) {
     return jsonError(error);
