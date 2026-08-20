@@ -1,5 +1,11 @@
-import type { InventoryItem, InventorySystem } from "@/lib/inventory-schema";
+import type {
+  InventoryItem,
+  InventorySystem,
+  User,
+  UserRole,
+} from "@/lib/inventory-schema";
 import { createId, nowIso } from "@/backend/server/helperUtils";
+import { hashPassword } from "@/lib/auth/password";
 
 const ROOM_RECEIVING = "11111111-1111-4111-8111-111111111111";
 const ROOM_FIBER = "22222222-2222-4222-8222-222222222222";
@@ -11,6 +17,38 @@ const LOC_FIBER = "aaaa2222-2222-4222-8222-222222222222";
 const LOC_A0101 = "aaaa3333-3333-4333-8333-333333333333";
 const LOC_A0102 = "aaaa4444-4444-4444-8444-444444444444";
 export const LOC_DAMAGED = "aaaa5555-5555-4555-8555-555555555555";
+
+const USER_MANAGER = "bbbb1111-1111-4111-8111-111111111111";
+const USER_ASSOCIATE = "bbbb2222-2222-4222-8222-222222222222";
+const USER_VIEWER = "bbbb3333-3333-4333-8333-333333333333";
+
+export const DEMO_PASSWORD = "saltbox123";
+
+export const DEMO_ACCOUNTS: Array<{
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}> = [
+  {
+    id: USER_MANAGER,
+    name: "Avery Manager",
+    email: "manager@saltbox.local",
+    role: "manager",
+  },
+  {
+    id: USER_ASSOCIATE,
+    name: "Jordan Associate",
+    email: "associate@saltbox.local",
+    role: "associate",
+  },
+  {
+    id: USER_VIEWER,
+    name: "Riley User",
+    email: "user@saltbox.local",
+    role: "user",
+  },
+];
 
 function sampleItem(
   sku: string,
@@ -123,6 +161,7 @@ export function createSeedSystem(): InventorySystem {
       ),
     ],
     transactions: [],
+    users: [],
   };
 }
 
@@ -146,4 +185,32 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
     });
   }
   return system;
+}
+
+export async function ensureDemoUsers(
+  system: InventorySystem,
+): Promise<boolean> {
+  if (!system.users) system.users = [];
+
+  let changed = false;
+  const now = nowIso();
+  for (const account of DEMO_ACCOUNTS) {
+    if (system.users.some((user) => user.email === account.email)) {
+      continue;
+    }
+    const user: User = {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      passwordHash: await hashPassword(DEMO_PASSWORD),
+      role: account.role,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: "system",
+    };
+    system.users.push(user);
+    changed = true;
+  }
+  return changed;
 }

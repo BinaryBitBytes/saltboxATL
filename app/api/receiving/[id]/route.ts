@@ -5,6 +5,7 @@ import {
   getReceivingOrder,
   ServiceError,
 } from "@/backend/server/inventory-service";
+import { requireApiPermission } from "@/backend/server/dal";
 import { jsonError, jsonOk } from "@/backend/server/http";
 
 export async function GET(
@@ -12,6 +13,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireApiPermission("receive");
     const { id } = await context.params;
     const order = await getReceivingOrder(id);
     return jsonOk(order);
@@ -25,6 +27,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireApiPermission("receive");
     const { id } = await context.params;
     const body = (await request.json()) as {
       action?: string;

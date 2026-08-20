@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
+import { requirePermission } from "@/backend/server/dal";
 import { ShippingStatusBadge } from "@/frontend/client/status-badge";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -15,6 +16,7 @@ export default async function ShippingOrderPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("ship");
   const { id } = await params;
   const system = await getSystem();
   const order = system.shippingOrders.find((entry) => entry.id === id);

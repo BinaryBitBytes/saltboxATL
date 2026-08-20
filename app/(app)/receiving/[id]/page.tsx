@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
+import { requirePermission } from "@/backend/server/dal";
 import { ReceivingWorkspace } from "@/frontend/client/receiving-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { formatDateTime } from "@/lib/format";
@@ -16,6 +17,7 @@ export default async function ReceivingOrderPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("receive");
   const { id } = await params;
   const system = await getSystem();
   const order = system.receivingOrders.find((entry) => entry.id === id);

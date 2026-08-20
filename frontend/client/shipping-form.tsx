@@ -26,7 +26,13 @@ const ShippingHeaderSchema = z.object({
 type ShippingHeader = z.infer<typeof ShippingHeaderSchema>;
 type PickDraft = { inventoryItemId: string; quantity: number };
 
-export function ShippingForm({ inventory }: { inventory: InventoryRow[] }) {
+export function ShippingForm({
+  inventory,
+  defaultShipperName = "",
+}: {
+  inventory: InventoryRow[];
+  defaultShipperName?: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +43,7 @@ export function ShippingForm({ inventory }: { inventory: InventoryRow[] }) {
       customer: "",
       shipmentNumber: "",
       carrierOutbound: "",
-      shipperName: "",
+      shipperName: defaultShipperName,
       notes: "",
     },
   });

@@ -1,5 +1,23 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Authentication
+
+Saltbox uses credential login with httpOnly session cookies. Roles:
+
+| Role | Access |
+| --- | --- |
+| **User** | Dashboard, on-hand inventory, and the transaction log |
+| **Associate** | User access plus receiving and shipping |
+| **Manager** | Associate access plus adjustments, rooms/locations, and user admin |
+
+Demo accounts (password `saltbox123`) are seeded on first boot:
+
+- `manager@saltbox.local`
+- `associate@saltbox.local`
+- `user@saltbox.local`
+
+Set `SESSION_SECRET` in production. If it is missing, the app writes a generated secret to `data/.session-secret`.
+
 ## Getting Started
 
 First, run the development server:

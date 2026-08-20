@@ -1,8 +1,10 @@
 import { getSystem } from "@/backend/server/store";
+import { requireUser } from "@/backend/server/dal";
 import { enrichTransactions } from "@/backend/server/inventory-service";
 import { TransactionsTable } from "@/frontend/client/transactions-table";
 
 export default async function TransactionsPage() {
+  await requireUser();
   const system = await getSystem();
   const rows = enrichTransactions(system);
 

@@ -4,7 +4,6 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Providers } from "@/frontend/client/providers";
-import { AppShell } from "@/components/app-shell";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -37,9 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       )}
     >
       <body className="min-h-full flex flex-col">
-        <Providers>
-          <AppShell>{children}</AppShell>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

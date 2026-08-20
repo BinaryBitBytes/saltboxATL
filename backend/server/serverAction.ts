@@ -14,6 +14,7 @@ import {
   setWorkingPallet,
   ServiceError,
 } from "@/backend/server/inventory-service";
+import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
 import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
 
 export type ActionResult<T> =
@@ -43,7 +44,8 @@ export async function createReceivingOrder(
   rawData: unknown,
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
-    const data = await createReceivingOrderRecord(rawData);
+    const user = await requireApiPermission("receive");
+    const data = await createReceivingOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     revalidatePath(`/receiving/${data.id}`);
     return { ok: true, data };
@@ -57,6 +59,7 @@ export async function addReceivingPallet(
   rawData: unknown,
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
+    await requireApiPermission("receive");
     const data = await addPalletToOrder(orderId, rawData);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
@@ -71,6 +74,7 @@ export async function selectWorkingPallet(
   palletId: string,
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
+    await requireApiPermission("receive");
     const data = await setWorkingPallet(orderId, palletId);
     revalidatePath(`/receiving/${orderId}`);
     return { ok: true, data };
@@ -85,6 +89,7 @@ export async function addReceivingCase(
   rawData: unknown,
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
+    await requireApiPermission("receive");
     const data = await addCaseToPallet(orderId, palletId, rawData);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
@@ -98,6 +103,7 @@ export async function completeReceiving(
   orderId: string,
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
+    await requireApiPermission("receive");
     const data = await completeReceivingOrder(orderId);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
@@ -111,6 +117,7 @@ export async function cancelReceiving(
   orderId: string,
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
+    await requireApiPermission("receive");
     const data = await cancelReceivingOrder(orderId);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
@@ -124,7 +131,8 @@ export async function createShippingOrder(
   rawData: unknown,
 ): Promise<ActionResult<ShippingOrder>> {
   try {
-    const data = await createShippingOrderRecord(rawData);
+    const user = await requireApiPermission("ship");
+    const data = await createShippingOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     revalidatePath(`/shipping/${data.id}`);
     return { ok: true, data };
@@ -135,6 +143,7 @@ export async function createShippingOrder(
 
 export async function createRoom(rawData: unknown): Promise<ActionResult<{ id: string }>> {
   try {
+    await requireApiPermission("manageLocations");
     const data = await createRoomRecord(rawData);
     revalidatePath("/locations");
     return { ok: true, data };
@@ -147,6 +156,7 @@ export async function createLocation(
   rawData: unknown,
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    await requireApiPermission("manageLocations");
     const data = await createLocationRecord(rawData);
     revalidatePath("/locations");
     return { ok: true, data };
@@ -159,7 +169,8 @@ export async function createAdjustment(
   rawData: unknown,
 ): Promise<ActionResult<{ sku: string; quantityDelta: number }>> {
   try {
-    const data = await createAdjustmentRecord(rawData);
+    const user = await requireApiPermission("adjustInventory");
+    const data = await createAdjustmentRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     return {
       ok: true,

@@ -1,4 +1,5 @@
 import { getSystem } from "@/backend/server/store";
+import { requirePermission } from "@/backend/server/dal";
 import { LocationForms } from "@/frontend/client/location-forms";
 import {
   Table,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/table";
 
 export default async function LocationsPage() {
+  await requirePermission("manageLocations");
   const system = await getSystem();
   const rooms = new Map(system.rooms.map((room) => [room.id, room.name]));
 

@@ -27,7 +27,11 @@ const ReceivingFormSchema = z.object({
 
 type ReceivingFormValues = z.infer<typeof ReceivingFormSchema>;
 
-export default function ReceivingForm() {
+export default function ReceivingForm({
+  defaultReceiverName = "",
+}: {
+  defaultReceiverName?: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -39,7 +43,7 @@ export default function ReceivingForm() {
       vendor: "",
       orderNumber: "",
       carrierInbound: "",
-      receiverName: "",
+      receiverName: defaultReceiverName,
       loadPalletCount: 1,
       notes: "",
       receivedAtLocal: localDateTimeValue(),
