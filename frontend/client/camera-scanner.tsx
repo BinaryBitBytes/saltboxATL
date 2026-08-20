@@ -73,7 +73,7 @@ export function CameraScanner({
 
   return (
     <div className="grid gap-2 rounded-lg border border-border p-3">
-      <div id={elementId} className="min-h-40 overflow-hidden rounded-md bg-black" />
+      <div id={elementId} className="min-h-32 max-h-[min(20rem,50dvh)] overflow-hidden rounded-md bg-black short:min-h-24" />
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <Button type="button" variant="outline" onClick={onClose}>
         Close camera

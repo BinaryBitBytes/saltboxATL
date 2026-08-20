@@ -29,11 +29,12 @@ export function ScanInput({
 
   return (
     <div className="grid gap-2">
-      <div className="flex gap-2">
+      <div className="flex min-w-0 flex-wrap gap-2">
         <Input
           value={value}
           autoFocus={autoFocus}
           autoComplete="off"
+          className="min-w-0 flex-1 basis-40"
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {

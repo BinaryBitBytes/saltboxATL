@@ -19,7 +19,7 @@ import { Field, NativeSelect } from "@/frontend/client/field";
 
 export function LocationForms({ rooms }: { rooms: Room[] }) {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid gap-4 sm:gap-6 min-[40rem]:grid-cols-2">
       <RoomForm />
       <LocationForm rooms={rooms} />
     </div>
