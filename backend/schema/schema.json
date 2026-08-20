@@ -50,6 +50,13 @@
                 
             }
         },
+        "Users":{
+            "Role":["user","associate","manager"],
+            "Login":"Email and password",
+            "User":"View dashboard, inventory, and transaction log",
+            "Associate":"User access plus receiving and shipping",
+            "Manager":"Associate access plus adjustments, locations, and user admin"
+        },
         "Inventory_Transactions":{
             "ID":"String",
             "Type":["receiving","shipping","overage","shortage","damage"],

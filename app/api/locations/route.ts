@@ -4,10 +4,12 @@ import {
   listSystem,
   ServiceError,
 } from "@/backend/server/inventory-service";
+import { requireApiPermission, requireApiUser } from "@/backend/server/dal";
 import { jsonError, jsonOk } from "@/backend/server/http";
 
 export async function GET() {
   try {
+    await requireApiUser();
     const system = await listSystem();
     return jsonOk({
       rooms: system.rooms,
@@ -20,6 +22,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    await requireApiPermission("manageLocations");
     const body = (await request.json()) as {
       type?: "room" | "location";
       payload?: unknown;

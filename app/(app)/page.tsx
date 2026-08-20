@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
+import { requireUser } from "@/backend/server/dal";
 import { enrichInventory, enrichTransactions } from "@/backend/server/inventory-service";
+import { hasPermission } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,7 +18,10 @@ import {
 import { formatDateTime, formatSignedInt, uniqueSkuCount } from "@/lib/format";
 
 export default async function Home() {
+  const user = await requireUser();
   const system = await getSystem();
+  const canReceive = hasPermission(user.role, "receive");
+  const canShip = hasPermission(user.role, "ship");
   const inventory = enrichInventory(system);
   const transactions = enrichTransactions(system);
   const openReceiving = system.receivingOrders.filter(
@@ -38,18 +43,24 @@ export default async function Home() {
             Receive inbound pallets, put away cases, and ship from on-hand stock.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button nativeButton={false} render={<Link href="/receiving" />}>
-            New receiving
-          </Button>
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={<Link href="/shipping" />}
-          >
-            New shipment
-          </Button>
-        </div>
+        {canReceive || canShip ? (
+          <div className="flex gap-2">
+            {canReceive ? (
+              <Button nativeButton={false} render={<Link href="/receiving" />}>
+                New receiving
+              </Button>
+            ) : null}
+            {canShip ? (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/shipping" />}
+              >
+                New shipment
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

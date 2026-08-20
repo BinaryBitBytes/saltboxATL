@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
+import { requirePermission } from "@/backend/server/dal";
 import { enrichInventory } from "@/backend/server/inventory-service";
 import { ShippingForm } from "@/frontend/client/shipping-form";
 import { ShippingStatusBadge } from "@/frontend/client/status-badge";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/table";
 
 export default async function ShippingPage() {
+  const user = await requirePermission("ship");
   const system = await getSystem();
   const inventory = enrichInventory(system);
 
@@ -43,7 +45,7 @@ export default async function ShippingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ShippingForm inventory={inventory} />
+          <ShippingForm inventory={inventory} defaultShipperName={user.name} />
         </CardContent>
       </Card>
 

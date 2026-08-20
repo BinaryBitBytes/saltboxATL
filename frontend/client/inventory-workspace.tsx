@@ -8,25 +8,35 @@ import { AdjustmentForm } from "@/frontend/client/adjustment-form";
 export function InventoryWorkspace({
   rows,
   locations,
+  canAdjust = false,
 }: {
   rows: InventoryRow[];
   locations: Location[];
+  canAdjust?: boolean;
 }) {
   const [selectedItemId, setSelectedItemId] = useState<string | undefined>();
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div
+      className={
+        canAdjust
+          ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]"
+          : "grid gap-6"
+      }
+    >
       <InventoryTable
         initialRows={rows}
         selectedItemId={selectedItemId}
         onSelectItem={setSelectedItemId}
       />
-      <AdjustmentForm
-        inventory={rows}
-        locations={locations}
-        selectedItemId={selectedItemId}
-        onSelectedItemIdChange={setSelectedItemId}
-      />
+      {canAdjust ? (
+        <AdjustmentForm
+          inventory={rows}
+          locations={locations}
+          selectedItemId={selectedItemId}
+          onSelectedItemIdChange={setSelectedItemId}
+        />
+      ) : null}
     </div>
   );
 }

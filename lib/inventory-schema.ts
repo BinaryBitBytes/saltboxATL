@@ -304,6 +304,54 @@ export const CreateRoomInputSchema = z.object({
 });
 export type CreateRoomInput = z.infer<typeof CreateRoomInputSchema>;
 
+export const UserRoleSchema = z.enum(["user", "associate", "manager"]);
+export type UserRole = z.infer<typeof UserRoleSchema>;
+export const USER_ROLES = UserRoleSchema.options;
+
+export const UserSchema = z.object({
+  id: UuidSchema,
+  name: NonEmptyStringSchema,
+  email: z.email().trim().toLowerCase(),
+  passwordHash: NonEmptyStringSchema,
+  role: UserRoleSchema,
+  isActive: z.boolean().default(true),
+  createdAt: DateTimeSchema.optional(),
+  updatedAt: DateTimeSchema.optional(),
+  createdBy: z.string().optional(),
+});
+export type User = z.infer<typeof UserSchema>;
+
+export const PublicUserSchema = UserSchema.omit({ passwordHash: true });
+export type PublicUser = z.infer<typeof PublicUserSchema>;
+
+export const LoginInputSchema = z.object({
+  email: z.email().trim().toLowerCase(),
+  password: z.string().min(1),
+  from: z.string().optional(),
+});
+export type LoginInput = z.infer<typeof LoginInputSchema>;
+
+export const CreateUserInputSchema = z.object({
+  name: NonEmptyStringSchema,
+  email: z.email().trim().toLowerCase(),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+  role: UserRoleSchema,
+});
+export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
+
+export const UpdateUserInputSchema = z.object({
+  id: UuidSchema,
+  name: NonEmptyStringSchema.optional(),
+  email: z.email().trim().toLowerCase().optional(),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .optional(),
+  role: UserRoleSchema.optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
   receivingOrders: z.array(ReceivingOrderSchema).default([]),
@@ -312,6 +360,7 @@ export const InventorySystemSchema = z.object({
   locations: z.array(LocationSchema).default([]),
   rooms: z.array(RoomSchema).default([]),
   transactions: z.array(InventoryTransactionSchema).default([]),
+  users: z.array(UserSchema).default([]),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
 

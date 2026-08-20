@@ -344,7 +344,7 @@ export async function completeReceivingOrder(
       occurredAt: now,
       referenceType: "receiving-order",
       referenceId: order.id,
-      createdBy: order.receiverName,
+      createdBy: order.createdBy ?? order.receiverName,
       reason: `Receiving ${order.orderNumber}`,
     });
     order.status = "completed";
@@ -418,7 +418,7 @@ export async function createShippingOrderRecord(
       occurredAt: now,
       referenceType: "shipping-order",
       referenceId: order.id,
-      createdBy: parsed.data.shipperName,
+      createdBy: parsed.data.createdBy ?? parsed.data.shipperName,
       reason: `Shipment ${parsed.data.shipmentNumber}`,
     });
     system.shippingOrders.unshift(order);

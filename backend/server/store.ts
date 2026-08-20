@@ -2,7 +2,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { connection } from "next/server";
 import { InventorySystemSchema, type InventorySystem } from "@/lib/inventory-schema";
-import { createSeedSystem, ensureSystemDefaults } from "@/backend/server/seed";
+import {
+  createSeedSystem,
+  ensureDemoUsers,
+  ensureSystemDefaults,
+} from "@/backend/server/seed";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_PATH = path.join(DATA_DIR, "inventory.json");
@@ -17,13 +21,15 @@ async function readFromDisk(): Promise<InventorySystem> {
       (location) => location.code === "DMG-01",
     );
     ensureSystemDefaults(parsed);
-    if (!hadDamagedHold) {
+    const seededUsers = await ensureDemoUsers(parsed);
+    if (!hadDamagedHold || seededUsers) {
       await persist(parsed);
     }
     return parsed;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       const seed = createSeedSystem();
+      await ensureDemoUsers(seed);
       await persist(seed);
       return seed;
     }

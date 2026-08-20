@@ -35,6 +35,7 @@ yarn-error.log*
 
 # local json inventory database
 /data/inventory.json
+/data/.session-secret
 
 # vercel
 .vercel

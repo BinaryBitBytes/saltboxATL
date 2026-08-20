@@ -11,20 +11,39 @@ import {
   TruckDeliveryIcon,
   PinLocation01Icon,
   TransactionHistoryIcon,
+  UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
+import { logoutAction } from "@/backend/server/auth-actions";
+import { hasPermission, roleLabel, type Permission } from "@/lib/auth/permissions";
+import type { PublicUser } from "@/lib/inventory-schema";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: DashboardSquare01Icon },
-  { href: "/receiving", label: "Receiving", icon: PackageOpenIcon },
-  { href: "/inventory", label: "Inventory", icon: WarehouseIcon },
-  { href: "/transactions", label: "Log", icon: TransactionHistoryIcon },
-  { href: "/shipping", label: "Shipping", icon: TruckDeliveryIcon },
-  { href: "/locations", label: "Locations", icon: PinLocation01Icon },
-] as const;
+const NAV: Array<{
+  href: string;
+  label: string;
+  icon: typeof DashboardSquare01Icon;
+  permission: Permission;
+}> = [
+  { href: "/", label: "Dashboard", icon: DashboardSquare01Icon, permission: "viewDashboard" },
+  { href: "/receiving", label: "Receiving", icon: PackageOpenIcon, permission: "receive" },
+  { href: "/inventory", label: "Inventory", icon: WarehouseIcon, permission: "viewInventory" },
+  { href: "/transactions", label: "Log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
+  { href: "/shipping", label: "Shipping", icon: TruckDeliveryIcon, permission: "ship" },
+  { href: "/locations", label: "Locations", icon: PinLocation01Icon, permission: "manageLocations" },
+  { href: "/users", label: "Users", icon: UserMultipleIcon, permission: "manageUsers" },
+];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  user,
+}: {
+  children: ReactNode;
+  user: PublicUser;
+}) {
   const pathname = usePathname();
+  const items = NAV.filter((item) => hasPermission(user.role, item.permission));
 
   return (
     <div className="min-h-full bg-background text-foreground">
@@ -34,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Saltbox Inventory
           </Link>
           <nav className="flex flex-wrap gap-1">
-            {NAV.map((item) => {
+            {items.map((item) => {
               const active =
                 item.href === "/"
                   ? pathname === "/"
@@ -56,6 +75,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{user.name}</span>
+            <Badge variant="outline">{roleLabel(user.role)}</Badge>
+            <form action={logoutAction}>
+              <Button type="submit" variant="ghost" size="sm">
+                Sign out
+              </Button>
+            </form>
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-4 py-6">{children}</main>

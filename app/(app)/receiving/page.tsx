@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
+import { requirePermission } from "@/backend/server/dal";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/card";
 
 export default async function ReceivingPage() {
+  const user = await requirePermission("receive");
   const system = await getSystem();
 
   return (
@@ -42,7 +44,7 @@ export default async function ReceivingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ReceivingForm />
+          <ReceivingForm defaultReceiverName={user.name} />
         </CardContent>
       </Card>
 
