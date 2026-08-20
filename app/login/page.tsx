@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/backend/server/dal";
 import { LoginForm } from "@/frontend/client/login-form";
+import { ThemeToggle } from "@/frontend/client/theme-toggle";
 import { safeRedirectPath } from "@/lib/auth/permissions";
 
 export default async function LoginPage({
@@ -16,7 +17,10 @@ export default async function LoginPage({
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-background px-4 py-10">
+    <div className="relative flex min-h-dvh items-center justify-center bg-background px-[max(1rem,env(safe-area-inset-left))] py-[max(2.5rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(2.5rem,env(safe-area-inset-bottom))]">
+      <div className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))]">
+        <ThemeToggle />
+      </div>
       <div className="grid w-full max-w-md gap-6">
         <div className="grid gap-1 text-center">
           <p className="text-sm font-semibold tracking-tight">Saltbox Inventory</p>

@@ -20,7 +20,7 @@ export function InventoryWorkspace({
     <div
       className={
         canAdjust
-          ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]"
+          ? "grid gap-6 min-[56rem]:grid-cols-[minmax(0,1fr)_22rem]"
           : "grid gap-6"
       }
     >

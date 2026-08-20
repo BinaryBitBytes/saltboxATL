@@ -20,6 +20,7 @@ import { hasPermission, roleLabel, type Permission } from "@/lib/auth/permission
 import type { PublicUser } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/frontend/client/theme-toggle";
 
 const NAV: Array<{
   href: string;
@@ -48,13 +49,27 @@ export function AppShell({
   const items = NAV.filter((item) => hasPermission(user.role, item.permission));
 
   return (
-    <div className="min-h-full bg-background text-foreground">
-      <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <Link href="/" className="text-sm font-semibold tracking-tight">
-            Saltbox Inventory
-          </Link>
-          <nav className="flex flex-wrap gap-1">
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
+        <div className="page-container flex flex-col gap-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] short:py-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between landscape:short:flex-row landscape:short:items-center">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight">
+              Saltbox Inventory
+            </Link>
+            <div className="flex items-center gap-1 sm:hidden">
+              <ThemeToggle />
+              <Badge variant="outline">{roleLabel(user.role)}</Badge>
+              <form action={logoutAction}>
+                <Button type="submit" variant="ghost" size="sm">
+                  Sign out
+                </Button>
+              </form>
+            </div>
+          </div>
+          <nav
+            aria-label="Main"
+            className="scroll-touch -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1"
+          >
             {items.map((item) => {
               const active =
                 item.href === "/"
@@ -65,7 +80,7 @@ export function AppShell({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs/relaxed transition-colors",
+                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs/relaxed transition-colors landscape:short:h-7",
                     active
                       ? "bg-muted text-foreground"
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
@@ -77,8 +92,11 @@ export function AppShell({
               );
             })}
           </nav>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{user.name}</span>
+          <div className="hidden min-w-0 items-center gap-2 sm:flex">
+            <ThemeToggle />
+            <span className="hidden truncate text-xs text-muted-foreground md:inline">
+              {user.name}
+            </span>
             <Badge variant="outline">{roleLabel(user.role)}</Badge>
             <form action={logoutAction}>
               <Button type="submit" variant="ghost" size="sm">
@@ -88,7 +106,9 @@ export function AppShell({
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-6">{children}</main>
+      <main className="page-container flex-1 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-6 short:py-3">
+        {children}
+      </main>
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   TransactionTypeBadge,
 } from "@/frontend/client/status-badge";
 import { formatDateTime, formatSignedInt, uniqueSkuCount } from "@/lib/format";
+import { emptyActiveLocations } from "@/lib/locations/availability";
 
 export default async function Home() {
   const user = await requireUser();
@@ -33,6 +34,12 @@ export default async function Home() {
     isAwaitingPutaway(order.status),
   );
   const unitsOnHand = inventory.reduce((sum, item) => sum + item.quantity, 0);
+  const activeLocations = system.locations.filter((location) => location.isActive);
+  const availableLocations = emptyActiveLocations(
+    system.locations,
+    system.rooms,
+    system.inventoryItems,
+  );
   const adjustments = transactions.filter((entry) =>
     entry.type === "overage" ||
     entry.type === "shortage" ||
@@ -40,16 +47,16 @@ export default async function Home() {
   ).length;
 
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-xl font-semibold">Dashboard</h1>
+    <div className="grid gap-4 sm:gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-heading text-lg font-semibold sm:text-xl">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             Receive inbound pallets, put away staged cases, and ship from on-hand stock.
           </p>
         </div>
         {canReceive || canPutaway || canShip ? (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {canReceive ? (
               <Button nativeButton={false} render={<Link href="/receiving" />}>
                 New receiving
@@ -77,19 +84,17 @@ export default async function Home() {
         ) : null}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 min-[30rem]:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
         <StatCard label="Units on hand" value={unitsOnHand} />
         <StatCard label="Unique SKUs" value={uniqueSkuCount(inventory)} />
         <StatCard label="Open receiving" value={openReceiving.length} />
         <StatCard label="Awaiting putaway" value={awaitingPutaway.length} />
-        <StatCard
-          label="Active locations"
-          value={system.locations.filter((location) => location.isActive).length}
-        />
+        <StatCard label="Active locations" value={activeLocations.length} />
+        <StatCard label="Empty locations" value={availableLocations.length} />
         <StatCard label="Adjustments posted" value={adjustments} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 min-[56rem]:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Open receiving</CardTitle>
@@ -145,7 +150,7 @@ export default async function Home() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 min-[56rem]:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>On-hand snapshot</CardTitle>
@@ -163,25 +168,66 @@ export default async function Home() {
                 .map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                    className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
                   >
-                    <span>
+                    <span className="min-w-0 truncate">
                       {item.sku}
                       <span className="text-muted-foreground">
                         {" "}
                         · {item.locationCode}
                       </span>
                     </span>
-                    <span>{item.quantity}</span>
+                    <span className="shrink-0">{item.quantity}</span>
                   </div>
                 ))
             )}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Empty locations</CardTitle>
+            <CardDescription>
+              Active bins with no on-hand quantity
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm">
+            {availableLocations.length === 0 ? (
+              <p className="text-muted-foreground">
+                {activeLocations.length === 0
+                  ? "No active locations yet."
+                  : "Every active location currently has stock."}
+              </p>
+            ) : (
+              availableLocations.slice(0, 8).map((location) => (
+                <div
+                  key={location.id}
+                  className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+                >
+                  <span className="min-w-0 truncate font-medium">
+                    {location.code}
+                    <span className="font-normal text-muted-foreground">
+                      {" "}
+                      · {location.roomName}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    empty
+                  </span>
+                </div>
+              ))
+            )}
+            {availableLocations.length > 8 ? (
+              <p className="text-xs text-muted-foreground">
+                +{availableLocations.length - 8} more empty locations
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Recent transactions</CardTitle>
             <CardDescription>Putaway, shipping, and adjustments</CardDescription>
@@ -199,7 +245,7 @@ export default async function Home() {
             transactions.slice(0, 8).map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
               >
                 <span className="min-w-0 truncate">
                   {entry.sku}
@@ -208,7 +254,7 @@ export default async function Home() {
                     · {entry.locationCode} · {formatDateTime(entry.occurredAt)}
                   </span>
                 </span>
-                <span className="flex items-center gap-2">
+                <span className="flex shrink-0 items-center gap-2">
                   <span>{formatSignedInt(entry.quantityDelta)}</span>
                   <TransactionTypeBadge type={entry.type} />
                 </span>
@@ -226,7 +272,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
     <Card>
       <CardHeader>
         <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
+        <CardTitle className="text-xl sm:text-2xl">{value}</CardTitle>
       </CardHeader>
     </Card>
   );

@@ -164,7 +164,7 @@ export function ReceivingWorkspace({
   return (
     <div className="grid gap-6">
       {editable ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,22rem)_1fr]">
+        <div className="grid gap-6 min-[56rem]:grid-cols-[minmax(0,22rem)_1fr]">
           <AddPalletForm orderId={order.id} />
           <WorkingCaseForm
             key={editingCase?.id ?? "new-case"}
