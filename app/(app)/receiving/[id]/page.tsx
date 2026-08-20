@@ -4,6 +4,7 @@ import { requirePermission } from "@/backend/server/dal";
 import { ReceivingWorkspace } from "@/frontend/client/receiving-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { collectKnownProducts } from "@/lib/codes/product-codes";
+import { formatDateTime } from "@/lib/format";
 import {
   Card,
   CardContent,

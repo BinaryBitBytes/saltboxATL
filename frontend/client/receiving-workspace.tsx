@@ -159,10 +159,6 @@ export function ReceivingWorkspace({
     setWorking(order.id, workingPallet?.id ?? null);
   }, [order.id, setWorking, workingPallet?.id]);
 
-  useEffect(() => {
-    if (editing && !editingCase) setEditing(null);
-  }, [editing, editingCase]);
-
   function selectPallet(palletId: string) {
     if (editing && editing.palletId !== palletId) setEditing(null);
     setWorking(order.id, palletId);
@@ -181,6 +177,7 @@ export function ReceivingWorkspace({
         <div className="grid gap-6 xl:grid-cols-[minmax(0,22rem)_1fr]">
           <AddPalletForm orderId={order.id} />
           <WorkingCaseForm
+            key={editingCase?.id ?? "new-case"}
             orderId={order.id}
             pallet={workingPallet}
             rooms={rooms}
@@ -490,7 +487,9 @@ function WorkingCaseForm({
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const form = useForm<CaseFormValues>({
     resolver: zodResolver(CaseFormSchema),
-    defaultValues: emptyCaseValues(rooms),
+    defaultValues: editingCase
+      ? valuesFromCase(editingCase, rooms)
+      : emptyCaseValues(rooms),
   });
 
   const catalog = useMemo(
@@ -498,19 +497,6 @@ function WorkingCaseForm({
       knownProducts.filter((product) => product.caseId !== editingCase?.id),
     [knownProducts, editingCase?.id],
   );
-
-  const editingCaseId = editingCase?.id ?? null;
-
-  // Reset the form only when the edited line changes, not when pallet data refreshes.
-  useEffect(() => {
-    form.reset(
-      editingCase ? valuesFromCase(editingCase, rooms) : emptyCaseValues(rooms),
-    );
-    setError(null);
-    setConfirmLargeInput(false);
-    setConfirmationQuantity("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- editingCaseId is the load trigger
-  }, [editingCaseId, form]);
 
   const selectedRoomId = useWatch({
     control: form.control,
