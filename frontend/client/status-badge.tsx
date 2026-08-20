@@ -13,6 +13,7 @@ const receivingVariant: Record<
 > = {
   draft: "outline",
   "in-progress": "secondary",
+  received: "secondary",
   completed: "default",
   cancelled: "destructive",
 };
@@ -49,6 +50,7 @@ const transactionVariant: Record<
   "outline" | "secondary" | "default" | "destructive"
 > = {
   receiving: "secondary",
+  putaway: "default",
   shipping: "outline",
   overage: "default",
   shortage: "destructive",

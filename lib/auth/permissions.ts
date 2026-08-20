@@ -5,6 +5,7 @@ export const PERMISSIONS = {
   viewInventory: ["user", "associate", "manager"],
   viewTransactions: ["user", "associate", "manager"],
   receive: ["associate", "manager"],
+  putaway: ["associate", "manager"],
   ship: ["associate", "manager"],
   scanLookup: ["user", "associate", "manager"],
   adjustInventory: ["manager"],
@@ -30,6 +31,9 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   }
   if (pathname.startsWith("/receiving")) {
     return hasPermission(role, "receive");
+  }
+  if (pathname.startsWith("/putaway")) {
+    return hasPermission(role, "putaway");
   }
   if (pathname.startsWith("/shipping")) {
     return hasPermission(role, "ship");

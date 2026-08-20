@@ -134,13 +134,29 @@ export const PalletInputSchema = z.object({
 });
 export type PalletInput = z.infer<typeof PalletInputSchema>;
 
+export const PutawayLocationInputSchema = z.object({
+  putawayRoomId: UuidSchema.nullable().optional().default(null),
+  putawayLocationId: UuidSchema,
+  applyToPallet: z.boolean().optional().default(false),
+});
+export type PutawayLocationInput = z.infer<typeof PutawayLocationInputSchema>;
+
 export const ReceivingOrderStatusSchema = z.enum([
   "draft",
   "in-progress",
+  "received",
   "completed",
   "cancelled",
 ]);
 export type ReceivingOrderStatus = z.infer<typeof ReceivingOrderStatusSchema>;
+
+export function isReceivingEditable(status: ReceivingOrderStatus): boolean {
+  return status === "draft" || status === "in-progress";
+}
+
+export function isAwaitingPutaway(status: ReceivingOrderStatus): boolean {
+  return status === "received";
+}
 
 export const PurchaseOrderSchema = z.object({
   id: UuidSchema,
@@ -251,6 +267,7 @@ export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
 export const InventoryTransactionTypeSchema = z.enum([
   "receiving",
+  "putaway",
   "shipping",
   "overage",
   "shortage",

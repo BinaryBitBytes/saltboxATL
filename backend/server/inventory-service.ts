@@ -6,6 +6,9 @@ import {
   CreateRoomInputSchema,
   CreateShippingOrderInputSchema,
   PalletInputSchema,
+  PutawayLocationInputSchema,
+  isAwaitingPutaway,
+  isReceivingEditable,
   type CaseItem,
   type InventoryRow,
   type InventorySystem,
@@ -224,10 +227,28 @@ function requireOrder(system: InventorySystem, orderId: string): ReceivingOrder 
   return order;
 }
 
-function requireMutableOrder(order: ReceivingOrder): void {
-  if (order.status === "completed" || order.status === "cancelled") {
+function requireReceivingEditable(order: ReceivingOrder): void {
+  if (!isReceivingEditable(order.status)) {
     throw new ServiceError(
       `Receiving order ${order.orderNumber} is ${order.status} and cannot be edited.`,
+    );
+  }
+}
+
+function requireCancellable(order: ReceivingOrder): void {
+  if (order.status === "completed" || order.status === "cancelled") {
+    throw new ServiceError(
+      `Receiving order ${order.orderNumber} is ${order.status} and cannot be cancelled.`,
+    );
+  }
+}
+
+function requireAwaitingPutaway(order: ReceivingOrder): void {
+  if (!isAwaitingPutaway(order.status)) {
+    throw new ServiceError(
+      isReceivingEditable(order.status)
+        ? `Finish receiving ${order.orderNumber} before starting putaway.`
+        : `Receiving order ${order.orderNumber} is ${order.status} and cannot be put away.`,
     );
   }
 }
@@ -315,7 +336,7 @@ export async function addPalletToOrder(
 
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
-    requireMutableOrder(order);
+    requireReceivingEditable(order);
 
     const pallet: Pallet = recountPallet({
       id: createId(),
@@ -343,7 +364,7 @@ export async function setWorkingPallet(
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
-    requireMutableOrder(order);
+    requireReceivingEditable(order);
     const pallet = order.pallets.find((entry) => entry.id === palletId);
     if (!pallet) {
       throw new ServiceError("Pallet not found on this receiving order.", 404);
@@ -366,7 +387,7 @@ export async function addCaseToPallet(
 
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
-    requireMutableOrder(order);
+    requireReceivingEditable(order);
     const pallet = requirePallet(order, palletId);
 
     assertLargeInputConfirmed(
@@ -397,7 +418,7 @@ export async function updateCaseOnPallet(
 
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
-    requireMutableOrder(order);
+    requireReceivingEditable(order);
     const pallet = requirePallet(order, palletId);
     const index = pallet.cases.findIndex((entry) => entry.id === caseId);
     if (index < 0) {
@@ -428,7 +449,7 @@ export async function removeCaseFromPallet(
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
-    requireMutableOrder(order);
+    requireReceivingEditable(order);
     const pallet = requirePallet(order, palletId);
     const index = pallet.cases.findIndex((entry) => entry.id === caseId);
     if (index < 0) {
@@ -448,7 +469,7 @@ export async function completeReceivingOrder(
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
-    requireMutableOrder(order);
+    requireReceivingEditable(order);
 
     const cases = order.pallets.flatMap((pallet) => pallet.cases);
     if (cases.length === 0) {
@@ -456,7 +477,6 @@ export async function completeReceivingOrder(
         "Receive at least one case before completing this order.",
       );
     }
-    assertPutawayReady(cases);
     const totalUnits = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
     assertLargeInputConfirmed(
       totalUnits,
@@ -465,15 +485,79 @@ export async function completeReceivingOrder(
       "receiving total",
     );
 
+    order.status = "received";
+    order.workingPalletId = null;
+    order.updatedAt = nowIso();
+    return order;
+  });
+}
+
+export async function assignPutawayLocation(
+  orderId: string,
+  palletId: string,
+  caseId: string,
+  rawData: unknown,
+): Promise<ReceivingOrder> {
+  const parsed = parseWithSchema(PutawayLocationInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  return updateSystem((system) => {
+    const order = requireOrder(system, orderId);
+    requireAwaitingPutaway(order);
+    const pallet = requirePallet(order, palletId);
+    const putaway = applyPutawayLocation(system, parsed.data);
+    const targets = parsed.data.applyToPallet
+      ? pallet.cases
+      : pallet.cases.filter((entry) => entry.id === caseId);
+
+    if (!parsed.data.applyToPallet && targets.length === 0) {
+      throw new ServiceError("Case line was not found on this pallet.", 404);
+    }
+    if (targets.length === 0) {
+      throw new ServiceError("This pallet has no cases to put away.");
+    }
+
+    for (const caseItem of targets) {
+      caseItem.putawayRoomId = putaway.putawayRoomId;
+      caseItem.putawayLocationId = putaway.putawayLocationId;
+    }
+    order.updatedAt = nowIso();
+    return order;
+  });
+}
+
+export async function completePutawayOrder(
+  orderId: string,
+  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+): Promise<ReceivingOrder> {
+  return updateSystem((system) => {
+    const order = requireOrder(system, orderId);
+    requireAwaitingPutaway(order);
+
+    const cases = order.pallets.flatMap((pallet) => pallet.cases);
+    if (cases.length === 0) {
+      throw new ServiceError("There are no received cases to put away.");
+    }
+    assertPutawayReady(cases);
+    const totalUnits = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
+    assertLargeInputConfirmed(
+      totalUnits,
+      confirmation,
+      LIMITS.largeQuantity,
+      "putaway total",
+    );
+
     const now = nowIso();
     const result = putAwayCases(system.inventoryItems, cases, now);
     system.inventoryItems = result.items;
-    appendTransactions(system, "receiving", result.changes, {
+    appendTransactions(system, "putaway", result.changes, {
       occurredAt: now,
       referenceType: "receiving-order",
       referenceId: order.id,
       createdBy: order.createdBy ?? order.receiverName,
-      reason: `Receiving ${order.orderNumber}`,
+      reason: `Putaway ${order.orderNumber}`,
     });
     order.status = "completed";
     order.workingPalletId = null;
@@ -487,7 +571,7 @@ export async function cancelReceivingOrder(
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
-    requireMutableOrder(order);
+    requireCancellable(order);
     order.status = "cancelled";
     order.workingPalletId = null;
     order.updatedAt = nowIso();

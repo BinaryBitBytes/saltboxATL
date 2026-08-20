@@ -7,6 +7,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   DashboardSquare01Icon,
   PackageOpenIcon,
+  PackageMovingIcon,
   WarehouseIcon,
   TruckDeliveryIcon,
   PinLocation01Icon,
@@ -28,6 +29,7 @@ const NAV: Array<{
 }> = [
   { href: "/", label: "Dashboard", icon: DashboardSquare01Icon, permission: "viewDashboard" },
   { href: "/receiving", label: "Receiving", icon: PackageOpenIcon, permission: "receive" },
+  { href: "/putaway", label: "Putaway", icon: PackageMovingIcon, permission: "putaway" },
   { href: "/inventory", label: "Inventory", icon: WarehouseIcon, permission: "viewInventory" },
   { href: "/transactions", label: "Log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
   { href: "/shipping", label: "Shipping", icon: TruckDeliveryIcon, permission: "ship" },

@@ -121,6 +121,7 @@ export function TransactionsTable({
         >
           <option value="all">All types</option>
           <option value="receiving">Receiving</option>
+          <option value="putaway">Putaway</option>
           <option value="shipping">Shipping</option>
           <option value="overage">Overage</option>
           <option value="shortage">Shortage</option>

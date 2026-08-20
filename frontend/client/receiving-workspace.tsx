@@ -5,13 +5,13 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   CONNECTION_TYPES,
   STRAND_COUNTS,
+  isReceivingEditable,
   type CaseItem,
-  type Location,
   type ReceivingOrder,
-  type Room,
 } from "@/lib/inventory-schema";
 import {
   addReceivingCase,
@@ -58,8 +58,6 @@ const CaseFormSchema = z
     connectionType: z.string().nullable(),
     strandCount: z.number().nullable(),
     lengthMeters: z.number().nullable(),
-    putawayRoomId: z.string().nullable(),
-    putawayLocationId: z.uuid("Select a putaway location"),
   })
   .superRefine((values, ctx) => {
     if (!values.generateSku && values.sku.length === 0) {
@@ -89,7 +87,7 @@ function ErrorText({ error }: { error: string | null }) {
   return <p className="text-xs text-destructive">{error}</p>;
 }
 
-function emptyCaseValues(rooms: Room[]): CaseFormValues {
+function emptyCaseValues(): CaseFormValues {
   return {
     upc: "",
     sku: "",
@@ -102,12 +100,10 @@ function emptyCaseValues(rooms: Room[]): CaseFormValues {
     connectionType: null,
     strandCount: null,
     lengthMeters: null,
-    putawayRoomId: rooms[0]?.id ?? null,
-    putawayLocationId: undefined as never,
   };
 }
 
-function valuesFromCase(item: CaseItem, rooms: Room[]): CaseFormValues {
+function valuesFromCase(item: CaseItem): CaseFormValues {
   return {
     upc: item.upc,
     sku: item.sku,
@@ -120,24 +116,18 @@ function valuesFromCase(item: CaseItem, rooms: Room[]): CaseFormValues {
     connectionType: item.fiber?.connectionType ?? null,
     strandCount: item.fiber?.strandCount ?? null,
     lengthMeters: item.fiber?.lengthMeters ?? null,
-    putawayRoomId: item.putawayRoomId ?? rooms[0]?.id ?? null,
-    putawayLocationId: (item.putawayLocationId ?? undefined) as never,
   };
 }
 
 export function ReceivingWorkspace({
   order,
-  rooms,
-  locations,
   knownProducts,
 }: {
   order: ReceivingOrder;
-  rooms: Room[];
-  locations: Location[];
   knownProducts: KnownProduct[];
 }) {
   const router = useRouter();
-  const editable = order.status === "draft" || order.status === "in-progress";
+  const editable = isReceivingEditable(order.status);
   const setWorking = useReceivingSession((state) => state.setWorking);
   const workingPalletId =
     useReceivingSession((state) =>
@@ -180,8 +170,6 @@ export function ReceivingWorkspace({
             key={editingCase?.id ?? "new-case"}
             orderId={order.id}
             pallet={workingPallet}
-            rooms={rooms}
-            locations={locations}
             knownProducts={knownProducts}
             editingCase={editingCase}
             onCancelEdit={() => setEditing(null)}
@@ -220,6 +208,16 @@ export function ReceivingWorkspace({
           )}
         </CardContent>
       </Card>
+
+      {order.status === "received" ? (
+        <ReceivedOrderActions orderId={order.id} />
+      ) : null}
+
+      {order.status === "completed" ? (
+        <p className="text-sm text-muted-foreground">
+          This order has been put away. On-hand inventory includes these cases.
+        </p>
+      ) : null}
 
       {editable ? (
         <ReceivingActions
@@ -464,8 +462,6 @@ function AddPalletForm({ orderId }: { orderId: string }) {
 function WorkingCaseForm({
   orderId,
   pallet,
-  rooms,
-  locations,
   knownProducts,
   editingCase,
   onCancelEdit,
@@ -473,8 +469,6 @@ function WorkingCaseForm({
 }: {
   orderId: string;
   pallet: ReceivingOrder["pallets"][number] | null;
-  rooms: Room[];
-  locations: Location[];
   knownProducts: KnownProduct[];
   editingCase: CaseItem | null;
   onCancelEdit: () => void;
@@ -487,9 +481,7 @@ function WorkingCaseForm({
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const form = useForm<CaseFormValues>({
     resolver: zodResolver(CaseFormSchema),
-    defaultValues: editingCase
-      ? valuesFromCase(editingCase, rooms)
-      : emptyCaseValues(rooms),
+    defaultValues: editingCase ? valuesFromCase(editingCase) : emptyCaseValues(),
   });
 
   const catalog = useMemo(
@@ -498,10 +490,6 @@ function WorkingCaseForm({
     [knownProducts, editingCase?.id],
   );
 
-  const selectedRoomId = useWatch({
-    control: form.control,
-    name: "putawayRoomId",
-  });
   const isFiber = useWatch({ control: form.control, name: "isFiber" });
   const quantityInCase = useWatch({
     control: form.control,
@@ -510,13 +498,6 @@ function WorkingCaseForm({
   const description = useWatch({ control: form.control, name: "description" });
   const generateSku = useWatch({ control: form.control, name: "generateSku" });
   const generateUpc = useWatch({ control: form.control, name: "generateUpc" });
-  const roomLocations = useMemo(
-    () =>
-      locations.filter(
-        (location) => location.isActive && location.roomId === selectedRoomId,
-      ),
-    [locations, selectedRoomId],
-  );
   const canAutoGenerate = Boolean(description?.trim());
 
   async function fillFromScan(payload: ScanPayload) {
@@ -596,8 +577,7 @@ function WorkingCaseForm({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Add or select a pallet to record case items, including fiber details
-            and putaway location.
+            Add or select a pallet to record case items, including fiber details.
           </p>
         </CardContent>
       </Card>
@@ -631,8 +611,6 @@ function WorkingCaseForm({
                 batch: values.batch,
                 quantityInCase: Number(values.quantityInCase),
                 description: values.description,
-                putawayRoomId: values.putawayRoomId,
-                putawayLocationId: values.putawayLocationId,
                 fiber: values.isFiber
                   ? {
                       isFiber: true,
@@ -664,11 +642,7 @@ function WorkingCaseForm({
                 return;
               }
               onSaved();
-              form.reset({
-                ...emptyCaseValues(rooms),
-                putawayRoomId: values.putawayRoomId,
-                putawayLocationId: values.putawayLocationId,
-              });
+              form.reset(emptyCaseValues());
               router.refresh();
             });
           })}
@@ -791,36 +765,6 @@ function WorkingCaseForm({
               </Field>
             </div>
           ) : null}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Putaway room">
-              <NativeSelect
-                {...form.register("putawayRoomId")}
-                onChange={(event) => {
-                  form.setValue("putawayRoomId", event.target.value);
-                  form.setValue("putawayLocationId", "" as never);
-                }}
-              >
-                {rooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    {room.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <Field
-              label="Putaway location"
-              error={form.formState.errors.putawayLocationId?.message}
-            >
-              <NativeSelect {...form.register("putawayLocationId")}>
-                <option value="">Select location</option>
-                {roomLocations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Field>
-          </div>
           <LargeInputConfirm
             total={Number(quantityInCase) || 0}
             threshold={LIMITS.largeQuantity}
@@ -848,7 +792,7 @@ function WorkingCaseForm({
                 disabled={pending}
                 onClick={() => {
                   onCancelEdit();
-                  form.reset(emptyCaseValues(rooms));
+                  form.reset(emptyCaseValues());
                   setError(null);
                 }}
               >
@@ -857,6 +801,53 @@ function WorkingCaseForm({
             ) : null}
           </div>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReceivedOrderActions({ orderId }: { orderId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const clear = useReceivingSession((state) => state.clear);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Receiving complete</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <p className="text-sm text-muted-foreground">
+          Cases are checked in. Assign bin locations in putaway to add this
+          stock to on-hand inventory.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button nativeButton={false} render={<Link href={`/putaway/${orderId}`} />}>
+            Open putaway
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={() => {
+              setError(null);
+              startTransition(async () => {
+                const result = await cancelReceiving(orderId);
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                clear();
+                router.push("/receiving");
+                router.refresh();
+              });
+            }}
+          >
+            Cancel order
+          </Button>
+          <ErrorText error={error} />
+        </div>
       </CardContent>
     </Card>
   );
@@ -906,12 +897,12 @@ function ReceivingActions({
               return;
             }
             clear();
-            router.push("/inventory");
+            router.push(`/receiving/${orderId}`);
             router.refresh();
           });
         }}
       >
-        Complete receiving & put away
+        Complete receiving
       </Button>
       <Button
         variant="outline"

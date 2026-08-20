@@ -13,7 +13,7 @@ export default async function TransactionsPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold">Transaction log</h1>
         <p className="text-sm text-muted-foreground">
-          Every receiving putaway, shipment, overage, shortage, and damage
+          Every putaway, shipment, overage, shortage, and damage
           adjustment.
         </p>
       </div>

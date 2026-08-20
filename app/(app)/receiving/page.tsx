@@ -31,7 +31,7 @@ export default async function ReceivingPage() {
         <h1 className="font-heading text-xl font-semibold">Receiving</h1>
         <p className="text-sm text-muted-foreground">
           Create an inbound order from a purchase order, then work pallets and
-          cases until putaway.
+          cases. Putaway is a separate step after receiving is complete.
         </p>
       </div>
 

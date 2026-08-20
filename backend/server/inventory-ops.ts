@@ -135,7 +135,7 @@ export function putAwayCases(
   for (const caseItem of cases) {
     if (!caseItem.putawayLocationId) {
       throw new Error(
-        `SKU ${caseItem.sku} is missing a putaway location before receiving can complete.`,
+        `SKU ${caseItem.sku} is missing a putaway location. Assign a bin before putting this case away.`,
       );
     }
 

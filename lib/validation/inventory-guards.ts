@@ -83,7 +83,7 @@ export function assertPutawayReady(
   const missing = cases.filter((item) => !item.putawayLocationId);
   if (missing.length > 0) {
     throw new ValidationError(
-      `SKU ${missing[0].sku} is missing a putaway location before receiving can complete.`,
+      `SKU ${missing[0].sku} is missing a putaway location. Assign bin locations before completing putaway.`,
     );
   }
 }
