@@ -1,0 +1,30 @@
+export const LIMITS = {
+  name: 80,
+  email: 254,
+  passwordMin: 8,
+  passwordMax: 128,
+  sku: 64,
+  upc: 32,
+  code: 40,
+  text: 200,
+  notes: 2000,
+  description: 240,
+  reason: 240,
+  quantityMax: 100_000,
+  largeQuantity: 500,
+  largePickTotal: 200,
+  largePalletCount: 20,
+  largeCaseCount: 40,
+  loginMaxFailures: 5,
+  loginWindowMs: 15 * 60 * 1000,
+  loginLockMs: 15 * 60 * 1000,
+} as const;
+
+export const SENSITIVE_USER_KEYS = [
+  "passwordHash",
+  "password_hash",
+  "hash",
+  "session",
+  "token",
+  "secret",
+] as const;

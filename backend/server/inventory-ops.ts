@@ -5,6 +5,12 @@ import type {
   Pallet,
   ShippingPick,
 } from "@/lib/inventory-schema";
+import {
+  assertEnoughOnHand,
+  assertPositiveQuantity,
+  assertStockDoesNotGoNegative,
+  findInventoryLine,
+} from "@/lib/validation/inventory-guards";
 
 export function inventoryKey(
   sku: string,
@@ -57,6 +63,7 @@ export function addQuantity(
     now: string;
   },
 ): { items: InventoryItem[]; change: StockChange } {
+  assertPositiveQuantity(input.quantity);
   const map = itemMap(items);
   const key = inventoryKey(input.sku, input.batch, input.locationId);
   const existing = map.get(key);
@@ -158,23 +165,17 @@ export function pickFromInventory(
   changes: StockChange[];
 } {
   const remaining = items.map((item) => ({ ...item }));
-  const byId = new Map(remaining.map((item) => [item.id, item]));
   const shippedCases: CaseItem[] = [];
   const changes: StockChange[] = [];
 
   for (const pick of picks) {
-    const item = byId.get(pick.inventoryItemId);
-    if (!item) {
-      throw new Error("One of the selected inventory lines no longer exists.");
-    }
-    if (pick.quantity > item.quantity) {
-      throw new Error(
-        `Not enough quantity for SKU ${item.sku} at this location. Available: ${item.quantity}.`,
-      );
-    }
+    const item = findInventoryLine(remaining, pick.inventoryItemId);
+    assertPositiveQuantity(pick.quantity, "Pick quantity");
+    assertEnoughOnHand(item.quantity, pick.quantity, item.sku);
 
     const quantityBefore = item.quantity;
     item.quantity -= pick.quantity;
+    assertStockDoesNotGoNegative(quantityBefore, item.quantity);
     item.lastMovedAt = now;
     item.updatedAt = now;
 
@@ -215,12 +216,17 @@ export function applyAdjustment(input: {
   damagedLocationId?: string;
 }): { items: InventoryItem[]; changes: StockChange[] } {
   const { target, type, quantity, now, damagedLocationId } = input;
+  assertPositiveQuantity(quantity, "Adjustment quantity");
   let items = input.items.map((item) =>
     item.id === target.id ? { ...item } : item,
   );
   const current = items.find((item) => item.id === target.id);
   if (!current) {
     throw new Error("Inventory line was not found.");
+  }
+
+  if (type !== "overage") {
+    assertEnoughOnHand(current.quantity, quantity, current.sku);
   }
 
   if (type === "overage") {
@@ -236,14 +242,9 @@ export function applyAdjustment(input: {
     return { items: result.items, changes: [result.change] };
   }
 
-  if (quantity > current.quantity) {
-    throw new Error(
-      `Not enough on-hand quantity for ${current.sku}. Available: ${current.quantity}.`,
-    );
-  }
-
   const quantityBefore = current.quantity;
   current.quantity -= quantity;
+  assertStockDoesNotGoNegative(quantityBefore, current.quantity);
   current.lastMovedAt = now;
   current.updatedAt = now;
 

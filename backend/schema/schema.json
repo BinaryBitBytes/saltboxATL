@@ -55,7 +55,8 @@
             "Login":"Email and password",
             "User":"View dashboard, inventory, and transaction log",
             "Associate":"User access plus receiving and shipping",
-            "Manager":"Associate access plus adjustments, locations, and user admin"
+            "Manager":"Associate access plus adjustments, locations, and user admin",
+            "LargeInputConfirmation":"Quantities at or above threshold require checkbox plus matching re-entry"
         },
         "Inventory_Transactions":{
             "ID":"String",

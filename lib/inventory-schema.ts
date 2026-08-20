@@ -1,4 +1,20 @@
 import { z } from "zod";
+import {
+  DescriptionSchema,
+  EmailSchema,
+  LocationCodeSchema,
+  LoginPasswordSchema,
+  NonNegativeCountSchema,
+  OptionalNotesSchema,
+  PasswordSchema,
+  PersonNameSchema,
+  QuantitySchema,
+  ReasonSchema,
+  SafeTextSchema,
+  SkuSchema,
+  UpcSchema,
+} from "@/lib/validation/fields";
+import { LIMITS } from "@/lib/validation/limits";
 
 /**
  * Canonical Zod models for the Saltbox inventory app.
@@ -13,8 +29,8 @@ import { z } from "zod";
  */
 
 export const UuidSchema = z.uuid();
-export const NonEmptyStringSchema = z.string().trim().min(1);
-export const PositiveIntegerSchema = z.coerce.number().int().min(0);
+export const NonEmptyStringSchema = SafeTextSchema;
+export const PositiveIntegerSchema = NonNegativeCountSchema;
 export const DateTimeSchema = z.iso.datetime();
 
 export const ConnectionTypeSchema = z.enum([
@@ -55,11 +71,11 @@ export type FiberItem = z.infer<typeof FiberItemSchema>;
 
 export const CaseItemSchema = z.object({
   id: UuidSchema,
-  upc: z.string().trim().min(1),
-  sku: z.string().trim().min(1),
+  upc: UpcSchema,
+  sku: SkuSchema,
   batch: z.string().trim().nullable().default(null),
-  quantityInCase: z.coerce.number().int().min(1),
-  description: z.string().trim().min(1),
+  quantityInCase: QuantitySchema,
+  description: DescriptionSchema,
   fiber: FiberItemSchema.nullable().default(null),
   putawayRoomId: UuidSchema.nullable().default(null),
   putawayLocationId: UuidSchema.nullable().default(null),
@@ -71,12 +87,15 @@ export const CaseItemInputSchema = CaseItemSchema.omit({ id: true }).extend({
   batch: z
     .string()
     .trim()
+    .max(LIMITS.code)
     .nullable()
     .optional()
     .transform((value) => (value === "" || value === undefined ? null : value)),
   fiber: FiberItemSchema.nullable().optional().default(null),
   putawayRoomId: UuidSchema.nullable().optional().default(null),
   putawayLocationId: UuidSchema.nullable().optional().default(null),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
 });
 export type CaseItemInput = z.infer<typeof CaseItemInputSchema>;
 
@@ -135,7 +154,7 @@ export const ReceivingOrderSchema = z.object({
   status: ReceivingOrderStatusSchema.default("draft"),
   workingPalletId: UuidSchema.nullable().default(null),
   pallets: z.array(PalletSchema).default([]),
-  notes: z.string().optional(),
+  notes: OptionalNotesSchema,
   createdAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
   createdBy: z.string().optional(),
@@ -149,10 +168,12 @@ export const CreateReceivingOrderInputSchema = z.object({
   vendor: NonEmptyStringSchema,
   orderNumber: NonEmptyStringSchema,
   carrierInbound: NonEmptyStringSchema,
-  receiverName: NonEmptyStringSchema,
-  loadPalletCount: z.coerce.number().int().min(0).default(0),
-  notes: z.string().optional(),
+  receiverName: PersonNameSchema,
+  loadPalletCount: NonNegativeCountSchema.default(0),
+  notes: OptionalNotesSchema,
   createdBy: z.string().optional(),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
 });
 export type CreateReceivingOrderInput = z.infer<
   typeof CreateReceivingOrderInputSchema
@@ -169,7 +190,7 @@ export type ShippingOrderStatus = z.infer<typeof ShippingOrderStatusSchema>;
 
 export const ShippingPickSchema = z.object({
   inventoryItemId: UuidSchema,
-  quantity: z.coerce.number().int().min(1),
+  quantity: QuantitySchema,
 });
 export type ShippingPick = z.infer<typeof ShippingPickSchema>;
 
@@ -185,7 +206,7 @@ export const ShippingOrderSchema = z.object({
   itemsInJeopardy: z.array(z.string()).default([]),
   status: ShippingOrderStatusSchema.default("draft"),
   pallets: z.array(PalletSchema).default([]),
-  notes: z.string().optional(),
+  notes: OptionalNotesSchema,
   createdAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
   createdBy: z.string().optional(),
@@ -196,10 +217,12 @@ export const CreateShippingOrderInputSchema = z.object({
   customer: NonEmptyStringSchema,
   shipmentNumber: NonEmptyStringSchema,
   carrierOutbound: NonEmptyStringSchema,
-  shipperName: NonEmptyStringSchema,
-  notes: z.string().optional(),
+  shipperName: PersonNameSchema,
+  notes: OptionalNotesSchema,
   createdBy: z.string().optional(),
   picks: z.array(ShippingPickSchema).min(1),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
 });
 export type CreateShippingOrderInput = z.infer<
   typeof CreateShippingOrderInputSchema
@@ -207,11 +230,11 @@ export type CreateShippingOrderInput = z.infer<
 
 export const InventoryItemSchema = z.object({
   id: UuidSchema,
-  sku: z.string().trim().min(1),
-  upc: z.string().optional(),
+  sku: SkuSchema,
+  upc: UpcSchema.optional(),
   batch: z.string().nullable().default(null),
   locationId: UuidSchema,
-  quantity: z.coerce.number().int().min(0),
+  quantity: NonNegativeCountSchema,
   description: z.string().optional(),
   lastMovedAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
@@ -242,42 +265,45 @@ export const InventoryTransactionSchema = z.object({
   quantityDelta: z.number().int(),
   quantityBefore: z.coerce.number().int().min(0).optional(),
   quantityAfter: z.coerce.number().int().min(0).optional(),
-  reason: z.string().optional(),
+  reason: OptionalNotesSchema,
   referenceType: z
     .enum(["receiving-order", "shipping-order", "adjustment"])
     .optional(),
   referenceId: UuidSchema.optional(),
   scannedCode: z.string().optional(),
   createdBy: z.string().optional(),
-  notes: z.string().optional(),
+  notes: OptionalNotesSchema,
 });
 export type InventoryTransaction = z.infer<typeof InventoryTransactionSchema>;
 
 export const CreateAdjustmentInputSchema = z.object({
   type: z.enum(["overage", "shortage", "damage"]),
-  quantity: z.coerce.number().int().min(1),
-  reason: NonEmptyStringSchema,
+  quantity: QuantitySchema,
+  reason: ReasonSchema,
   inventoryItemId: UuidSchema.optional(),
-  sku: z.string().trim().optional(),
-  upc: z.string().trim().optional(),
+  sku: SkuSchema.optional(),
+  upc: UpcSchema.optional(),
   batch: z
     .string()
     .trim()
+    .max(LIMITS.code)
     .nullable()
     .optional()
     .transform((value) => (value === "" || value === undefined ? null : value)),
   locationId: UuidSchema.optional(),
   description: z.string().optional(),
-  notes: z.string().optional(),
+  notes: OptionalNotesSchema,
   createdBy: z.string().optional(),
-  scannedCode: z.string().optional(),
+  scannedCode: z.string().max(LIMITS.notes).optional(),
   moveDamagedToLocationId: UuidSchema.optional(),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
 });
 export type CreateAdjustmentInput = z.infer<typeof CreateAdjustmentInputSchema>;
 
 export const LocationSchema = z.object({
   id: UuidSchema,
-  code: NonEmptyStringSchema,
+  code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
   isActive: z.boolean().default(true),
@@ -285,7 +311,7 @@ export const LocationSchema = z.object({
 export type Location = z.infer<typeof LocationSchema>;
 
 export const CreateLocationInputSchema = z.object({
-  code: NonEmptyStringSchema,
+  code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
 });
@@ -310,9 +336,9 @@ export const USER_ROLES = UserRoleSchema.options;
 
 export const UserSchema = z.object({
   id: UuidSchema,
-  name: NonEmptyStringSchema,
-  email: z.email().trim().toLowerCase(),
-  passwordHash: NonEmptyStringSchema,
+  name: PersonNameSchema,
+  email: EmailSchema,
+  passwordHash: z.string().min(1).max(512),
   role: UserRoleSchema,
   isActive: z.boolean().default(true),
   createdAt: DateTimeSchema.optional(),
@@ -324,32 +350,35 @@ export type User = z.infer<typeof UserSchema>;
 export const PublicUserSchema = UserSchema.omit({ passwordHash: true });
 export type PublicUser = z.infer<typeof PublicUserSchema>;
 
-export const LoginInputSchema = z.object({
-  email: z.email().trim().toLowerCase(),
-  password: z.string().min(1),
-  from: z.string().optional(),
-});
+export const LoginInputSchema = z
+  .object({
+    email: EmailSchema,
+    password: LoginPasswordSchema,
+    from: z.string().optional(),
+  })
+  .strict();
 export type LoginInput = z.infer<typeof LoginInputSchema>;
 
-export const CreateUserInputSchema = z.object({
-  name: NonEmptyStringSchema,
-  email: z.email().trim().toLowerCase(),
-  password: z.string().min(8, "Password must be at least 8 characters."),
-  role: UserRoleSchema,
-});
+export const CreateUserInputSchema = z
+  .object({
+    name: PersonNameSchema,
+    email: EmailSchema,
+    password: PasswordSchema,
+    role: UserRoleSchema,
+  })
+  .strict();
 export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
 
-export const UpdateUserInputSchema = z.object({
-  id: UuidSchema,
-  name: NonEmptyStringSchema.optional(),
-  email: z.email().trim().toLowerCase().optional(),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters.")
-    .optional(),
-  role: UserRoleSchema.optional(),
-  isActive: z.boolean().optional(),
-});
+export const UpdateUserInputSchema = z
+  .object({
+    id: UuidSchema,
+    name: PersonNameSchema.optional(),
+    email: EmailSchema.optional(),
+    password: PasswordSchema.optional(),
+    role: UserRoleSchema.optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict();
 export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;
 
 export const InventorySystemSchema = z.object({

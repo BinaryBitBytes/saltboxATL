@@ -34,6 +34,8 @@ export async function POST(
       palletId?: string;
       pallet?: unknown;
       caseItem?: unknown;
+      confirmLargeInput?: boolean;
+      confirmationQuantity?: number;
     };
 
     if (body.action === "add-pallet") {
@@ -43,7 +45,12 @@ export async function POST(
       return jsonOk(await addCaseToPallet(id, body.palletId, body.caseItem));
     }
     if (body.action === "complete") {
-      return jsonOk(await completeReceivingOrder(id));
+      return jsonOk(
+        await completeReceivingOrder(id, {
+          confirmLargeInput: body.confirmLargeInput,
+          confirmationQuantity: body.confirmationQuantity,
+        }),
+      );
     }
 
     return jsonError(new ServiceError("Unsupported receiving action"));

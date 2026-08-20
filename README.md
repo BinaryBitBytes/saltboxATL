@@ -18,6 +18,20 @@ Demo accounts (password `saltbox123`) are seeded on first boot:
 
 Set `SESSION_SECRET` in production. If it is missing, the app writes a generated secret to `data/.session-secret`.
 
+## Validation and tests
+
+Input is checked with Zod plus inventory/auth safeguards:
+
+- User records never return `passwordHash`; create/update payloads reject secret fields
+- Passwords need 8+ characters with a letter and a number; sign-in locks after 5 failures
+- HTML/control characters, oversized fields, and unsafe SKU/UPC values are rejected
+- Shipping, shortages, and damage cannot take more than on-hand stock or use inactive locations
+- Quantities at or above 500 units (200 for shipments, 20 pallets on a receiving header) require a confirmation checkbox and a matching re-entered amount
+
+```bash
+npm test
+```
+
 ## Getting Started
 
 First, run the development server:

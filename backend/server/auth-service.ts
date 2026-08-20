@@ -1,17 +1,31 @@
 import "server-only";
 
 import { createId, nowIso } from "@/backend/server/helperUtils";
-import { toPublicUser } from "@/backend/server/dal";
+import { toPublicUser } from "@/lib/validation/user-security";
 import { ServiceError } from "@/backend/server/inventory-service";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import { readSystem, updateSystem } from "@/backend/server/store";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import {
+  assertLoginNotLocked,
+  clearFailedLogins,
+  recordFailedLogin,
+} from "@/lib/validation/login-guard";
+import { assertNoSensitiveUserFields } from "@/lib/validation/user-security";
+import { ValidationError } from "@/lib/validation/errors";
 import {
   CreateUserInputSchema,
   LoginInputSchema,
   UpdateUserInputSchema,
   type PublicUser,
 } from "@/lib/inventory-schema";
+
+let dummyPasswordHash: string | undefined;
+
+async function consumePasswordCheck(password: string): Promise<void> {
+  dummyPasswordHash ??= await hashPassword("timing-dummy-not-a-user");
+  await verifyPassword(password, dummyPasswordHash);
+}
 
 export async function authenticateUser(
   email: string,
@@ -22,19 +36,25 @@ export async function authenticateUser(
     throw new ServiceError("Enter a valid email and password.");
   }
 
+  assertLoginNotLocked(parsed.data.email);
+
   const system = await readSystem();
   const user = system.users.find(
     (entry) => entry.email === parsed.data.email,
   );
   if (!user || !user.isActive) {
+    await consumePasswordCheck(parsed.data.password);
+    recordFailedLogin(parsed.data.email);
     throw new ServiceError("Invalid email or password.", 401);
   }
 
   const matches = await verifyPassword(parsed.data.password, user.passwordHash);
   if (!matches) {
+    recordFailedLogin(parsed.data.email);
     throw new ServiceError("Invalid email or password.", 401);
   }
 
+  clearFailedLogins(parsed.data.email);
   return toPublicUser(user);
 }
 
@@ -47,6 +67,7 @@ export async function createUserRecord(
   rawData: unknown,
   actorName: string,
 ): Promise<PublicUser> {
+  assertNoSensitiveUserFields(rawData);
   const parsed = parseWithSchema(CreateUserInputSchema, rawData);
   if (!parsed.success) {
     throw new ServiceError(parsed.error);
@@ -79,6 +100,7 @@ export async function updateUserRecord(
   rawData: unknown,
   actorId: string,
 ): Promise<PublicUser> {
+  assertNoSensitiveUserFields(rawData);
   const parsed = parseWithSchema(UpdateUserInputSchema, rawData);
   if (!parsed.success) {
     throw new ServiceError(parsed.error);
@@ -137,4 +159,11 @@ export async function updateUserRecord(
     user.updatedAt = nowIso();
     return toPublicUser(user);
   });
+}
+
+export function asAuthError(error: unknown): string | undefined {
+  if (error instanceof ServiceError || error instanceof ValidationError) {
+    return error.message;
+  }
+  return undefined;
 }
