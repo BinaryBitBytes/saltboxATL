@@ -1,8 +1,8 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
   "style": "base-mira",
-  "rsc": true,
   "tsx": true,
+  "rsc": true,
   "tailwind": {
     "config": "",
     "css": "app/globals.css",
