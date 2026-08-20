@@ -3,6 +3,7 @@ import { getSystem } from "@/backend/server/store";
 import { requireUser } from "@/backend/server/dal";
 import { enrichInventory, enrichTransactions } from "@/backend/server/inventory-service";
 import { hasPermission } from "@/lib/auth/permissions";
+import { isAwaitingPutaway } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,11 +22,15 @@ export default async function Home() {
   const user = await requireUser();
   const system = await getSystem();
   const canReceive = hasPermission(user.role, "receive");
+  const canPutaway = hasPermission(user.role, "putaway");
   const canShip = hasPermission(user.role, "ship");
   const inventory = enrichInventory(system);
   const transactions = enrichTransactions(system);
   const openReceiving = system.receivingOrders.filter(
     (order) => order.status === "draft" || order.status === "in-progress",
+  );
+  const awaitingPutaway = system.receivingOrders.filter((order) =>
+    isAwaitingPutaway(order.status),
   );
   const unitsOnHand = inventory.reduce((sum, item) => sum + item.quantity, 0);
   const adjustments = transactions.filter((entry) =>
@@ -40,14 +45,23 @@ export default async function Home() {
         <div>
           <h1 className="font-heading text-xl font-semibold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Receive inbound pallets, put away cases, and ship from on-hand stock.
+            Receive inbound pallets, put away staged cases, and ship from on-hand stock.
           </p>
         </div>
-        {canReceive || canShip ? (
+        {canReceive || canPutaway || canShip ? (
           <div className="flex gap-2">
             {canReceive ? (
               <Button nativeButton={false} render={<Link href="/receiving" />}>
                 New receiving
+              </Button>
+            ) : null}
+            {canPutaway ? (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/putaway" />}
+              >
+                Putaway
               </Button>
             ) : null}
             {canShip ? (
@@ -63,10 +77,11 @@ export default async function Home() {
         ) : null}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard label="Units on hand" value={unitsOnHand} />
         <StatCard label="Unique SKUs" value={uniqueSkuCount(inventory)} />
         <StatCard label="Open receiving" value={openReceiving.length} />
+        <StatCard label="Awaiting putaway" value={awaitingPutaway.length} />
         <StatCard
           label="Active locations"
           value={system.locations.filter((location) => location.isActive).length}
@@ -78,7 +93,7 @@ export default async function Home() {
         <Card>
           <CardHeader>
             <CardTitle>Open receiving</CardTitle>
-            <CardDescription>Inbound orders still being worked</CardDescription>
+            <CardDescription>Inbound orders still being checked in</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
             {openReceiving.length === 0 ? (
@@ -104,13 +119,42 @@ export default async function Home() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Awaiting putaway</CardTitle>
+            <CardDescription>Received cases waiting for a bin</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {awaitingPutaway.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No orders are waiting for putaway.
+              </p>
+            ) : (
+              awaitingPutaway.slice(0, 6).map((order) => (
+                <Link
+                  key={order.id}
+                  href={`/putaway/${order.id}`}
+                  className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/50"
+                >
+                  <span>
+                    {order.orderNumber} · {order.vendor}
+                  </span>
+                  <ReceivingStatusBadge status={order.status} />
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
             <CardTitle>On-hand snapshot</CardTitle>
             <CardDescription>Highest quantities first</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
             {inventory.length === 0 ? (
               <p className="text-muted-foreground">
-                Inventory is empty until a receiving order is completed.
+                Inventory is empty until putaway is completed.
               </p>
             ) : (
               [...inventory]
@@ -140,7 +184,7 @@ export default async function Home() {
         <CardHeader className="flex-row items-center justify-between">
           <div>
             <CardTitle>Recent transactions</CardTitle>
-            <CardDescription>Receiving, shipping, and adjustments</CardDescription>
+            <CardDescription>Putaway, shipping, and adjustments</CardDescription>
           </div>
           <Button nativeButton={false} variant="ghost" render={<Link href="/transactions" />}>
             View log
@@ -149,7 +193,7 @@ export default async function Home() {
         <CardContent className="grid gap-2 text-sm">
           {transactions.length === 0 ? (
             <p className="text-muted-foreground">
-              No stock movements yet. Complete receiving or post an adjustment.
+              No stock movements yet. Complete putaway or post an adjustment.
             </p>
           ) : (
             transactions.slice(0, 8).map((entry) => (

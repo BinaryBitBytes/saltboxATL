@@ -14,6 +14,8 @@ import {
   setWorkingPallet,
   updateCaseOnPallet,
   removeCaseFromPallet,
+  assignPutawayLocation,
+  completePutawayOrder,
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
@@ -37,6 +39,7 @@ function fail(error: unknown): ActionResult<never> {
 function revalidateInventory() {
   revalidatePath("/");
   revalidatePath("/receiving");
+  revalidatePath("/putaway");
   revalidatePath("/inventory");
   revalidatePath("/shipping");
   revalidatePath("/locations");
@@ -144,6 +147,7 @@ export async function completeReceiving(
     const data = await completeReceivingOrder(orderId, confirmation);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
+    revalidatePath(`/putaway/${orderId}`);
     return { ok: true, data };
   } catch (error) {
     return fail(error);
@@ -158,6 +162,41 @@ export async function cancelReceiving(
     const data = await cancelReceivingOrder(orderId);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
+    revalidatePath(`/putaway/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function assignReceivingPutawayLocation(
+  orderId: string,
+  palletId: string,
+  caseId: string,
+  rawData: unknown,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    await requireApiPermission("putaway");
+    const data = await assignPutawayLocation(orderId, palletId, caseId, rawData);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    revalidatePath(`/putaway/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function completePutaway(
+  orderId: string,
+  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    await requireApiPermission("putaway");
+    const data = await completePutawayOrder(orderId, confirmation);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    revalidatePath(`/putaway/${orderId}`);
     return { ok: true, data };
   } catch (error) {
     return fail(error);

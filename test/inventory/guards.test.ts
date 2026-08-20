@@ -60,7 +60,7 @@ describe("inventory control safeguards", () => {
     ).to.throw(ValidationError, /not enough/i);
   });
 
-  it("requires putaway locations before receiving can complete", () => {
+  it("requires putaway locations before cases can be put away", () => {
     expect(() =>
       putAwayCases(
         [],

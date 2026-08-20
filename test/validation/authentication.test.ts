@@ -75,6 +75,8 @@ describe("user authentication safeguards", () => {
   it("does not grant warehouse write permissions to the user role", () => {
     expect(hasPermission("user", "viewInventory")).to.equal(true);
     expect(hasPermission("user", "receive")).to.equal(false);
+    expect(hasPermission("user", "putaway")).to.equal(false);
+    expect(hasPermission("associate", "putaway")).to.equal(true);
     expect(hasPermission("user", "ship")).to.equal(false);
     expect(hasPermission("user", "adjustInventory")).to.equal(false);
     expect(hasPermission("associate", "adjustInventory")).to.equal(false);
@@ -86,5 +88,6 @@ describe("user authentication safeguards", () => {
     expect(safeRedirectPath("//evil.example")).to.equal("/");
     expect(safeRedirectPath("/api/users")).to.equal("/");
     expect(safeRedirectPath("/receiving")).to.equal("/receiving");
+    expect(safeRedirectPath("/putaway")).to.equal("/putaway");
   });
 });

@@ -12,7 +12,7 @@ export default async function UsersPage() {
         <h1 className="font-heading text-xl font-semibold">Users</h1>
         <p className="text-sm text-muted-foreground">
           Managers create and deactivate warehouse logins. Roles control who
-          can receive, ship, and post adjustments.
+          can receive, put away, ship, and post adjustments.
         </p>
       </div>
       <UserAdmin users={users} currentUserId={currentUser.id} />
