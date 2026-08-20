@@ -39,6 +39,10 @@ import {
   assertPutawayReady,
   assertUniquePicks,
 } from "@/lib/validation/inventory-guards";
+import {
+  collectKnownProducts,
+  resolveReceivingProductCodes,
+} from "@/lib/codes/product-codes";
 
 export class ServiceError extends Error {
   constructor(
@@ -138,6 +142,78 @@ export function lookupInventory(
 ): InventoryRow[] {
   const parsed = parseScanCode(code);
   return enrichInventory(system).filter((item) => matchesScan(item, parsed));
+}
+
+function requirePallet(
+  order: ReceivingOrder,
+  palletId: string,
+): Pallet {
+  const pallet = order.pallets.find((entry) => entry.id === palletId);
+  if (!pallet) {
+    throw new ServiceError("Pallet not found on this receiving order.", 404);
+  }
+  return pallet;
+}
+
+function applyPutawayLocation(
+  system: InventorySystem,
+  input: { putawayLocationId?: string | null; putawayRoomId?: string | null },
+): { putawayRoomId: string | null; putawayLocationId: string | null } {
+  if (!input.putawayLocationId) {
+    return {
+      putawayRoomId: input.putawayRoomId ?? null,
+      putawayLocationId: null,
+    };
+  }
+
+  const location = assertActiveLocation(
+    system.locations.find((entry) => entry.id === input.putawayLocationId),
+    "putaway",
+  );
+  if (input.putawayRoomId && input.putawayRoomId !== location.roomId) {
+    throw new ServiceError("Putaway location is not in the selected room.");
+  }
+  return {
+    putawayRoomId: location.roomId,
+    putawayLocationId: location.id,
+  };
+}
+
+function caseFromInput(
+  system: InventorySystem,
+  raw: ReturnType<typeof CaseItemInputSchema.parse>,
+  options: { caseId?: string; existingId?: string },
+): CaseItem {
+  const putaway = applyPutawayLocation(system, raw);
+  const codes = resolveReceivingProductCodes({
+    description: raw.description,
+    sku: raw.sku,
+    upc: raw.upc,
+    generateSku: raw.generateSku,
+    generateUpc: raw.generateUpc,
+    products: collectKnownProducts(system, {
+      excludeCaseId: options.existingId,
+    }),
+  });
+
+  const fiber =
+    raw.fiber?.isFiber
+      ? raw.fiber
+      : raw.fiber?.isFiber === false
+        ? { ...raw.fiber, isFiber: false }
+        : null;
+
+  return {
+    id: options.caseId ?? options.existingId ?? createId(),
+    upc: codes.upc,
+    sku: codes.sku,
+    batch: raw.batch ?? null,
+    quantityInCase: raw.quantityInCase,
+    description: raw.description,
+    fiber,
+    putawayRoomId: putaway.putawayRoomId,
+    putawayLocationId: putaway.putawayLocationId,
+  };
 }
 
 function requireOrder(system: InventorySystem, orderId: string): ReceivingOrder {
@@ -291,9 +367,41 @@ export async function addCaseToPallet(
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
     requireMutableOrder(order);
-    const pallet = order.pallets.find((entry) => entry.id === palletId);
-    if (!pallet) {
-      throw new ServiceError("Pallet not found on this receiving order.", 404);
+    const pallet = requirePallet(order, palletId);
+
+    assertLargeInputConfirmed(
+      parsed.data.quantityInCase,
+      parsed.data,
+      LIMITS.largeQuantity,
+      "case quantity",
+    );
+
+    pallet.cases.push(caseFromInput(system, parsed.data, {}));
+    Object.assign(pallet, recountPallet(pallet));
+    order.workingPalletId = pallet.id;
+    order.updatedAt = nowIso();
+    return order;
+  });
+}
+
+export async function updateCaseOnPallet(
+  orderId: string,
+  palletId: string,
+  caseId: string,
+  rawData: unknown,
+): Promise<ReceivingOrder> {
+  const parsed = parseWithSchema(CaseItemInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  return updateSystem((system) => {
+    const order = requireOrder(system, orderId);
+    requireMutableOrder(order);
+    const pallet = requirePallet(order, palletId);
+    const index = pallet.cases.findIndex((entry) => entry.id === caseId);
+    if (index < 0) {
+      throw new ServiceError("Case line was not found on this pallet.", 404);
     }
 
     assertLargeInputConfirmed(
@@ -303,44 +411,31 @@ export async function addCaseToPallet(
       "case quantity",
     );
 
-    if (parsed.data.putawayLocationId) {
-      const location = assertActiveLocation(
-        system.locations.find(
-          (entry) => entry.id === parsed.data.putawayLocationId,
-        ),
-        "putaway",
-      );
-      if (
-        parsed.data.putawayRoomId &&
-        parsed.data.putawayRoomId !== location.roomId
-      ) {
-        throw new ServiceError("Putaway location is not in the selected room.");
-      }
-      parsed.data.putawayRoomId = location.roomId;
+    pallet.cases[index] = caseFromInput(system, parsed.data, {
+      existingId: caseId,
+    });
+    Object.assign(pallet, recountPallet(pallet));
+    order.workingPalletId = pallet.id;
+    order.updatedAt = nowIso();
+    return order;
+  });
+}
+
+export async function removeCaseFromPallet(
+  orderId: string,
+  palletId: string,
+  caseId: string,
+): Promise<ReceivingOrder> {
+  return updateSystem((system) => {
+    const order = requireOrder(system, orderId);
+    requireMutableOrder(order);
+    const pallet = requirePallet(order, palletId);
+    const index = pallet.cases.findIndex((entry) => entry.id === caseId);
+    if (index < 0) {
+      throw new ServiceError("Case line was not found on this pallet.", 404);
     }
-
-    const fiber =
-      parsed.data.fiber?.isFiber
-        ? parsed.data.fiber
-        : parsed.data.fiber?.isFiber === false
-          ? { ...parsed.data.fiber, isFiber: false }
-          : null;
-
-    const caseItem: CaseItem = {
-      id: parsed.data.id ?? createId(),
-      upc: parsed.data.upc,
-      sku: parsed.data.sku,
-      batch: parsed.data.batch ?? null,
-      quantityInCase: parsed.data.quantityInCase,
-      description: parsed.data.description,
-      fiber,
-      putawayRoomId: parsed.data.putawayRoomId ?? null,
-      putawayLocationId: parsed.data.putawayLocationId ?? null,
-    };
-
-    pallet.cases.push(caseItem);
-    const updated = recountPallet(pallet);
-    Object.assign(pallet, updated);
+    pallet.cases.splice(index, 1);
+    Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
     return order;
