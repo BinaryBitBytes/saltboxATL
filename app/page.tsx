@@ -1,69 +1,135 @@
-import Image from "next/image";
+import Link from "next/link";
+import { getSystem } from "@/backend/server/store";
+import { enrichInventory } from "@/backend/server/inventory-service";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
+import { formatDateTime, uniqueSkuCount } from "@/lib/format";
 
-export default function Home() {
+export default async function Home() {
+  const system = await getSystem();
+  const inventory = enrichInventory(system);
+  const openReceiving = system.receivingOrders.filter(
+    (order) => order.status === "draft" || order.status === "in-progress",
+  );
+  const unitsOnHand = inventory.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="grid gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Receive inbound pallets, put away cases, and ship from on-hand stock.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="flex gap-2">
+          <Button nativeButton={false} render={<Link href="/receiving" />}>
+            New receiving
+          </Button>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/shipping" />}
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            New shipment
+          </Button>
         </div>
-      </main>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Units on hand" value={unitsOnHand} />
+        <StatCard label="Unique SKUs" value={uniqueSkuCount(inventory)} />
+        <StatCard label="Open receiving" value={openReceiving.length} />
+        <StatCard
+          label="Active locations"
+          value={system.locations.filter((location) => location.isActive).length}
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Open receiving</CardTitle>
+            <CardDescription>Inbound orders still being worked</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {openReceiving.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No open receiving orders.
+              </p>
+            ) : (
+              openReceiving.slice(0, 6).map((order) => (
+                <Link
+                  key={order.id}
+                  href={`/receiving/${order.id}`}
+                  className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/50"
+                >
+                  <span>
+                    {order.orderNumber} · {order.vendor}
+                  </span>
+                  <ReceivingStatusBadge status={order.status} />
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>On-hand snapshot</CardTitle>
+            <CardDescription>Highest quantities first</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm">
+            {inventory.length === 0 ? (
+              <p className="text-muted-foreground">
+                Inventory is empty until a receiving order is completed.
+              </p>
+            ) : (
+              [...inventory]
+                .sort((a, b) => b.quantity - a.quantity)
+                .slice(0, 6)
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                  >
+                    <span>
+                      {item.sku}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {item.locationCode}
+                      </span>
+                    </span>
+                    <span>{item.quantity}</span>
+                  </div>
+                ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Last receiving activity:{" "}
+        {formatDateTime(system.receivingOrders[0]?.updatedAt)}
+      </p>
     </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl">{value}</CardTitle>
+      </CardHeader>
+    </Card>
   );
 }
