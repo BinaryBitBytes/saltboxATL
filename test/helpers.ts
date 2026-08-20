@@ -1,6 +1,7 @@
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import type { InventoryItem, Location, User } from "@/lib/inventory-schema";
 
+// helper function for locations creation
 export function makeLocation(overrides: Partial<Location> = {}): Location {
   return {
     id: createId(),
