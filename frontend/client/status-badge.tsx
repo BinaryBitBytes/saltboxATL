@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import type {
+  InventoryTransactionType,
   ReceivingOrderStatus,
   ShippingOrderStatus,
 } from "@/lib/inventory-schema";
@@ -41,4 +42,23 @@ export function ShippingStatusBadge({
   status: ShippingOrderStatus;
 }) {
   return <Badge variant={shippingVariant[status]}>{status}</Badge>;
+}
+
+const transactionVariant: Record<
+  InventoryTransactionType,
+  "outline" | "secondary" | "default" | "destructive"
+> = {
+  receiving: "secondary",
+  shipping: "outline",
+  overage: "default",
+  shortage: "destructive",
+  damage: "destructive",
+};
+
+export function TransactionTypeBadge({
+  type,
+}: {
+  type: InventoryTransactionType;
+}) {
+  return <Badge variant={transactionVariant[type]}>{type}</Badge>;
 }

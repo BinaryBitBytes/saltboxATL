@@ -23,8 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
+import { ScanInput } from "@/frontend/client/scan-input";
 import { useReceivingSession } from "@/frontend/client/receiving-session";
 import { cn } from "@/lib/utils";
+import type { ScanPayload } from "@/lib/scan-code";
 
 const PalletFormSchema = z.object({
   palletNumber: z.string().trim().min(1),
@@ -308,6 +310,38 @@ function WorkingCaseForm({
     [locations, selectedRoomId],
   );
 
+  async function fillFromScan(payload: ScanPayload) {
+    const code = payload.upc || payload.sku || payload.raw;
+    form.setValue("upc", payload.upc || code);
+    if (payload.sku) form.setValue("sku", payload.sku);
+    if (payload.batch) form.setValue("batch", payload.batch);
+    try {
+      const response = await fetch(
+        `/api/inventory/lookup?code=${encodeURIComponent(code)}`,
+      );
+      const json = (await response.json()) as {
+        success: boolean;
+        data?: Array<{
+          sku: string;
+          upc?: string;
+          description?: string;
+          batch?: string | null;
+        }>;
+      };
+      const hit = json.data?.[0];
+      if (hit) {
+        form.setValue("sku", hit.sku);
+        form.setValue("upc", hit.upc || payload.upc || code);
+        if (hit.description) form.setValue("description", hit.description);
+        if (hit.batch) form.setValue("batch", hit.batch);
+      } else if (!payload.sku) {
+        form.setValue("sku", code);
+      }
+    } catch {
+      if (!payload.sku) form.setValue("sku", code);
+    }
+  }
+
   if (!pallet) {
     return (
       <Card>
@@ -329,7 +363,11 @@ function WorkingCaseForm({
       <CardHeader>
         <CardTitle>Working on pallet {pallet.palletNumber}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="grid gap-3">
+        <ScanInput
+          onScan={(payload) => void fillFromScan(payload)}
+          placeholder="Scan UPC, SKU, or product QR to fill this case"
+        />
         <form
           className="grid gap-3"
           onSubmit={form.handleSubmit((values) => {

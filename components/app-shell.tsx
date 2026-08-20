@@ -10,6 +10,7 @@ import {
   WarehouseIcon,
   TruckDeliveryIcon,
   PinLocation01Icon,
+  TransactionHistoryIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const NAV = [
   { href: "/", label: "Dashboard", icon: DashboardSquare01Icon },
   { href: "/receiving", label: "Receiving", icon: PackageOpenIcon },
   { href: "/inventory", label: "Inventory", icon: WarehouseIcon },
+  { href: "/transactions", label: "Log", icon: TransactionHistoryIcon },
   { href: "/shipping", label: "Shipping", icon: TruckDeliveryIcon },
   { href: "/locations", label: "Locations", icon: PinLocation01Icon },
 ] as const;

@@ -49,6 +49,21 @@
             "Contents_Outbound":{
                 
             }
+        },
+        "Inventory_Transactions":{
+            "ID":"String",
+            "Type":["receiving","shipping","overage","shortage","damage"],
+            "Occurred_At":"String",
+            "SKU":"String",
+            "UPC":"String",
+            "Quantity_Delta":"Number",
+            "Reason":"String",
+            "Scanned_Code":"String"
+        },
+        "Inventory_Adjustments":{
+            "Overage":"Increase on-hand quantity",
+            "Shortage":"Decrease on-hand quantity",
+            "Damage":"Write off or move units to Damaged Hold"
         }
     }
 }
