@@ -218,6 +218,63 @@ export const InventoryItemSchema = z.object({
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
+export const InventoryTransactionTypeSchema = z.enum([
+  "receiving",
+  "shipping",
+  "overage",
+  "shortage",
+  "damage",
+]);
+export type InventoryTransactionType = z.infer<
+  typeof InventoryTransactionTypeSchema
+>;
+
+export const InventoryTransactionSchema = z.object({
+  id: UuidSchema,
+  type: InventoryTransactionTypeSchema,
+  occurredAt: DateTimeSchema,
+  sku: NonEmptyStringSchema,
+  upc: z.string().optional(),
+  batch: z.string().nullable().default(null),
+  inventoryItemId: UuidSchema.nullable().default(null),
+  locationId: UuidSchema.nullable().default(null),
+  destinationLocationId: UuidSchema.nullable().default(null),
+  quantityDelta: z.number().int(),
+  quantityBefore: z.coerce.number().int().min(0).optional(),
+  quantityAfter: z.coerce.number().int().min(0).optional(),
+  reason: z.string().optional(),
+  referenceType: z
+    .enum(["receiving-order", "shipping-order", "adjustment"])
+    .optional(),
+  referenceId: UuidSchema.optional(),
+  scannedCode: z.string().optional(),
+  createdBy: z.string().optional(),
+  notes: z.string().optional(),
+});
+export type InventoryTransaction = z.infer<typeof InventoryTransactionSchema>;
+
+export const CreateAdjustmentInputSchema = z.object({
+  type: z.enum(["overage", "shortage", "damage"]),
+  quantity: z.coerce.number().int().min(1),
+  reason: NonEmptyStringSchema,
+  inventoryItemId: UuidSchema.optional(),
+  sku: z.string().trim().optional(),
+  upc: z.string().trim().optional(),
+  batch: z
+    .string()
+    .trim()
+    .nullable()
+    .optional()
+    .transform((value) => (value === "" || value === undefined ? null : value)),
+  locationId: UuidSchema.optional(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+  createdBy: z.string().optional(),
+  scannedCode: z.string().optional(),
+  moveDamagedToLocationId: UuidSchema.optional(),
+});
+export type CreateAdjustmentInput = z.infer<typeof CreateAdjustmentInputSchema>;
+
 export const LocationSchema = z.object({
   id: UuidSchema,
   code: NonEmptyStringSchema,
@@ -254,6 +311,7 @@ export const InventorySystemSchema = z.object({
   inventoryItems: z.array(InventoryItemSchema).default([]),
   locations: z.array(LocationSchema).default([]),
   rooms: z.array(RoomSchema).default([]),
+  transactions: z.array(InventoryTransactionSchema).default([]),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
 
@@ -263,4 +321,10 @@ export type PartialReceivingOrder = z.infer<typeof PartialReceivingOrderSchema>;
 export type InventoryRow = InventoryItem & {
   locationCode: string;
   roomName: string;
+};
+
+export type InventoryTransactionRow = InventoryTransaction & {
+  locationCode: string;
+  roomName: string;
+  destinationLocationCode: string | null;
 };

@@ -1,6 +1,6 @@
 import { getSystem } from "@/backend/server/store";
 import { enrichInventory } from "@/backend/server/inventory-service";
-import { InventoryTable } from "@/frontend/client/inventory-table";
+import { InventoryWorkspace } from "@/frontend/client/inventory-workspace";
 
 export default async function InventoryPage() {
   const system = await getSystem();
@@ -11,10 +11,11 @@ export default async function InventoryPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          On-hand quantities by SKU, batch, room, and putaway location.
+          On-hand quantities, barcode/QR labels, and overage / shortage / damage
+          adjustments.
         </p>
       </div>
-      <InventoryTable initialRows={rows} />
+      <InventoryWorkspace rows={rows} locations={system.locations} />
     </div>
   );
 }

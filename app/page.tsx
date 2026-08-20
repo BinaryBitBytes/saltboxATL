@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
-import { enrichInventory } from "@/backend/server/inventory-service";
+import { enrichInventory, enrichTransactions } from "@/backend/server/inventory-service";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,16 +9,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
-import { formatDateTime, uniqueSkuCount } from "@/lib/format";
+import {
+  ReceivingStatusBadge,
+  TransactionTypeBadge,
+} from "@/frontend/client/status-badge";
+import { formatDateTime, formatSignedInt, uniqueSkuCount } from "@/lib/format";
 
 export default async function Home() {
   const system = await getSystem();
   const inventory = enrichInventory(system);
+  const transactions = enrichTransactions(system);
   const openReceiving = system.receivingOrders.filter(
     (order) => order.status === "draft" || order.status === "in-progress",
   );
   const unitsOnHand = inventory.reduce((sum, item) => sum + item.quantity, 0);
+  const adjustments = transactions.filter((entry) =>
+    entry.type === "overage" ||
+    entry.type === "shortage" ||
+    entry.type === "damage",
+  ).length;
 
   return (
     <div className="grid gap-6">
@@ -43,7 +52,7 @@ export default async function Home() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Units on hand" value={unitsOnHand} />
         <StatCard label="Unique SKUs" value={uniqueSkuCount(inventory)} />
         <StatCard label="Open receiving" value={openReceiving.length} />
@@ -51,6 +60,7 @@ export default async function Home() {
           label="Active locations"
           value={system.locations.filter((location) => location.isActive).length}
         />
+        <StatCard label="Adjustments posted" value={adjustments} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -115,10 +125,43 @@ export default async function Home() {
         </Card>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Last receiving activity:{" "}
-        {formatDateTime(system.receivingOrders[0]?.updatedAt)}
-      </p>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle>Recent transactions</CardTitle>
+            <CardDescription>Receiving, shipping, and adjustments</CardDescription>
+          </div>
+          <Button nativeButton={false} variant="ghost" render={<Link href="/transactions" />}>
+            View log
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-2 text-sm">
+          {transactions.length === 0 ? (
+            <p className="text-muted-foreground">
+              No stock movements yet. Complete receiving or post an adjustment.
+            </p>
+          ) : (
+            transactions.slice(0, 8).map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+              >
+                <span className="min-w-0 truncate">
+                  {entry.sku}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {entry.locationCode} · {formatDateTime(entry.occurredAt)}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span>{formatSignedInt(entry.quantityDelta)}</span>
+                  <TransactionTypeBadge type={entry.type} />
+                </span>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

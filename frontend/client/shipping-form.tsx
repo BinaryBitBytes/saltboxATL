@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/frontend/client/field";
+import { ScanInput } from "@/frontend/client/scan-input";
 import { NonEmptyStringSchema } from "@/lib/inventory-schema";
+import { matchesScan } from "@/lib/scan-code";
 
 const ShippingHeaderSchema = z.object({
   customer: NonEmptyStringSchema,
@@ -108,6 +110,24 @@ export function ShippingForm({ inventory }: { inventory: InventoryRow[] }) {
 
       <div className="grid gap-2">
         <h2 className="text-sm font-medium">Pick from on-hand inventory</h2>
+        <ScanInput
+          onScan={(payload) => {
+            const matches = inventory.filter(
+              (row) => row.quantity > 0 && matchesScan(row, payload),
+            );
+            const hit = matches[0];
+            if (!hit) {
+              setError("Scanned code did not match on-hand inventory.");
+              return;
+            }
+            setError(null);
+            setQuantity(
+              hit.id,
+              Math.min(hit.quantity, (pickMap.get(hit.id) ?? 0) + 1),
+            );
+          }}
+          placeholder="Scan barcode/QR to add 1 to the matching pick"
+        />
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-xs">
             <thead className="border-b text-left">
@@ -119,14 +139,16 @@ export function ShippingForm({ inventory }: { inventory: InventoryRow[] }) {
               </tr>
             </thead>
             <tbody>
-              {inventory.length === 0 ? (
+              {inventory.filter((row) => row.quantity > 0).length === 0 ? (
                 <tr>
                   <td className="px-2 py-3 text-muted-foreground" colSpan={4}>
                     Nothing on hand. Complete a receiving order first.
                   </td>
                 </tr>
               ) : (
-                inventory.map((row) => (
+                inventory
+                  .filter((row) => row.quantity > 0)
+                  .map((row) => (
                   <tr key={row.id} className="border-b last:border-0">
                     <td className="px-2 py-2">
                       <div className="font-medium">{row.sku}</div>
@@ -161,7 +183,7 @@ export function ShippingForm({ inventory }: { inventory: InventoryRow[] }) {
 
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <div>
-        <Button type="submit" disabled={pending || inventory.length === 0}>
+        <Button type="submit" disabled={pending || inventory.every((row) => row.quantity <= 0)}>
           {pending ? "Shipping…" : "Ship selected inventory"}
         </Button>
       </div>
