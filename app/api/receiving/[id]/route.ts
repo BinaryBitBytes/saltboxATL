@@ -3,6 +3,8 @@ import {
   addPalletToOrder,
   completeReceivingOrder,
   getReceivingOrder,
+  removeCaseFromPallet,
+  updateCaseOnPallet,
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission } from "@/backend/server/dal";
@@ -34,6 +36,7 @@ export async function POST(
       palletId?: string;
       pallet?: unknown;
       caseItem?: unknown;
+      caseId?: string;
       confirmLargeInput?: boolean;
       confirmationQuantity?: number;
     };
@@ -43,6 +46,14 @@ export async function POST(
     }
     if (body.action === "add-case" && body.palletId) {
       return jsonOk(await addCaseToPallet(id, body.palletId, body.caseItem));
+    }
+    if (body.action === "update-case" && body.palletId && body.caseId) {
+      return jsonOk(
+        await updateCaseOnPallet(id, body.palletId, body.caseId, body.caseItem),
+      );
+    }
+    if (body.action === "remove-case" && body.palletId && body.caseId) {
+      return jsonOk(await removeCaseFromPallet(id, body.palletId, body.caseId));
     }
     if (body.action === "complete") {
       return jsonOk(

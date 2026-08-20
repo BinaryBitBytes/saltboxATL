@@ -3,7 +3,7 @@ import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { ReceivingWorkspace } from "@/frontend/client/receiving-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
-import { formatDateTime } from "@/lib/format";
+import { collectKnownProducts } from "@/lib/codes/product-codes";
 import {
   Card,
   CardContent,
@@ -64,6 +64,7 @@ export default async function ReceivingOrderPage({
         order={order}
         rooms={system.rooms}
         locations={system.locations}
+        knownProducts={collectKnownProducts(system)}
       />
     </div>
   );

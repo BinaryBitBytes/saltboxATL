@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   CONNECTION_TYPES,
   STRAND_COUNTS,
+  type CaseItem,
   type Location,
   type ReceivingOrder,
   type Room,
@@ -17,7 +18,9 @@ import {
   addReceivingPallet,
   cancelReceiving,
   completeReceiving,
+  removeReceivingCase,
   selectWorkingPallet,
+  updateReceivingCase,
 } from "@/backend/server/serverAction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +32,10 @@ import { LIMITS } from "@/lib/validation/limits";
 import { useReceivingSession } from "@/frontend/client/receiving-session";
 import { cn } from "@/lib/utils";
 import type { ScanPayload } from "@/lib/scan-code";
+import {
+  resolveReceivingProductCodes,
+  type KnownProduct,
+} from "@/lib/codes/product-codes";
 
 const PalletFormSchema = z.object({
   palletNumber: z.string().trim().min(1),
@@ -38,36 +45,96 @@ const PalletFormSchema = z.object({
   expectedCaseCount: z.number().int().min(0),
 });
 
-const CaseFormSchema = z.object({
-  upc: z.string().trim().min(1),
-  sku: z.string().trim().min(1),
-  batch: z.string().nullable(),
-  quantityInCase: z.number().int().min(1),
-  description: z.string().trim().min(1),
-  isFiber: z.boolean(),
-  connectionType: z.string().nullable(),
-  strandCount: z.number().nullable(),
-  lengthMeters: z.number().nullable(),
-  putawayRoomId: z.string().nullable(),
-  putawayLocationId: z.uuid("Select a putaway location"),
-});
+const CaseFormSchema = z
+  .object({
+    upc: z.string().trim(),
+    sku: z.string().trim(),
+    generateSku: z.boolean(),
+    generateUpc: z.boolean(),
+    batch: z.string().nullable(),
+    quantityInCase: z.number().int().min(1),
+    description: z.string().trim().min(1, "Enter a case / item description."),
+    isFiber: z.boolean(),
+    connectionType: z.string().nullable(),
+    strandCount: z.number().nullable(),
+    lengthMeters: z.number().nullable(),
+    putawayRoomId: z.string().nullable(),
+    putawayLocationId: z.uuid("Select a putaway location"),
+  })
+  .superRefine((values, ctx) => {
+    if (!values.generateSku && values.sku.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sku"],
+        message:
+          "Enter a vendor SKU or auto-generate one after adding a description.",
+      });
+    }
+    if (!values.generateUpc && values.upc.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["upc"],
+        message:
+          "Enter a vendor UPC or auto-generate one after adding a description.",
+      });
+    }
+  });
 
 type CaseFormValues = z.infer<typeof CaseFormSchema>;
 type PalletFormValues = z.infer<typeof PalletFormSchema>;
+type EditingLine = { palletId: string; caseId: string };
 
 function ErrorText({ error }: { error: string | null }) {
   if (!error) return null;
   return <p className="text-xs text-destructive">{error}</p>;
 }
 
+function emptyCaseValues(rooms: Room[]): CaseFormValues {
+  return {
+    upc: "",
+    sku: "",
+    generateSku: false,
+    generateUpc: false,
+    batch: null,
+    quantityInCase: 1,
+    description: "",
+    isFiber: false,
+    connectionType: null,
+    strandCount: null,
+    lengthMeters: null,
+    putawayRoomId: rooms[0]?.id ?? null,
+    putawayLocationId: undefined as never,
+  };
+}
+
+function valuesFromCase(item: CaseItem, rooms: Room[]): CaseFormValues {
+  return {
+    upc: item.upc,
+    sku: item.sku,
+    generateSku: false,
+    generateUpc: false,
+    batch: item.batch,
+    quantityInCase: item.quantityInCase,
+    description: item.description,
+    isFiber: Boolean(item.fiber?.isFiber),
+    connectionType: item.fiber?.connectionType ?? null,
+    strandCount: item.fiber?.strandCount ?? null,
+    lengthMeters: item.fiber?.lengthMeters ?? null,
+    putawayRoomId: item.putawayRoomId ?? rooms[0]?.id ?? null,
+    putawayLocationId: (item.putawayLocationId ?? undefined) as never,
+  };
+}
+
 export function ReceivingWorkspace({
   order,
   rooms,
   locations,
+  knownProducts,
 }: {
   order: ReceivingOrder;
   rooms: Room[];
   locations: Location[];
+  knownProducts: KnownProduct[];
 }) {
   const router = useRouter();
   const editable = order.status === "draft" || order.status === "in-progress";
@@ -80,10 +147,33 @@ export function ReceivingWorkspace({
     order.pallets.find((pallet) => pallet.id === workingPalletId) ??
     order.pallets.at(-1) ??
     null;
+  const [editing, setEditing] = useState<EditingLine | null>(null);
+  const editingCase =
+    editing == null
+      ? null
+      : (order.pallets
+          .find((pallet) => pallet.id === editing.palletId)
+          ?.cases.find((item) => item.id === editing.caseId) ?? null);
 
   useEffect(() => {
     setWorking(order.id, workingPallet?.id ?? null);
   }, [order.id, setWorking, workingPallet?.id]);
+
+  useEffect(() => {
+    if (editing && !editingCase) setEditing(null);
+  }, [editing, editingCase]);
+
+  function selectPallet(palletId: string) {
+    if (editing && editing.palletId !== palletId) setEditing(null);
+    setWorking(order.id, palletId);
+    void selectWorkingPallet(order.id, palletId).then(() => router.refresh());
+  }
+
+  function startEdit(palletId: string, caseId: string) {
+    setEditing({ palletId, caseId });
+    setWorking(order.id, palletId);
+    void selectWorkingPallet(order.id, palletId).then(() => router.refresh());
+  }
 
   return (
     <div className="grid gap-6">
@@ -95,6 +185,10 @@ export function ReceivingWorkspace({
             pallet={workingPallet}
             rooms={rooms}
             locations={locations}
+            knownProducts={knownProducts}
+            editingCase={editingCase}
+            onCancelEdit={() => setEditing(null)}
+            onSaved={() => setEditing(null)}
           />
         </div>
       ) : null}
@@ -111,46 +205,20 @@ export function ReceivingWorkspace({
             </p>
           ) : (
             order.pallets.map((pallet) => (
-              <button
+              <PalletCard
                 key={pallet.id}
-                type="button"
-                disabled={!editable}
-                onClick={() => {
-                  setWorking(order.id, pallet.id);
-                  void selectWorkingPallet(order.id, pallet.id).then(() =>
-                    router.refresh(),
-                  );
+                pallet={pallet}
+                editable={editable}
+                isWorking={workingPallet?.id === pallet.id}
+                editingCaseId={editingCase?.id ?? null}
+                onSelect={() => selectPallet(pallet.id)}
+                onEdit={(caseId) => startEdit(pallet.id, caseId)}
+                onRemoved={(caseId) => {
+                  if (editing?.caseId === caseId) setEditing(null);
+                  router.refresh();
                 }}
-                className={cn(
-                  "rounded-lg border border-border px-3 py-3 text-left transition-colors",
-                  workingPallet?.id === pallet.id
-                    ? "bg-muted"
-                    : "hover:bg-muted/50",
-                )}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium">
-                    Pallet {pallet.palletNumber}
-                    {pallet.isPartial ? " · partial" : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {pallet.actualCaseCount}/{pallet.expectedCaseCount || "?"} cases
-                    · {pallet.actualSkuCount}/{pallet.expectedSkuCount || "?"} SKUs
-                  </p>
-                </div>
-                {pallet.cases.length > 0 ? (
-                  <ul className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                    {pallet.cases.map((item) => (
-                      <li key={item.id}>
-                        {item.sku} · UPC {item.upc} · qty {item.quantityInCase}
-                        {item.fiber?.isFiber
-                          ? ` · fiber ${item.fiber.connectionType ?? ""} ${item.fiber.strandCount ?? ""}ct`
-                          : ""}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </button>
+                orderId={order.id}
+              />
             ))
           )}
         </CardContent>
@@ -167,6 +235,124 @@ export function ReceivingWorkspace({
           )}
         />
       ) : null}
+    </div>
+  );
+}
+
+function PalletCard({
+  orderId,
+  pallet,
+  editable,
+  isWorking,
+  editingCaseId,
+  onSelect,
+  onEdit,
+  onRemoved,
+}: {
+  orderId: string;
+  pallet: ReceivingOrder["pallets"][number];
+  editable: boolean;
+  isWorking: boolean;
+  editingCaseId: string | null;
+  onSelect: () => void;
+  onEdit: (caseId: string) => void;
+  onRemoved: (caseId: string) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border border-border transition-colors",
+        isWorking ? "bg-muted" : "hover:bg-muted/50",
+      )}
+    >
+      <button
+        type="button"
+        disabled={!editable}
+        onClick={onSelect}
+        className="w-full px-3 py-3 text-left"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">
+            Pallet {pallet.palletNumber}
+            {pallet.isPartial ? " · partial" : ""}
+            {isWorking ? " · working" : ""}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {pallet.actualCaseCount}/{pallet.expectedCaseCount || "?"} cases
+            · {pallet.actualSkuCount}/{pallet.expectedSkuCount || "?"} SKUs
+          </p>
+        </div>
+      </button>
+      {pallet.cases.length > 0 ? (
+        <ul className="grid gap-1 border-t border-border px-3 py-2">
+          {pallet.cases.map((item) => (
+            <li
+              key={item.id}
+              className={cn(
+                "flex flex-wrap items-start justify-between gap-2 rounded-md px-1 py-1 text-xs",
+                editingCaseId === item.id ? "bg-background" : "",
+              )}
+            >
+              <div className="min-w-0 text-muted-foreground">
+                <p>
+                  {item.sku} · UPC {item.upc} · qty {item.quantityInCase}
+                  {item.fiber?.isFiber
+                    ? ` · fiber ${item.fiber.connectionType ?? ""} ${item.fiber.strandCount ?? ""}ct`
+                    : ""}
+                </p>
+                <p>{item.description}</p>
+              </div>
+              {editable ? (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => onEdit(item.id)}
+                  >
+                    {editingCaseId === item.id ? "Editing" : "Edit"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Remove ${item.sku} from pallet ${pallet.palletNumber}?`,
+                        )
+                      ) {
+                        return;
+                      }
+                      setError(null);
+                      startTransition(async () => {
+                        const result = await removeReceivingCase(
+                          orderId,
+                          pallet.id,
+                          item.id,
+                        );
+                        if (!result.ok) {
+                          setError(result.error);
+                          return;
+                        }
+                        onRemoved(item.id);
+                      });
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <ErrorText error={error} />
     </div>
   );
 }
@@ -283,11 +469,19 @@ function WorkingCaseForm({
   pallet,
   rooms,
   locations,
+  knownProducts,
+  editingCase,
+  onCancelEdit,
+  onSaved,
 }: {
   orderId: string;
   pallet: ReceivingOrder["pallets"][number] | null;
   rooms: Room[];
   locations: Location[];
+  knownProducts: KnownProduct[];
+  editingCase: CaseItem | null;
+  onCancelEdit: () => void;
+  onSaved: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -296,20 +490,27 @@ function WorkingCaseForm({
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const form = useForm<CaseFormValues>({
     resolver: zodResolver(CaseFormSchema),
-    defaultValues: {
-      upc: "",
-      sku: "",
-      batch: null,
-      quantityInCase: 1,
-      description: "",
-      isFiber: false,
-      connectionType: null,
-      strandCount: null,
-      lengthMeters: null,
-      putawayRoomId: rooms[0]?.id ?? null,
-      putawayLocationId: undefined,
-    },
+    defaultValues: emptyCaseValues(rooms),
   });
+
+  const catalog = useMemo(
+    () =>
+      knownProducts.filter((product) => product.caseId !== editingCase?.id),
+    [knownProducts, editingCase?.id],
+  );
+
+  const editingCaseId = editingCase?.id ?? null;
+
+  // Reset the form only when the edited line changes, not when pallet data refreshes.
+  useEffect(() => {
+    form.reset(
+      editingCase ? valuesFromCase(editingCase, rooms) : emptyCaseValues(rooms),
+    );
+    setError(null);
+    setConfirmLargeInput(false);
+    setConfirmationQuantity("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editingCaseId is the load trigger
+  }, [editingCaseId, form]);
 
   const selectedRoomId = useWatch({
     control: form.control,
@@ -320,6 +521,9 @@ function WorkingCaseForm({
     control: form.control,
     name: "quantityInCase",
   });
+  const description = useWatch({ control: form.control, name: "description" });
+  const generateSku = useWatch({ control: form.control, name: "generateSku" });
+  const generateUpc = useWatch({ control: form.control, name: "generateUpc" });
   const roomLocations = useMemo(
     () =>
       locations.filter(
@@ -327,10 +531,13 @@ function WorkingCaseForm({
       ),
     [locations, selectedRoomId],
   );
+  const canAutoGenerate = Boolean(description?.trim());
 
   async function fillFromScan(payload: ScanPayload) {
     const code = payload.upc || payload.sku || payload.raw;
     form.setValue("upc", payload.upc || code);
+    form.setValue("generateUpc", false);
+    form.setValue("generateSku", false);
     if (payload.sku) form.setValue("sku", payload.sku);
     if (payload.batch) form.setValue("batch", payload.batch);
     try {
@@ -360,6 +567,41 @@ function WorkingCaseForm({
     }
   }
 
+  function autoGenerate(kind: "sku" | "upc" | "both") {
+    setError(null);
+    const values = form.getValues();
+    if (!values.description.trim()) {
+      setError(
+        "Enter a case / item description before auto-generating a UPC or SKU.",
+      );
+      return;
+    }
+    try {
+      const codes = resolveReceivingProductCodes({
+        description: values.description,
+        sku: kind === "sku" || kind === "both" ? "" : values.sku,
+        upc: kind === "upc" || kind === "both" ? "" : values.upc,
+        generateSku: kind === "sku" || kind === "both",
+        generateUpc: kind === "upc" || kind === "both",
+        products: catalog,
+      });
+      if (kind === "sku" || kind === "both") {
+        form.setValue("sku", codes.sku, { shouldValidate: true });
+        form.setValue("generateSku", true);
+      }
+      if (kind === "upc" || kind === "both") {
+        form.setValue("upc", codes.upc, { shouldValidate: true });
+        form.setValue("generateUpc", true);
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to auto-generate unique codes.",
+      );
+    }
+  }
+
   if (!pallet) {
     return (
       <Card>
@@ -379,7 +621,11 @@ function WorkingCaseForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Working on pallet {pallet.palletNumber}</CardTitle>
+        <CardTitle>
+          {editingCase
+            ? `Edit case on pallet ${pallet.palletNumber}`
+            : `Working on pallet ${pallet.palletNumber}`}
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         <ScanInput
@@ -391,9 +637,11 @@ function WorkingCaseForm({
           onSubmit={form.handleSubmit((values) => {
             setError(null);
             startTransition(async () => {
-              const result = await addReceivingCase(orderId, pallet.id, {
+              const payload = {
                 upc: values.upc,
                 sku: values.sku,
+                generateSku: values.generateSku,
+                generateUpc: values.generateUpc,
                 batch: values.batch,
                 quantityInCase: Number(values.quantityInCase),
                 description: values.description,
@@ -416,33 +664,94 @@ function WorkingCaseForm({
                   confirmLargeInput,
                   confirmationQuantity,
                 ),
-              });
+              };
+              const result = editingCase
+                ? await updateReceivingCase(
+                    orderId,
+                    pallet.id,
+                    editingCase.id,
+                    payload,
+                  )
+                : await addReceivingCase(orderId, pallet.id, payload);
               if (!result.ok) {
                 setError(result.error);
                 return;
               }
+              onSaved();
               form.reset({
-                ...form.getValues(),
-                upc: "",
-                sku: "",
-                batch: null,
-                quantityInCase: 1,
-                description: "",
-                isFiber: false,
-                connectionType: null,
-                strandCount: null,
-                lengthMeters: null,
+                ...emptyCaseValues(rooms),
+                putawayRoomId: values.putawayRoomId,
+                putawayLocationId: values.putawayLocationId,
               });
               router.refresh();
             });
           })}
         >
+          <Field
+            label="Case / item description"
+            htmlFor="description"
+            error={form.formState.errors.description?.message}
+          >
+            <Input id="description" {...form.register("description")} />
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            If the vendor did not provide a UPC or SKU, enter the description
+            first, then auto-generate unique codes. Duplicate UPCs and SKUs are
+            not allowed.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canAutoGenerate || pending}
+              onClick={() => autoGenerate("sku")}
+            >
+              Auto-generate SKU
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canAutoGenerate || pending}
+              onClick={() => autoGenerate("upc")}
+            >
+              Auto-generate UPC
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canAutoGenerate || pending}
+              onClick={() => autoGenerate("both")}
+            >
+              Auto-generate both
+            </Button>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="UPC" htmlFor="upc" error={form.formState.errors.upc?.message}>
-              <Input id="upc" {...form.register("upc")} />
+            <Field
+              label={generateUpc ? "UPC (auto-generated)" : "UPC"}
+              htmlFor="upc"
+              error={form.formState.errors.upc?.message}
+            >
+              <Input
+                id="upc"
+                {...form.register("upc", {
+                  onChange: () => form.setValue("generateUpc", false),
+                })}
+              />
             </Field>
-            <Field label="SKU" htmlFor="sku" error={form.formState.errors.sku?.message}>
-              <Input id="sku" {...form.register("sku")} />
+            <Field
+              label={generateSku ? "SKU (auto-generated)" : "SKU"}
+              htmlFor="sku"
+              error={form.formState.errors.sku?.message}
+            >
+              <Input
+                id="sku"
+                {...form.register("sku", {
+                  onChange: () => form.setValue("generateSku", false),
+                })}
+              />
             </Field>
             <Field label="Batch" htmlFor="batch">
               <Input id="batch" {...form.register("batch")} />
@@ -460,13 +769,6 @@ function WorkingCaseForm({
               />
             </Field>
           </div>
-          <Field
-            label="Description"
-            htmlFor="description"
-            error={form.formState.errors.description?.message}
-          >
-            <Input id="description" {...form.register("description")} />
-          </Field>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" {...form.register("isFiber")} />
             Fiber item
@@ -543,9 +845,31 @@ function WorkingCaseForm({
             onConfirmationQuantityChange={setConfirmationQuantity}
           />
           <ErrorText error={error} />
-          <Button type="submit" disabled={pending}>
-            {pending ? "Adding…" : "Add case to pallet"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={pending}>
+              {pending
+                ? editingCase
+                  ? "Saving…"
+                  : "Adding…"
+                : editingCase
+                  ? "Save case changes"
+                  : "Add case to pallet"}
+            </Button>
+            {editingCase ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  onCancelEdit();
+                  form.reset(emptyCaseValues(rooms));
+                  setError(null);
+                }}
+              >
+                Cancel edit
+              </Button>
+            ) : null}
+          </div>
         </form>
       </CardContent>
     </Card>

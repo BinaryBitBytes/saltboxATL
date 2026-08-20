@@ -12,6 +12,8 @@ import {
   addCaseToPallet,
   addPalletToOrder,
   setWorkingPallet,
+  updateCaseOnPallet,
+  removeCaseFromPallet,
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
@@ -92,6 +94,39 @@ export async function addReceivingCase(
   try {
     await requireApiPermission("receive");
     const data = await addCaseToPallet(orderId, palletId, rawData);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function updateReceivingCase(
+  orderId: string,
+  palletId: string,
+  caseId: string,
+  rawData: unknown,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    await requireApiPermission("receive");
+    const data = await updateCaseOnPallet(orderId, palletId, caseId, rawData);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function removeReceivingCase(
+  orderId: string,
+  palletId: string,
+  caseId: string,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    await requireApiPermission("receive");
+    const data = await removeCaseFromPallet(orderId, palletId, caseId);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     return { ok: true, data };

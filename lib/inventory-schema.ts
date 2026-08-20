@@ -82,8 +82,16 @@ export const CaseItemSchema = z.object({
 });
 export type CaseItem = z.infer<typeof CaseItemSchema>;
 
-export const CaseItemInputSchema = CaseItemSchema.omit({ id: true }).extend({
+export const CaseItemInputSchema = CaseItemSchema.omit({
+  id: true,
+  sku: true,
+  upc: true,
+}).extend({
   id: UuidSchema.optional(),
+  sku: z.string().trim().optional().default(""),
+  upc: z.string().trim().optional().default(""),
+  generateSku: z.boolean().optional().default(false),
+  generateUpc: z.boolean().optional().default(false),
   batch: z
     .string()
     .trim()
