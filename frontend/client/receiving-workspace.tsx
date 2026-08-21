@@ -218,6 +218,7 @@ export function ReceivingWorkspace({
           </CardHeader>
           <CardContent>
             <LabelPrintSheet
+              printId="inbound-labels"
               title="Print inbound labels"
               description="Print case labels after receiving so putaway and inventory can scan the freight."
               labels={buildInboundLabels(order)}

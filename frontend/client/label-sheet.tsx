@@ -5,6 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { PrinterIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import type { WarehouseLabel } from "@/lib/labels/build-labels";
+import { printNamedDocument } from "@/frontend/client/print";
 import { cn } from "@/lib/utils";
 
 function LabelMark({
@@ -124,10 +125,12 @@ export function LabelPrintSheet({
   title,
   description,
   labels,
+  printId = "labels",
 }: {
   title: string;
   description: string;
   labels: WarehouseLabel[];
+  printId?: string;
 }) {
   if (labels.length === 0) {
     return (
@@ -144,13 +147,14 @@ export function LabelPrintSheet({
           <p className="text-sm font-medium">{title}</p>
           <p className="text-xs text-muted-foreground">{description}</p>
         </div>
-        <Button type="button" onClick={() => window.print()}>
+        <Button type="button" onClick={() => printNamedDocument(printId)}>
           <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
           Print {labels.length} label{labels.length === 1 ? "" : "s"}
         </Button>
       </div>
       <div
-        data-print-root
+        data-print-root={printId}
+        data-print-layout="labels"
         className="flex flex-wrap gap-3 rounded-lg border border-border bg-muted/30 p-3 print:gap-2 print:border-0 print:bg-white print:p-0"
       >
         {labels.map((label) => (

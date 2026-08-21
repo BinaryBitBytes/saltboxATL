@@ -11,7 +11,7 @@ import { LIMITS } from "@/lib/validation/limits";
 import { ValidationError } from "@/lib/validation/errors";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { signSession, verifySessionToken } from "@/lib/auth/token";
-import { hasPermission, safeRedirectPath } from "@/lib/auth/permissions";
+import { canAccessPath, hasPermission, safeRedirectPath } from "@/lib/auth/permissions";
 
 describe("user authentication safeguards", () => {
   beforeEach(() => {
@@ -81,6 +81,8 @@ describe("user authentication safeguards", () => {
     expect(hasPermission("user", "adjustInventory")).to.equal(false);
     expect(hasPermission("associate", "adjustInventory")).to.equal(false);
     expect(hasPermission("manager", "manageUsers")).to.equal(true);
+    expect(canAccessPath("user", "/logbook")).to.equal(true);
+    expect(canAccessPath("user", "/shipping")).to.equal(false);
   });
 
   it("blocks open redirects after login", () => {

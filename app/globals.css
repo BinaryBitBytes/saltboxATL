@@ -173,23 +173,36 @@
     visibility: hidden !important;
   }
 
-  [data-print-root],
-  [data-print-root] * {
+  [data-print-active],
+  [data-print-active] * {
     visibility: visible !important;
   }
 
-  [data-print-root] {
+  [data-print-active] {
     position: absolute;
-    inset: 0;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+    padding: 0;
+    border: 0;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  [data-print-active][data-print-layout="labels"] {
     display: flex;
     flex-wrap: wrap;
     gap: 0.2in;
-    background: white;
-    padding: 0;
-    border: 0;
   }
 
-  [data-print-root] article {
+  [data-print-active][data-print-layout="document"] {
+    display: block;
+    padding: 0.35in;
+  }
+
+  [data-print-active][data-print-layout="labels"] article {
     break-inside: avoid;
     page-break-inside: avoid;
     print-color-adjust: exact;

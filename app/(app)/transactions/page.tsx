@@ -14,8 +14,8 @@ export default async function TransactionsPage() {
         <h1 className="font-heading text-xl font-semibold">Transaction log</h1>
         <p className="text-sm text-muted-foreground">
           Every putaway, shipment, overage, shortage, and damage
-          adjustment. Proof photos attached to a PO, shipment, or damage
-          write-off appear on the matching log lines.
+          adjustment. Use the logbook to review whole shipments,
+          deliveries, and damage events.
         </p>
       </div>
       <TransactionsTable initialRows={rows} />

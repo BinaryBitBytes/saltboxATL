@@ -26,7 +26,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   if (pathname.startsWith("/inventory")) {
     return hasPermission(role, "viewInventory");
   }
-  if (pathname.startsWith("/transactions")) {
+  if (pathname.startsWith("/transactions") || pathname.startsWith("/logbook")) {
     return hasPermission(role, "viewTransactions");
   }
   if (pathname.startsWith("/receiving")) {
