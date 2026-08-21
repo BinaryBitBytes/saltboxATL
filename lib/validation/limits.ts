@@ -18,6 +18,9 @@ export const LIMITS = {
   loginMaxFailures: 5,
   loginWindowMs: 15 * 60 * 1000,
   loginLockMs: 15 * 60 * 1000,
+  photoMaxBytes: 2 * 1024 * 1024,
+  photoMaxCount: 16,
+  photoFileName: 120,
 } as const;
 
 export const SENSITIVE_USER_KEYS = [

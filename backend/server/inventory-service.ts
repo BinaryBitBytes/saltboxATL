@@ -32,6 +32,7 @@ import {
 } from "@/backend/server/inventory-ops";
 import { readSystem, updateSystem } from "@/backend/server/store";
 import { matchesScan, parseScanCode } from "@/lib/scan-code";
+import { photosForReference } from "@/lib/photos/query";
 import { LIMITS } from "@/lib/validation/limits";
 import {
   assertLargeInputConfirmed,
@@ -97,6 +98,11 @@ export function enrichTransactions(
       locationCode: location?.code ?? "—",
       roomName: room?.name ?? "—",
       destinationLocationCode: destination?.code ?? null,
+      photos: photosForReference(
+        system.photos ?? [],
+        entry.referenceType,
+        entry.referenceId,
+      ),
     };
   });
 }
@@ -739,7 +745,11 @@ export async function lookupInventoryByCode(
   return lookupInventory(system, trimmed);
 }
 
-export async function createAdjustmentRecord(rawData: unknown) {
+export type AdjustmentRecordResult = StockChange & { referenceId: string };
+
+export async function createAdjustmentRecord(
+  rawData: unknown,
+): Promise<AdjustmentRecordResult> {
   const parsed = parseWithSchema(CreateAdjustmentInputSchema, rawData);
   if (!parsed.success) {
     throw new ServiceError(parsed.error);
@@ -837,7 +847,7 @@ export async function createAdjustmentRecord(rawData: unknown) {
         referenceType: "adjustment",
         referenceId: adjustmentId,
       });
-      return created.change;
+      return { ...created.change, referenceId: adjustmentId };
     }
 
     if (!target) {
@@ -874,6 +884,10 @@ export async function createAdjustmentRecord(rawData: unknown) {
       referenceType: "adjustment",
       referenceId: adjustmentId,
     });
-    return result.changes[0];
+    const change = result.changes[0];
+    if (!change) {
+      throw new ServiceError("Adjustment did not produce a stock change.");
+    }
+    return { ...change, referenceId: adjustmentId };
   });
 }

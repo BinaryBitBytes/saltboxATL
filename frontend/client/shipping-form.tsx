@@ -13,6 +13,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/frontend/client/field";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import {
+  PhotoDraftCollector,
+  revokePhotoDrafts,
+  type PhotoDraft,
+} from "@/frontend/client/photo-proof";
+import { uploadProofPhotos } from "@/frontend/client/photo-api";
 import { NonEmptyStringSchema } from "@/lib/inventory-schema";
 import { LIMITS } from "@/lib/validation/limits";
 import { matchesScan } from "@/lib/scan-code";
@@ -39,6 +45,7 @@ export function ShippingForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [picks, setPicks] = useState<PickDraft[]>([]);
+  const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const form = useForm<ShippingHeader>({
@@ -90,6 +97,19 @@ export function ShippingForm({
             setError(result.error);
             return;
           }
+          if (photoDrafts.length > 0) {
+            const uploaded = await uploadProofPhotos({
+              ownerType: "shipping-order",
+              ownerId: result.data.id,
+              files: photoDrafts.map((draft) => draft.file),
+            });
+            if (!uploaded.ok) {
+              setError(
+                `Shipment saved, but photos failed: ${uploaded.error}. Add them on the shipment page.`,
+              );
+            }
+            revokePhotoDrafts(photoDrafts);
+          }
           router.push(`/shipping/${result.data.id}`);
           router.refresh();
         });
@@ -124,6 +144,13 @@ export function ShippingForm({
       <Field label="Notes" htmlFor="notes">
         <Textarea id="notes" {...form.register("notes")} />
       </Field>
+      <PhotoDraftCollector
+        drafts={photoDrafts}
+        onChange={setPhotoDrafts}
+        disabled={pending}
+        title="Proof of outbound freight"
+        description="Photograph picked freight, packed pallets, and shipping papers. These attach to the shipment after you pick."
+      />
 
       <div className="grid gap-2">
         <h2 className="text-sm font-medium">Pick from on-hand inventory</h2>

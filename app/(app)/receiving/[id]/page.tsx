@@ -3,7 +3,9 @@ import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { ReceivingWorkspace } from "@/frontend/client/receiving-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
+import { PhotoProofCollector } from "@/frontend/client/photo-proof";
 import { collectKnownProducts } from "@/lib/codes/product-codes";
+import { photosForOwner } from "@/lib/photos/query";
 import { formatDateTime } from "@/lib/format";
 import {
   Card,
@@ -60,6 +62,15 @@ export default async function ReceivingOrderPage({
           <Detail label="Notes" value={order.notes || "—"} />
         </CardContent>
       </Card>
+
+      <PhotoProofCollector
+        ownerType="receiving-order"
+        ownerId={order.id}
+        photos={photosForOwner(system.photos ?? [], "receiving-order", order.id)}
+        canEdit={order.status !== "cancelled"}
+        title="Proof of inbound freight"
+        description={`Photographs for PO ${order.poNumber} — packing slips, pallets, seals, and freight condition.`}
+      />
 
       <ReceivingWorkspace
         order={order}

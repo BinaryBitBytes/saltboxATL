@@ -3,7 +3,9 @@ import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { ShippingStatusBadge } from "@/frontend/client/status-badge";
 import { LabelPrintSheet } from "@/frontend/client/label-sheet";
+import { PhotoProofCollector } from "@/frontend/client/photo-proof";
 import { buildOutboundLabels } from "@/lib/labels/build-labels";
+import { photosForOwner } from "@/lib/photos/query";
 import { formatDateTime } from "@/lib/format";
 import {
   Card,
@@ -28,6 +30,11 @@ export default async function ShippingOrderPage({
     system.locations.map((location) => [location.id, location.code]),
   );
   const labels = buildOutboundLabels(order, locations);
+  const photos = photosForOwner(
+    system.photos ?? [],
+    "shipping-order",
+    order.id,
+  );
 
   return (
     <div className="grid gap-6">
@@ -67,6 +74,15 @@ export default async function ShippingOrderPage({
           ))}
         </CardContent>
       </Card>
+
+      <PhotoProofCollector
+        ownerType="shipping-order"
+        ownerId={order.id}
+        photos={photos}
+        canEdit={order.status !== "cancelled"}
+        title="Proof of outbound freight"
+        description="Photograph picked pallets, packed freight, and the bill of lading for this shipment."
+      />
 
       <Card className="print:border-0 print:shadow-none print:ring-0">
         <CardHeader className="print:hidden">
