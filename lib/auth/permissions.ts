@@ -23,7 +23,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   if (pathname === "/" || pathname === "") {
     return hasPermission(role, "viewDashboard");
   }
-  if (pathname.startsWith("/inventory")) {
+  if (pathname.startsWith("/inventory") || pathname.startsWith("/reports")) {
     return hasPermission(role, "viewInventory");
   }
   if (pathname.startsWith("/transactions") || pathname.startsWith("/logbook")) {

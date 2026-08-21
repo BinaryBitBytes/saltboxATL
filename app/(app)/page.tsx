@@ -55,7 +55,6 @@ export default async function Home() {
             Receive inbound pallets, put away staged cases, and ship from on-hand stock.
           </p>
         </div>
-        {canReceive || canPutaway || canShip ? (
           <div className="flex flex-wrap gap-2">
             {canReceive ? (
               <Button nativeButton={false} render={<Link href="/receiving" />}>
@@ -80,8 +79,14 @@ export default async function Home() {
                 New shipment
               </Button>
             ) : null}
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/reports" />}
+            >
+              Item report
+            </Button>
           </div>
-        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 min-[30rem]:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
