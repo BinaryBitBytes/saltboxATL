@@ -163,3 +163,36 @@
     display: none;
   }
 }
+
+@media print {
+  body {
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  [data-print-root],
+  [data-print-root] * {
+    visibility: visible !important;
+  }
+
+  [data-print-root] {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2in;
+    background: white;
+    padding: 0;
+    border: 0;
+  }
+
+  [data-print-root] article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

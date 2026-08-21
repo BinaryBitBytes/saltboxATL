@@ -15,13 +15,14 @@ export default async function InventoryPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          On-hand quantities, barcode/QR labels
-          {canAdjust ? ", and overage / shortage / damage adjustments." : "."}
+          On-hand quantities, barcode/QR labels, and location label printing
+          {canAdjust ? ", plus overage / shortage / damage adjustments." : "."}
         </p>
       </div>
       <InventoryWorkspace
         rows={rows}
         locations={system.locations}
+        rooms={system.rooms}
         canAdjust={canAdjust}
       />
     </div>

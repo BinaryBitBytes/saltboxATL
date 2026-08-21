@@ -36,6 +36,8 @@ import {
   resolveReceivingProductCodes,
   type KnownProduct,
 } from "@/lib/codes/product-codes";
+import { LabelPrintSheet } from "@/frontend/client/label-sheet";
+import { buildInboundLabels } from "@/lib/labels/build-labels";
 
 const PalletFormSchema = z.object({
   palletNumber: z.string().trim().min(1),
@@ -208,6 +210,21 @@ export function ReceivingWorkspace({
           )}
         </CardContent>
       </Card>
+
+      {order.status === "received" || order.status === "completed" ? (
+        <Card className="print:border-0 print:shadow-none print:ring-0">
+          <CardHeader className="print:hidden">
+            <CardTitle>Inbound freight labels</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LabelPrintSheet
+              title="Print inbound labels"
+              description="Print case labels after receiving so putaway and inventory can scan the freight."
+              labels={buildInboundLabels(order)}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {order.status === "received" ? (
         <ReceivedOrderActions orderId={order.id} />
