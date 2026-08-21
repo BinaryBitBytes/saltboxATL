@@ -232,9 +232,14 @@ export default async function Home() {
             <CardTitle>Recent transactions</CardTitle>
             <CardDescription>Putaway, shipping, and adjustments</CardDescription>
           </div>
-          <Button nativeButton={false} variant="ghost" render={<Link href="/transactions" />}>
-            View log
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button nativeButton={false} variant="ghost" render={<Link href="/logbook" />}>
+              Open logbook
+            </Button>
+            <Button nativeButton={false} variant="ghost" render={<Link href="/transactions" />}>
+              Stock log
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm">
           {transactions.length === 0 ? (

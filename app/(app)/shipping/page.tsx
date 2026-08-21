@@ -32,7 +32,8 @@ export default async function ShippingPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold">Shipping</h1>
         <p className="text-sm text-muted-foreground">
-          Pick on-hand inventory into an outbound shipment and decrement stock.
+          Pick on-hand inventory into an outbound shipment, then print packing
+          slips and a load manifest for the dock.
         </p>
       </div>
 

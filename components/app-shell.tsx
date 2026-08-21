@@ -12,6 +12,7 @@ import {
   TruckDeliveryIcon,
   PinLocation01Icon,
   TransactionHistoryIcon,
+  BookOpen02Icon,
   UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
@@ -32,8 +33,9 @@ const NAV: Array<{
   { href: "/receiving", label: "Receiving", icon: PackageOpenIcon, permission: "receive" },
   { href: "/putaway", label: "Putaway", icon: PackageMovingIcon, permission: "putaway" },
   { href: "/inventory", label: "Inventory", icon: WarehouseIcon, permission: "viewInventory" },
-  { href: "/transactions", label: "Log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
   { href: "/shipping", label: "Shipping", icon: TruckDeliveryIcon, permission: "ship" },
+  { href: "/logbook", label: "Logbook", icon: BookOpen02Icon, permission: "viewTransactions" },
+  { href: "/transactions", label: "Stock log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
   { href: "/locations", label: "Locations", icon: PinLocation01Icon, permission: "manageLocations" },
   { href: "/users", label: "Users", icon: UserMultipleIcon, permission: "manageUsers" },
 ];

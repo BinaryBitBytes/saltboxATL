@@ -124,6 +124,7 @@ export function LocationLabelMaker({
           )}
         </ul>
         <LabelPrintSheet
+          printId="location-labels"
           title="Location labels"
           description="Print bin labels to scan during putaway and inventory counts."
           labels={labels}

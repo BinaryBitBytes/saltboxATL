@@ -4,7 +4,12 @@ import { requirePermission } from "@/backend/server/dal";
 import { ShippingStatusBadge } from "@/frontend/client/status-badge";
 import { LabelPrintSheet } from "@/frontend/client/label-sheet";
 import { PhotoProofCollector } from "@/frontend/client/photo-proof";
+import {
+  LoadManifestSheet,
+  PackSlipSheet,
+} from "@/frontend/client/shipment-documents";
 import { buildOutboundLabels } from "@/lib/labels/build-labels";
+import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
 import { photosForOwner } from "@/lib/photos/query";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -30,6 +35,8 @@ export default async function ShippingOrderPage({
     system.locations.map((location) => [location.id, location.code]),
   );
   const labels = buildOutboundLabels(order, locations);
+  const packSlip = buildPackSlip(order, locations);
+  const manifest = buildLoadManifest(order, locations);
   const photos = photosForOwner(
     system.photos ?? [],
     "shipping-order",
@@ -86,6 +93,30 @@ export default async function ShippingOrderPage({
 
       <Card className="print:border-0 print:shadow-none print:ring-0">
         <CardHeader className="print:hidden">
+          <CardTitle>Packing slip</CardTitle>
+          <CardDescription>
+            Customer packing list of SKUs, quantities, and source bins.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PackSlipSheet doc={packSlip} />
+        </CardContent>
+      </Card>
+
+      <Card className="print:border-0 print:shadow-none print:ring-0">
+        <CardHeader className="print:hidden">
+          <CardTitle>Load manifest</CardTitle>
+          <CardDescription>
+            Dock copy of pallets going on this outbound load.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LoadManifestSheet doc={manifest} />
+        </CardContent>
+      </Card>
+
+      <Card className="print:border-0 print:shadow-none print:ring-0">
+        <CardHeader className="print:hidden">
           <CardTitle>Outbound freight labels</CardTitle>
           <CardDescription>
             Print after picking so the dock can scan this shipment.
@@ -93,6 +124,7 @@ export default async function ShippingOrderPage({
         </CardHeader>
         <CardContent>
           <LabelPrintSheet
+            printId="outbound-labels"
             title="Print outbound labels"
             description="One label per picked case, including customer, carrier, and source location."
             labels={labels}
