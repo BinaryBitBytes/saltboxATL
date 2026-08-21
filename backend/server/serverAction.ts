@@ -243,14 +243,20 @@ export async function createLocation(
 
 export async function createAdjustment(
   rawData: unknown,
-): Promise<ActionResult<{ sku: string; quantityDelta: number }>> {
+): Promise<
+  ActionResult<{ sku: string; quantityDelta: number; referenceId: string }>
+> {
   try {
     const user = await requireApiPermission("adjustInventory");
     const data = await createAdjustmentRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     return {
       ok: true,
-      data: { sku: data.sku, quantityDelta: data.quantityDelta },
+      data: {
+        sku: data.sku,
+        quantityDelta: data.quantityDelta,
+        referenceId: data.referenceId,
+      },
     };
   } catch (error) {
     return fail(error);

@@ -14,6 +14,7 @@ import {
   SkuSchema,
   UpcSchema,
 } from "@/lib/validation/fields";
+import { hasControlChars, hasHtmlMarkup } from "@/lib/validation/sanitize";
 import { LIMITS } from "@/lib/validation/limits";
 
 /**
@@ -301,6 +302,47 @@ export const InventoryTransactionSchema = z.object({
 });
 export type InventoryTransaction = z.infer<typeof InventoryTransactionSchema>;
 
+export const PhotoOwnerTypeSchema = z.enum([
+  "receiving-order",
+  "shipping-order",
+  "adjustment",
+]);
+export type PhotoOwnerType = z.infer<typeof PhotoOwnerTypeSchema>;
+
+export const PhotoMimeTypeSchema = z.enum([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+export type PhotoMimeType = z.infer<typeof PhotoMimeTypeSchema>;
+
+export const PhotoFileNameSchema = z
+  .string()
+  .trim()
+  .transform((value) => {
+    const base = value.replaceAll("\\", "/").split("/").pop()?.trim() ?? "";
+    return base.slice(0, LIMITS.photoFileName) || "photo";
+  })
+  .refine((value) => !hasControlChars(value), {
+    error: "Control characters are not allowed.",
+  })
+  .refine((value) => !hasHtmlMarkup(value), {
+    error: "HTML markup is not allowed.",
+  });
+
+export const PhotoAttachmentSchema = z.object({
+  id: UuidSchema,
+  ownerType: PhotoOwnerTypeSchema,
+  ownerId: UuidSchema,
+  originalName: PhotoFileNameSchema,
+  mimeType: PhotoMimeTypeSchema,
+  size: z.number().int().min(1).max(LIMITS.photoMaxBytes),
+  caption: OptionalNotesSchema,
+  createdAt: DateTimeSchema,
+  createdBy: z.string().optional(),
+});
+export type PhotoAttachment = z.infer<typeof PhotoAttachmentSchema>;
+
 export const CreateAdjustmentInputSchema = z.object({
   type: z.enum(["overage", "shortage", "damage"]),
   quantity: QuantitySchema,
@@ -414,6 +456,7 @@ export const InventorySystemSchema = z.object({
   locations: z.array(LocationSchema).default([]),
   rooms: z.array(RoomSchema).default([]),
   transactions: z.array(InventoryTransactionSchema).default([]),
+  photos: z.array(PhotoAttachmentSchema).default([]),
   users: z.array(UserSchema).default([]),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
@@ -430,4 +473,5 @@ export type InventoryTransactionRow = InventoryTransaction & {
   locationCode: string;
   roomName: string;
   destinationLocationCode: string | null;
+  photos: PhotoAttachment[];
 };

@@ -19,6 +19,12 @@ import {
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import {
+  PhotoDraftCollector,
+  revokePhotoDrafts,
+  type PhotoDraft,
+} from "@/frontend/client/photo-proof";
+import { uploadProofPhotos } from "@/frontend/client/photo-api";
 import { LIMITS } from "@/lib/validation/limits";
 import { matchesScan, type ScanPayload } from "@/lib/scan-code";
 
@@ -49,6 +55,7 @@ export function AdjustmentForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [scannedCode, setScannedCode] = useState<string | undefined>();
+  const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const damagedLocationId =
@@ -129,6 +136,20 @@ export function AdjustmentForm({
                 setError(result.error);
                 return;
               }
+              if (values.type === "damage" && photoDrafts.length > 0) {
+                const uploaded = await uploadProofPhotos({
+                  ownerType: "adjustment",
+                  ownerId: result.data.referenceId,
+                  files: photoDrafts.map((draft) => draft.file),
+                });
+                if (!uploaded.ok) {
+                  setError(
+                    `Adjustment posted, but photos failed: ${uploaded.error}`,
+                  );
+                }
+              }
+              revokePhotoDrafts(photoDrafts);
+              setPhotoDrafts([]);
               form.reset({
                 type: values.type,
                 inventoryItemId: values.inventoryItemId,
@@ -202,6 +223,15 @@ export function AdjustmentForm({
           <Field label="Notes" htmlFor="notes">
             <Textarea id="notes" rows={2} {...form.register("notes")} />
           </Field>
+          {type === "damage" ? (
+            <PhotoDraftCollector
+              drafts={photoDrafts}
+              onChange={setPhotoDrafts}
+              disabled={pending}
+              title="Proof of damage"
+              description="Photograph crushed cartons, wet freight, or other damage before posting the adjustment."
+            />
+          ) : null}
           {type === "damage" ? (
             <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" {...form.register("moveDamaged")} />

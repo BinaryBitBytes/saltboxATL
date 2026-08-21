@@ -161,12 +161,14 @@ export function createSeedSystem(): InventorySystem {
       ),
     ],
     transactions: [],
+    photos: [],
     users: [],
   };
 }
 
 export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
   if (!system.transactions) system.transactions = [];
+  if (!system.photos) system.photos = [];
 
   if (!system.rooms.some((room) => room.id === ROOM_DAMAGED)) {
     system.rooms.push({

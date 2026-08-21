@@ -21,6 +21,7 @@ import { NativeSelect } from "@/frontend/client/field";
 import { TransactionTypeBadge } from "@/frontend/client/status-badge";
 import { formatDateTime, formatSignedInt } from "@/lib/format";
 import { ScanInput } from "@/frontend/client/scan-input";
+import { PhotoThumbnails } from "@/frontend/client/photo-proof";
 import { matchesScan } from "@/lib/scan-code";
 
 const features = tableFeatures({});
@@ -50,6 +51,10 @@ const columns = columnHelper.columns([
   columnHelper.accessor("reason", {
     header: "Reason",
     cell: ({ getValue }) => getValue() || "—",
+  }),
+  columnHelper.accessor("photos", {
+    header: "Photos",
+    cell: ({ getValue }) => <PhotoThumbnails photos={getValue() ?? []} />,
   }),
 ]);
 
