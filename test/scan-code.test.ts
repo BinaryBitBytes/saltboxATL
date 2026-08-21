@@ -9,6 +9,9 @@ describe("scan code parsing", () => {
       sku: "FBR-LC-12-100",
       upc: "010000000001",
     });
+    expect(parseScanCode("saltbox://location?code=A-01-01").locationCode).to.equal(
+      "A-01-01",
+    );
     expect(
       matchesScan(
         { sku: "FBR-LC-12-100", upc: "010000000001", batch: null },

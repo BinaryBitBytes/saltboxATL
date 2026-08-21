@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { ShippingStatusBadge } from "@/frontend/client/status-badge";
+import { LabelPrintSheet } from "@/frontend/client/label-sheet";
+import { buildOutboundLabels } from "@/lib/labels/build-labels";
 import { formatDateTime } from "@/lib/format";
 import {
   Card,
@@ -25,6 +27,7 @@ export default async function ShippingOrderPage({
   const locations = new Map(
     system.locations.map((location) => [location.id, location.code]),
   );
+  const labels = buildOutboundLabels(order, locations);
 
   return (
     <div className="grid gap-6">
@@ -62,6 +65,22 @@ export default async function ShippingOrderPage({
               </ul>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="print:border-0 print:shadow-none print:ring-0">
+        <CardHeader className="print:hidden">
+          <CardTitle>Outbound freight labels</CardTitle>
+          <CardDescription>
+            Print after picking so the dock can scan this shipment.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LabelPrintSheet
+            title="Print outbound labels"
+            description="One label per picked case, including customer, carrier, and source location."
+            labels={labels}
+          />
         </CardContent>
       </Card>
     </div>
