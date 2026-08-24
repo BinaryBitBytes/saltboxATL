@@ -146,7 +146,10 @@ export function ReceivingWorkspace({
     ) ?? order.workingPalletId;
   const workingPallet =
     order.pallets.find((pallet) => pallet.id === workingPalletId) ??
-    order.pallets.at(-1) ??
+    order.pallets.find((pallet) =>
+      pallet.cases.some((item) => !isCasePutawayPosted(item)),
+    ) ??
+    (editable ? null : order.pallets.at(-1)) ??
     null;
   const [editing, setEditing] = useState<EditingLine | null>(null);
   const editingCase =
