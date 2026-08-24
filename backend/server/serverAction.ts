@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   cancelReceivingOrder,
   completeReceivingOrder,
@@ -169,6 +170,29 @@ export async function reopenReceiving(
   } catch (error) {
     return fail(error);
   }
+}
+
+export async function reopenReceivingForm(
+  orderId: string,
+  formData: FormData,
+): Promise<void> {
+  const user = await requireApiPermission("reopenReceiving");
+  const raw = formData.get("expectedPalletCount");
+  const expectedPalletCount =
+    typeof raw === "string" && raw.trim().length > 0
+      ? Number(raw)
+      : undefined;
+  await reopenReceivingOrder(
+    orderId,
+    user.name,
+    Number.isFinite(expectedPalletCount)
+      ? { expectedPalletCount }
+      : {},
+  );
+  revalidateInventory();
+  revalidatePath(`/receiving/${orderId}`);
+  revalidatePath(`/putaway/${orderId}`);
+  redirect(`/receiving/${orderId}`);
 }
 
 export async function cancelReceiving(

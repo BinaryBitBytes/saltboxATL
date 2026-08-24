@@ -25,6 +25,7 @@ import {
   cancelReceiving,
   completeReceiving,
   removeReceivingCase,
+  reopenReceivingForm,
   selectWorkingPallet,
   updateReceivingCase,
 } from "@/backend/server/serverAction";
@@ -855,51 +856,20 @@ export function ReopenAsPartialControls({
   order: ReceivingOrder;
   compact?: boolean;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const remaining = remainingExpectedPallets(order);
   const needsExpectedCount = remaining === 0;
   const [expectedPalletCount, setExpectedPalletCount] = useState(
     defaultReopenExpectedPalletCount(order),
   );
-
-  function reopen() {
-    setError(null);
-    startTransition(async () => {
-      const response = await fetch(`/api/receiving/${order.id}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(
-          needsExpectedCount
-            ? { action: "reopen", expectedPalletCount }
-            : { action: "reopen" },
-        ),
-      });
-      const json = (await response.json().catch(() => null)) as {
-        success?: boolean;
-        error?: string;
-      } | null;
-      if (!response.ok || !json?.success) {
-        setError(json?.error || "Unable to reopen this order.");
-        return;
-      }
-      router.refresh();
-    });
-  }
+  const reopen = reopenReceivingForm.bind(null, order.id);
 
   return (
-    <form
-      className="grid gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        reopen();
-      }}
-    >
+    <form action={reopen} className="grid gap-3">
       {compact ? null : needsExpectedCount ? (
         <Field label="Expected pallets" htmlFor="reopen-expected-pallets">
           <Input
             id="reopen-expected-pallets"
+            name="expectedPalletCount"
             type="number"
             min={order.pallets.length + 1}
             value={expectedPalletCount}
@@ -914,15 +884,20 @@ export function ReopenAsPartialControls({
           as a partialed PO so remaining freight can be checked in.
         </p>
       )}
+      {needsExpectedCount && compact ? (
+        <input
+          type="hidden"
+          name="expectedPalletCount"
+          value={expectedPalletCount}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="submit"
-          disabled={pending}
           className={cn(buttonVariants({ size: "lg" }), "cursor-pointer")}
         >
-          {pending ? "Reopening…" : "Reopen as partialed"}
+          Reopen as partialed
         </button>
-        <ErrorText error={error} />
       </div>
     </form>
   );
