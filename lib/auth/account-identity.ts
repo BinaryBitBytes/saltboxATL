@@ -13,6 +13,28 @@ export function passwordMatchesIdentity(
   return value === username.toLowerCase() || value === email.toLowerCase();
 }
 
+export function accountLoginLockKeys(
+  user: { email: string; username: string },
+  extraIdentifier?: string,
+): string[] {
+  const keys = new Set([
+    user.email.trim().toLowerCase(),
+    user.username.trim().toLowerCase(),
+  ]);
+  if (extraIdentifier?.trim()) {
+    keys.add(extraIdentifier.trim().toLowerCase());
+  }
+  return [...keys];
+}
+
+export function usernameRecoveryLockKey(email: string): string {
+  return `recover-username:${email.trim().toLowerCase()}`;
+}
+
+export function passwordResetLockKey(email: string): string {
+  return `reset-password:${email.trim().toLowerCase()}`;
+}
+
 export function findUserByLoginIdentifier(
   users: readonly User[],
   identifier: string,

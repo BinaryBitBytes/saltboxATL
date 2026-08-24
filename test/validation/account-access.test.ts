@@ -14,9 +14,11 @@ import {
   uniqueUsernameFromEmail,
 } from "@/lib/auth/username";
 import {
+  accountLoginLockKeys,
   findUserByLoginIdentifier,
   findUserForPasswordReset,
   findUserForUsernameRecovery,
+  passwordResetLockKey,
 } from "@/lib/auth/account-identity";
 import { makeUser } from "../helpers";
 
@@ -239,5 +241,17 @@ describe("account registration and recovery", () => {
         email: "riley@saltbox.local",
       }),
     ).to.equal(undefined);
+  });
+
+  it("locks password reset by email so guessed usernames share one bucket", () => {
+    expect(passwordResetLockKey("Riley@Saltbox.local")).to.equal(
+      passwordResetLockKey("riley@saltbox.local"),
+    );
+    expect(passwordResetLockKey("riley@saltbox.local")).to.equal(
+      "reset-password:riley@saltbox.local",
+    );
+    expect(
+      accountLoginLockKeys({ email: "riley@saltbox.local", username: "riley" }, "RILEY"),
+    ).to.have.members(["riley@saltbox.local", "riley"]);
   });
 });

@@ -7,9 +7,12 @@ import { parseWithSchema } from "@/backend/server/safeParsing";
 import { readSystem, updateSystem } from "@/backend/server/store";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
+  accountLoginLockKeys,
   findUserByLoginIdentifier,
   findUserForPasswordReset,
   findUserForUsernameRecovery,
+  passwordResetLockKey,
+  usernameRecoveryLockKey,
 } from "@/lib/auth/account-identity";
 import {
   assertLoginNotLocked,
@@ -64,25 +67,32 @@ export async function authenticateUser(
   }
 
   const loginId = parsed.data.identifier;
-  assertLoginNotLocked(loginId);
-
   const system = await readSystem();
   const user = findUserByLoginIdentifier(system.users, loginId);
+  const lockKeys = user ? accountLoginLockKeys(user, loginId) : [loginId];
+  for (const key of lockKeys) {
+    assertLoginNotLocked(key);
+  }
+
   if (!user || !user.isActive) {
     await consumePasswordCheck(parsed.data.password);
-    recordFailedLogin(loginId);
+    for (const key of lockKeys) {
+      recordFailedLogin(key);
+    }
     throw new ServiceError("Invalid username or password.", 401);
   }
 
   const matches = await verifyPassword(parsed.data.password, user.passwordHash);
   if (!matches) {
-    recordFailedLogin(loginId);
+    for (const key of lockKeys) {
+      recordFailedLogin(key);
+    }
     throw new ServiceError("Invalid username or password.", 401);
   }
 
-  clearFailedLogins(loginId);
-  clearFailedLogins(user.email);
-  clearFailedLogins(user.username);
+  for (const key of lockKeys) {
+    clearFailedLogins(key);
+  }
   return toPublicUser(user);
 }
 
@@ -125,7 +135,7 @@ export async function recoverUsername(
     throw new ServiceError(parsed.error);
   }
 
-  const lockKey = `recover-username:${parsed.data.email}`;
+  const lockKey = usernameRecoveryLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "username recovery");
 
   const system = await readSystem();
@@ -153,22 +163,29 @@ export async function resetPasswordWithIdentity(
     throw new ServiceError(parsed.error);
   }
 
-  const lockKey = `reset-password:${parsed.data.username}:${parsed.data.email}`;
+  const lockKey = passwordResetLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "password reset");
+
+  const current = await readSystem();
+  const matched = findUserForPasswordReset(current.users, parsed.data);
+  if (!matched) {
+    await consumePasswordCheck(parsed.data.password);
+    recordFailedLogin(lockKey);
+    throw new ServiceError("No matching account was found.");
+  }
 
   await updateSystem(async (system) => {
     const user = findUserForPasswordReset(system.users, parsed.data);
     if (!user) {
-      await consumePasswordCheck(parsed.data.password);
-      recordFailedLogin(lockKey);
       throw new ServiceError("No matching account was found.");
     }
 
     user.passwordHash = await hashPassword(parsed.data.password);
     user.updatedAt = nowIso();
     clearFailedLogins(lockKey);
-    clearFailedLogins(user.email);
-    clearFailedLogins(user.username);
+    for (const key of accountLoginLockKeys(user)) {
+      clearFailedLogins(key);
+    }
   });
 }
 
