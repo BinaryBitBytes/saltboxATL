@@ -86,6 +86,8 @@ describe("user authentication safeguards", () => {
     expect(hasPermission("user", "adjustInventory")).to.equal(false);
     expect(hasPermission("associate", "adjustInventory")).to.equal(false);
     expect(hasPermission("manager", "manageUsers")).to.equal(true);
+    expect(hasPermission("manager", "reopenReceiving")).to.equal(true);
+    expect(hasPermission("associate", "reopenReceiving")).to.equal(false);
     expect(canAccessPath("user", "/logbook")).to.equal(true);
     expect(canAccessPath("user", "/reports")).to.equal(true);
     expect(canAccessPath("user", "/shipping")).to.equal(false);

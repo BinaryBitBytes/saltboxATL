@@ -9,6 +9,7 @@ export const PERMISSIONS = {
   ship: ["associate", "manager"],
   scanLookup: ["user", "associate", "manager"],
   adjustInventory: ["manager"],
+  reopenReceiving: ["manager"],
   manageLocations: ["manager"],
   manageUsers: ["manager"],
 } as const;

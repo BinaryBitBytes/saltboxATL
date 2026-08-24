@@ -5,8 +5,10 @@ import { ReceivingWorkspace } from "@/frontend/client/receiving-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { PhotoProofCollector } from "@/frontend/client/photo-proof";
 import { collectKnownProducts } from "@/lib/codes/product-codes";
-import { photosForOwner } from "@/lib/photos/query";
+import { photosForOwnerKind } from "@/lib/photos/query";
+import { hasPermission } from "@/lib/auth/permissions";
 import { formatDateTime } from "@/lib/format";
+import { remainingExpectedPallets } from "@/lib/receiving/reopen";
 import {
   Card,
   CardContent,
@@ -20,11 +22,14 @@ export default async function ReceivingOrderPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("receive");
+  const user = await requirePermission("receive");
   const { id } = await params;
   const system = await getSystem();
   const order = system.receivingOrders.find((entry) => entry.id === id);
   if (!order) notFound();
+  const photos = system.photos ?? [];
+  const canEditPhotos = order.status !== "cancelled";
+  const remaining = remainingExpectedPallets(order);
 
   return (
     <div className="grid gap-6">
@@ -38,7 +43,10 @@ export default async function ReceivingOrderPage({
             {formatDateTime(order.receivedAt)}
           </p>
         </div>
-        <ReceivingStatusBadge status={order.status} />
+        <ReceivingStatusBadge
+          status={order.status}
+          isPartialed={order.isPartialed}
+        />
       </div>
 
       <Card>
@@ -53,6 +61,10 @@ export default async function ReceivingOrderPage({
             value={String(order.loadPalletCount)}
           />
           <Detail
+            label="Received / remaining"
+            value={`${order.pallets.length} received · ${remaining} remaining`}
+          />
+          <Detail
             label="Working pallet"
             value={
               order.pallets.find((pallet) => pallet.id === order.workingPalletId)
@@ -60,21 +72,66 @@ export default async function ReceivingOrderPage({
             }
           />
           <Detail label="Notes" value={order.notes || "—"} />
+          {order.isPartialed ? (
+            <Detail
+              label="Partialed"
+              value={
+                order.partialedBy
+                  ? `Yes · ${order.partialedBy}`
+                  : "Yes"
+              }
+            />
+          ) : null}
         </CardContent>
       </Card>
 
       <PhotoProofCollector
         ownerType="receiving-order"
         ownerId={order.id}
-        photos={photosForOwner(system.photos ?? [], "receiving-order", order.id)}
-        canEdit={order.status !== "cancelled"}
+        documentKind="freight-proof"
+        photos={photosForOwnerKind(photos, "receiving-order", order.id, "freight-proof")}
+        canEdit={canEditPhotos}
         title="Proof of inbound freight"
-        description={`Photographs for PO ${order.poNumber} — packing slips, pallets, seals, and freight condition.`}
+        description={`Freight photos for PO ${order.poNumber} — pallets, seals, and condition. Keep manifests and pack slips in the document fields below.`}
       />
+
+      <div className="grid gap-6 min-[56rem]:grid-cols-3">
+        <PhotoProofCollector
+          ownerType="receiving-order"
+          ownerId={order.id}
+          documentKind="manifest"
+          photos={photosForOwnerKind(photos, "receiving-order", order.id, "manifest")}
+          canEdit={canEditPhotos}
+          title="Manifest"
+          description="Attach the inbound manifest."
+          emptyLabel="No manifest photos attached yet."
+        />
+        <PhotoProofCollector
+          ownerType="receiving-order"
+          ownerId={order.id}
+          documentKind="load-sheet"
+          photos={photosForOwnerKind(photos, "receiving-order", order.id, "load-sheet")}
+          canEdit={canEditPhotos}
+          title="Load sheet"
+          description="Attach the load sheet."
+          emptyLabel="No load sheet photos attached yet."
+        />
+        <PhotoProofCollector
+          ownerType="receiving-order"
+          ownerId={order.id}
+          documentKind="pack-slip"
+          photos={photosForOwnerKind(photos, "receiving-order", order.id, "pack-slip")}
+          canEdit={canEditPhotos}
+          title="Pack slips"
+          description="Attach packing slips."
+          emptyLabel="No pack slip photos attached yet."
+        />
+      </div>
 
       <ReceivingWorkspace
         order={order}
         knownProducts={collectKnownProducts(system)}
+        canReopen={hasPermission(user.role, "reopenReceiving")}
       />
     </div>
   );

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   cancelReceivingOrder,
   completeReceivingOrder,
+  reopenReceivingOrder,
   createLocationRecord,
   createReceivingOrderRecord,
   createRoomRecord,
@@ -145,6 +146,22 @@ export async function completeReceiving(
   try {
     await requireApiPermission("receive");
     const data = await completeReceivingOrder(orderId, confirmation);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    revalidatePath(`/putaway/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function reopenReceiving(
+  orderId: string,
+  rawData?: unknown,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    const user = await requireApiPermission("reopenReceiving");
+    const data = await reopenReceivingOrder(orderId, user.name, rawData ?? {});
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);

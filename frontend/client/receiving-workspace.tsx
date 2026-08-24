@@ -14,11 +14,18 @@ import {
   type ReceivingOrder,
 } from "@/lib/inventory-schema";
 import {
+  canReopenClosedReceiving,
+  hasPostedPutaway,
+  isCasePutawayPosted,
+  remainingExpectedPallets,
+} from "@/lib/receiving/reopen";
+import {
   addReceivingCase,
   addReceivingPallet,
   cancelReceiving,
   completeReceiving,
   removeReceivingCase,
+  reopenReceiving,
   selectWorkingPallet,
   updateReceivingCase,
 } from "@/backend/server/serverAction";
@@ -124,9 +131,11 @@ function valuesFromCase(item: CaseItem): CaseFormValues {
 export function ReceivingWorkspace({
   order,
   knownProducts,
+  canReopen = false,
 }: {
   order: ReceivingOrder;
   knownProducts: KnownProduct[];
+  canReopen?: boolean;
 }) {
   const router = useRouter();
   const editable = isReceivingEditable(order.status);
@@ -228,22 +237,39 @@ export function ReceivingWorkspace({
       ) : null}
 
       {order.status === "received" ? (
-        <ReceivedOrderActions orderId={order.id} />
+        <ReceivedOrderActions
+          orderId={order.id}
+          canCancel={!hasPostedPutaway(order)}
+        />
       ) : null}
 
       {order.status === "completed" ? (
         <p className="text-sm text-muted-foreground">
           This order has been put away. On-hand inventory includes these cases.
+          {order.isPartialed
+            ? " It is marked partialed until remaining freight is received."
+            : ""}
         </p>
+      ) : null}
+
+      {canReopen && canReopenClosedReceiving(order) ? (
+        <ReopenPartialOrderCard order={order} />
       ) : null}
 
       {editable ? (
         <ReceivingActions
           orderId={order.id}
+          canCancel={!hasPostedPutaway(order)}
           totalUnits={order.pallets.reduce(
             (sum, pallet) =>
               sum +
-              pallet.cases.reduce((caseSum, item) => caseSum + item.quantityInCase, 0),
+              pallet.cases.reduce(
+                (caseSum, item) =>
+                  isCasePutawayPosted(item)
+                    ? caseSum
+                    : caseSum + item.quantityInCase,
+                0,
+              ),
             0,
           )}
         />
@@ -318,7 +344,7 @@ function PalletCard({
                 </p>
                 <p>{item.description}</p>
               </div>
-              {editable ? (
+              {editable && !isCasePutawayPosted(item) ? (
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
                     type="button"
@@ -360,6 +386,10 @@ function PalletCard({
                     Remove
                   </Button>
                 </div>
+              ) : isCasePutawayPosted(item) ? (
+                <p className="shrink-0 text-[0.65rem] text-muted-foreground">
+                  On-hand
+                </p>
               ) : null}
             </li>
           ))}
@@ -824,7 +854,81 @@ function WorkingCaseForm({
   );
 }
 
-function ReceivedOrderActions({ orderId }: { orderId: string }) {
+function ReopenPartialOrderCard({ order }: { order: ReceivingOrder }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const remaining = remainingExpectedPallets(order);
+  const [expectedPalletCount, setExpectedPalletCount] = useState(
+    Math.max(order.loadPalletCount, order.pallets.length + 1),
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Reopen as partialed PO</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <p className="text-sm text-muted-foreground">
+          This order was closed with {order.pallets.length} of{" "}
+          {order.loadPalletCount} expected pallets
+          {order.isPartialed ? " and is already marked partialed" : ""}. Reopen
+          it so receivers can check in remaining freight without reversing
+          stock already put away.
+        </p>
+        <Field
+          label="Expected pallets"
+          htmlFor="reopen-expected-pallets"
+        >
+          <Input
+            id="reopen-expected-pallets"
+            type="number"
+            min={order.pallets.length + 1}
+            value={expectedPalletCount}
+            onChange={(event) =>
+              setExpectedPalletCount(Number(event.target.value) || 0)
+            }
+          />
+        </Field>
+        <p className="text-[0.625rem] text-muted-foreground">
+          {remaining > 0
+            ? `${remaining} pallet${remaining === 1 ? "" : "s"} still expected on the original count.`
+            : "Increase the expected pallet count to reopen for additional freight."}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              setError(null);
+              startTransition(async () => {
+                const result = await reopenReceiving(order.id, {
+                  expectedPalletCount,
+                });
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                router.refresh();
+              });
+            }}
+          >
+            {pending ? "Reopening…" : "Reopen as partialed"}
+          </Button>
+          <ErrorText error={error} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReceivedOrderActions({
+  orderId,
+  canCancel = true,
+}: {
+  orderId: string;
+  canCancel?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -844,26 +948,28 @@ function ReceivedOrderActions({ orderId }: { orderId: string }) {
           <Button nativeButton={false} render={<Link href={`/putaway/${orderId}`} />}>
             Open putaway
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending}
-            onClick={() => {
-              setError(null);
-              startTransition(async () => {
-                const result = await cancelReceiving(orderId);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                clear();
-                router.push("/receiving");
-                router.refresh();
-              });
-            }}
-          >
-            Cancel order
-          </Button>
+          {canCancel ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                setError(null);
+                startTransition(async () => {
+                  const result = await cancelReceiving(orderId);
+                  if (!result.ok) {
+                    setError(result.error);
+                    return;
+                  }
+                  clear();
+                  router.push("/receiving");
+                  router.refresh();
+                });
+              }}
+            >
+              Cancel order
+            </Button>
+          ) : null}
           <ErrorText error={error} />
         </div>
       </CardContent>
@@ -874,9 +980,11 @@ function ReceivedOrderActions({ orderId }: { orderId: string }) {
 function ReceivingActions({
   orderId,
   totalUnits,
+  canCancel = true,
 }: {
   orderId: string;
   totalUnits: number;
+  canCancel?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -922,25 +1030,27 @@ function ReceivingActions({
       >
         Complete receiving
       </Button>
-      <Button
-        variant="outline"
-        disabled={pending}
-        onClick={() => {
-          setError(null);
-          startTransition(async () => {
-            const result = await cancelReceiving(orderId);
-            if (!result.ok) {
-              setError(result.error);
-              return;
-            }
-            clear();
-            router.push("/receiving");
-            router.refresh();
-          });
-        }}
-      >
-        Cancel order
-      </Button>
+      {canCancel ? (
+        <Button
+          variant="outline"
+          disabled={pending}
+          onClick={() => {
+            setError(null);
+            startTransition(async () => {
+              const result = await cancelReceiving(orderId);
+              if (!result.ok) {
+                setError(result.error);
+                return;
+              }
+              clear();
+              router.push("/receiving");
+              router.refresh();
+            });
+          }}
+        >
+          Cancel order
+        </Button>
+      ) : null}
       <ErrorText error={error} />
     </div>
     </div>

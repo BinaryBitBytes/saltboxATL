@@ -24,6 +24,7 @@ const caseA = {
   fiber: null,
   putawayRoomId: null,
   putawayLocationId: locationId,
+  putawayPostedAt: null,
 };
 const caseB = {
   ...caseA,
@@ -112,6 +113,7 @@ describe("operations logbook", () => {
       id: createId(),
       ownerType: "shipping-order",
       ownerId: shipment.id,
+      documentKind: "freight-proof",
       originalName: "bol.jpg",
       mimeType: "image/jpeg",
       size: 1200,

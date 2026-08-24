@@ -80,7 +80,10 @@ export default async function ReceivingPage() {
                     {order.pallets.length}/{order.loadPalletCount}
                   </TableCell>
                   <TableCell>
-                    <ReceivingStatusBadge status={order.status} />
+                    <ReceivingStatusBadge
+                      status={order.status}
+                      isPartialed={order.isPartialed}
+                    />
                   </TableCell>
                   <TableCell>
                     <Button

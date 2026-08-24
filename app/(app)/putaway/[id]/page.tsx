@@ -40,7 +40,10 @@ export default async function PutawayOrderPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ReceivingStatusBadge status={order.status} />
+          <ReceivingStatusBadge
+            status={order.status}
+            isPartialed={order.isPartialed}
+          />
           <Button
             variant="outline"
             size="sm"

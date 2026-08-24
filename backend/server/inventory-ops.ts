@@ -201,6 +201,7 @@ export function pickFromInventory(
       fiber: null,
       putawayRoomId: null,
       putawayLocationId: item.locationId,
+      putawayPostedAt: null,
     });
   }
 

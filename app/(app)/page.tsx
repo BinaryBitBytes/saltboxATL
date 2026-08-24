@@ -120,7 +120,10 @@ export default async function Home() {
                   <span>
                     {order.orderNumber} · {order.vendor}
                   </span>
-                  <ReceivingStatusBadge status={order.status} />
+                  <ReceivingStatusBadge
+                    status={order.status}
+                    isPartialed={order.isPartialed}
+                  />
                 </Link>
               ))
             )}
@@ -147,7 +150,10 @@ export default async function Home() {
                   <span>
                     {order.orderNumber} · {order.vendor}
                   </span>
-                  <ReceivingStatusBadge status={order.status} />
+                  <ReceivingStatusBadge
+                    status={order.status}
+                    isPartialed={order.isPartialed}
+                  />
                 </Link>
               ))
             )}

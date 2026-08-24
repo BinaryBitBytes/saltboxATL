@@ -4,6 +4,7 @@ import {
   completeReceivingOrder,
   getReceivingOrder,
   removeCaseFromPallet,
+  reopenReceivingOrder,
   updateCaseOnPallet,
   ServiceError,
 } from "@/backend/server/inventory-service";
@@ -39,23 +40,29 @@ export async function POST(
       caseId?: string;
       confirmLargeInput?: boolean;
       confirmationQuantity?: number;
+      expectedPalletCount?: number;
     };
 
     if (body.action === "add-pallet") {
+      await requireApiPermission("receive");
       return jsonOk(await addPalletToOrder(id, body.pallet));
     }
     if (body.action === "add-case" && body.palletId) {
+      await requireApiPermission("receive");
       return jsonOk(await addCaseToPallet(id, body.palletId, body.caseItem));
     }
     if (body.action === "update-case" && body.palletId && body.caseId) {
+      await requireApiPermission("receive");
       return jsonOk(
         await updateCaseOnPallet(id, body.palletId, body.caseId, body.caseItem),
       );
     }
     if (body.action === "remove-case" && body.palletId && body.caseId) {
+      await requireApiPermission("receive");
       return jsonOk(await removeCaseFromPallet(id, body.palletId, body.caseId));
     }
     if (body.action === "complete") {
+      await requireApiPermission("receive");
       return jsonOk(
         await completeReceivingOrder(id, {
           confirmLargeInput: body.confirmLargeInput,
@@ -63,7 +70,16 @@ export async function POST(
         }),
       );
     }
+    if (body.action === "reopen") {
+      const user = await requireApiPermission("reopenReceiving");
+      return jsonOk(
+        await reopenReceivingOrder(id, user.name, {
+          expectedPalletCount: body.expectedPalletCount,
+        }),
+      );
+    }
 
+    await requireApiPermission("receive");
     return jsonError(new ServiceError("Unsupported receiving action"));
   } catch (error) {
     return jsonError(error);

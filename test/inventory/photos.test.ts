@@ -2,6 +2,7 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import {
   PhotoAttachmentSchema,
+  PhotoDocumentKindSchema,
   PhotoFileNameSchema,
   PhotoOwnerTypeSchema,
 } from "@/lib/inventory-schema";
@@ -11,7 +12,7 @@ import {
   extensionForMime,
   sniffImageMime,
 } from "@/lib/photos/image";
-import { photosForOwner, photosForReference } from "@/lib/photos/query";
+import { photosForOwner, photosForOwnerKind, photosForReference } from "@/lib/photos/query";
 import {
   permissionForPhotoWrite,
   resolvePhotoOwner,
@@ -86,6 +87,8 @@ describe("transaction proof photos", () => {
     });
     expect(parsed.originalName).to.equal("pallet-1.jpg");
     expect(parsed.caption).to.equal("Seal intact");
+    expect(parsed.documentKind).to.equal("freight-proof");
+    expect(PhotoDocumentKindSchema.parse("pack-slip")).to.equal("pack-slip");
   });
 
   it("resolves receiving, shipping, and damage owners and blocks cancelled orders", () => {
@@ -132,6 +135,7 @@ describe("transaction proof photos", () => {
         id: createId(),
         ownerType: "receiving-order" as const,
         ownerId: receivingId,
+        documentKind: "freight-proof" as const,
         originalName: "po.jpg",
         mimeType: "image/jpeg" as const,
         size: 100,
@@ -141,6 +145,7 @@ describe("transaction proof photos", () => {
         id: createId(),
         ownerType: "shipping-order" as const,
         ownerId: shippingId,
+        documentKind: "freight-proof" as const,
         originalName: "bol.jpg",
         mimeType: "image/jpeg" as const,
         size: 100,
@@ -151,6 +156,37 @@ describe("transaction proof photos", () => {
     expect(photosForOwner(photos, "receiving-order", receivingId)).to.have.length(
       1,
     );
+    expect(
+      photosForOwnerKind(photos, "receiving-order", receivingId, "freight-proof"),
+    ).to.have.length(1);
+    expect(
+      photosForOwnerKind(photos, "receiving-order", receivingId, "manifest"),
+    ).to.have.length(0);
+
+    const withManifest = [
+      ...photos,
+      {
+        id: createId(),
+        ownerType: "receiving-order" as const,
+        ownerId: receivingId,
+        documentKind: "manifest" as const,
+        originalName: "manifest.jpg",
+        mimeType: "image/jpeg" as const,
+        size: 100,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    expect(
+      photosForOwnerKind(withManifest, "receiving-order", receivingId, "manifest"),
+    ).to.have.length(1);
+    expect(
+      photosForOwnerKind(
+        withManifest,
+        "receiving-order",
+        receivingId,
+        "freight-proof",
+      ),
+    ).to.have.length(1);
     expect(
       photosForReference(photos, "shipping-order", shippingId),
     ).to.have.length(1);

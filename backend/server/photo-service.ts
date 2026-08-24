@@ -1,8 +1,10 @@
 import "server-only";
 
 import {
+  PhotoDocumentKindSchema,
   PhotoOwnerTypeSchema,
   type PhotoAttachment,
+  type PhotoDocumentKind,
   type PhotoOwnerType,
 } from "@/lib/inventory-schema";
 import { PhotoFileNameSchema } from "@/lib/inventory-schema";
@@ -16,13 +18,14 @@ import {
   writePhotoFile,
 } from "@/backend/server/photo-store";
 import { assertPhotoBytes, assertPhotoCollectionRoom } from "@/lib/photos/image";
-import { photosForOwner } from "@/lib/photos/query";
+import { photosForOwner, photosForOwnerKind } from "@/lib/photos/query";
 import { resolvePhotoOwner } from "@/lib/photos/owner";
 import { OptionalNotesSchema } from "@/lib/validation/fields";
 
 export type PhotoUploadInput = {
   ownerType: unknown;
   ownerId: unknown;
+  documentKind?: unknown;
   originalName?: unknown;
   caption?: unknown;
   bytes: Uint8Array;
@@ -48,6 +51,14 @@ export async function attachPhotoRecord(
   }
   const ownerType = ownerTypeParsed.data;
   const ownerId = requireOwnerId(input.ownerId);
+  const kindParsed = parseWithSchema(
+    PhotoDocumentKindSchema,
+    input.documentKind ?? "freight-proof",
+  );
+  if (!kindParsed.success) {
+    throw new ServiceError("Choose a valid document type for this photo.");
+  }
+  const documentKind: PhotoDocumentKind = kindParsed.data;
   const mime = assertPhotoBytes(input.bytes);
   const originalNameParsed = parseWithSchema(
     PhotoFileNameSchema,
@@ -65,6 +76,7 @@ export async function attachPhotoRecord(
     id: createId(),
     ownerType,
     ownerId,
+    documentKind,
     originalName: originalNameParsed.success
       ? originalNameParsed.data
       : "photo",
@@ -85,7 +97,7 @@ export async function attachPhotoRecord(
       }
       if (!system.photos) system.photos = [];
       assertPhotoCollectionRoom(
-        photosForOwner(system.photos, ownerType, ownerId).length,
+        photosForOwnerKind(system.photos, ownerType, ownerId, documentKind).length,
       );
       system.photos.unshift(photo);
       return photo;

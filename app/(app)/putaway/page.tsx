@@ -92,7 +92,10 @@ function PutawayTable({
                     {missing > 0 ? ` · ${missing} need locations` : ""}
                   </TableCell>
                   <TableCell>
-                    <ReceivingStatusBadge status={order.status} />
+                    <ReceivingStatusBadge
+                      status={order.status}
+                      isPartialed={order.isPartialed}
+                    />
                   </TableCell>
                   <TableCell>
                     <Button

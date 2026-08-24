@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     const ownerType = form.get("ownerType");
     const ownerId = form.get("ownerId");
     const caption = form.get("caption");
+    const documentKind = form.get("documentKind");
     const file = form.get("file");
 
     if (!(file instanceof File)) {
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
     const photo = await attachPhotoRecord({
       ownerType: ownerTypeParsed.data,
       ownerId,
+      documentKind: typeof documentKind === "string" ? documentKind : "freight-proof",
       originalName: file.name,
       caption: typeof caption === "string" ? caption : "",
       bytes,

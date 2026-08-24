@@ -87,6 +87,7 @@ export const CaseItemSchema = z.object({
   fiber: FiberItemSchema.nullable().default(null),
   putawayRoomId: UuidSchema.nullable().default(null),
   putawayLocationId: UuidSchema.nullable().default(null),
+  putawayPostedAt: DateTimeSchema.nullable().optional().default(null),
 });
 export type CaseItem = z.infer<typeof CaseItemSchema>;
 
@@ -94,6 +95,7 @@ export const CaseItemInputSchema = CaseItemSchema.omit({
   id: true,
   sku: true,
   upc: true,
+  putawayPostedAt: true,
 }).extend({
   id: UuidSchema.optional(),
   sku: z.string().trim().optional().default(""),
@@ -166,6 +168,10 @@ export function isAwaitingPutaway(status: ReceivingOrderStatus): boolean {
   return status === "received";
 }
 
+export function isClosedReceiving(status: ReceivingOrderStatus): boolean {
+  return status === "received" || status === "completed";
+}
+
 export const PurchaseOrderSchema = z.object({
   id: UuidSchema,
   purchaseOrderNumber: NonEmptyStringSchema,
@@ -184,6 +190,11 @@ export const ReceivingOrderSchema = z.object({
   receiverName: NonEmptyStringSchema,
   loadPalletCount: z.coerce.number().int().min(0),
   status: ReceivingOrderStatusSchema.default("draft"),
+  isPartialed: z.boolean().default(false),
+  partialedAt: DateTimeSchema.optional(),
+  partialedBy: z.string().optional(),
+  reopenedAt: DateTimeSchema.optional(),
+  reopenedBy: z.string().optional(),
   workingPalletId: UuidSchema.nullable().default(null),
   pallets: z.array(PalletSchema).default([]),
   notes: OptionalNotesSchema,
@@ -210,6 +221,13 @@ export const CreateReceivingOrderInputSchema = z.object({
 export type CreateReceivingOrderInput = z.infer<
   typeof CreateReceivingOrderInputSchema
 >;
+
+export const ReopenReceivingInputSchema = z
+  .object({
+    expectedPalletCount: NonNegativeCountSchema.optional(),
+  })
+  .strict();
+export type ReopenReceivingInput = z.infer<typeof ReopenReceivingInputSchema>;
 
 export const ShippingOrderStatusSchema = z.enum([
   "draft",
@@ -316,6 +334,15 @@ export const PhotoOwnerTypeSchema = z.enum([
 ]);
 export type PhotoOwnerType = z.infer<typeof PhotoOwnerTypeSchema>;
 
+export const PhotoDocumentKindSchema = z.enum([
+  "freight-proof",
+  "manifest",
+  "load-sheet",
+  "pack-slip",
+]);
+export type PhotoDocumentKind = z.infer<typeof PhotoDocumentKindSchema>;
+export const PHOTO_DOCUMENT_KINDS = PhotoDocumentKindSchema.options;
+
 export const PhotoMimeTypeSchema = z.enum([
   "image/jpeg",
   "image/png",
@@ -341,6 +368,7 @@ export const PhotoAttachmentSchema = z.object({
   id: UuidSchema,
   ownerType: PhotoOwnerTypeSchema,
   ownerId: UuidSchema,
+  documentKind: PhotoDocumentKindSchema.default("freight-proof"),
   originalName: PhotoFileNameSchema,
   mimeType: PhotoMimeTypeSchema,
   size: z.number().int().min(1).max(LIMITS.photoMaxBytes),

@@ -75,6 +75,7 @@ describe("inventory control safeguards", () => {
             fiber: null,
             putawayRoomId: null,
             putawayLocationId: null,
+            putawayPostedAt: null,
           },
         ],
         nowIso(),

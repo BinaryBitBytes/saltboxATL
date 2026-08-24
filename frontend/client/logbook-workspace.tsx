@@ -43,7 +43,12 @@ function StatusMark({ entry }: { entry: LogbookEntry }) {
     return <ShippingStatusBadge status={entry.status as ShippingOrderStatus} />;
   }
   if (entry.kind === "delivery" && entry.status) {
-    return <ReceivingStatusBadge status={entry.status as ReceivingOrderStatus} />;
+    return (
+      <ReceivingStatusBadge
+        status={entry.status as ReceivingOrderStatus}
+        isPartialed={entry.isPartialed}
+      />
+    );
   }
   return null;
 }

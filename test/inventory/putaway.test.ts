@@ -2,6 +2,7 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import {
   isAwaitingPutaway,
+  isClosedReceiving,
   isReceivingEditable,
   PutawayLocationInputSchema,
 } from "@/lib/inventory-schema";
@@ -15,6 +16,9 @@ describe("receiving and putaway process split", () => {
     expect(isReceivingEditable("received")).to.equal(false);
     expect(isReceivingEditable("completed")).to.equal(false);
     expect(isReceivingEditable("cancelled")).to.equal(false);
+    expect(isClosedReceiving("received")).to.equal(true);
+    expect(isClosedReceiving("completed")).to.equal(true);
+    expect(isClosedReceiving("in-progress")).to.equal(false);
   });
 
   it("queues received orders for putaway instead of treating them as completed stock", () => {
