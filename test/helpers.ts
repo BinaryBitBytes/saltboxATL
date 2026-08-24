@@ -1,5 +1,6 @@
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import type { InventoryItem, Location, User } from "@/lib/inventory-schema";
+import { uniqueUsernameFromEmail } from "@/lib/auth/username";
 
 export function makeLocation(overrides: Partial<Location> = {}): Location {
   return {
@@ -30,10 +31,14 @@ export function makeItem(overrides: Partial<InventoryItem> = {}): InventoryItem 
 
 export function makeUser(overrides: Partial<User> = {}): User {
   const now = nowIso();
+  const email = overrides.email ?? "manager@saltbox.local";
+  const username =
+    overrides.username ?? uniqueUsernameFromEmail(email, new Set());
   return {
     id: createId(),
     name: "Avery Manager",
-    email: "manager@saltbox.local",
+    username,
+    email,
     passwordHash: "scrypt:ab:cd",
     role: "manager",
     isActive: true,

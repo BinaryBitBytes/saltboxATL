@@ -11,6 +11,7 @@ describe("user data security", () => {
     const publicUser = toPublicUser(user);
     expect(publicUser).not.to.have.property("passwordHash");
     expect(publicUser.email).to.equal(user.email);
+    expect(publicUser.username).to.equal(user.username);
     expect(PublicUserSchema.parse(user)).not.to.have.property("passwordHash");
   });
 
@@ -19,6 +20,7 @@ describe("user data security", () => {
       assertSafePublicUser({
         id: makeUser().id,
         name: "Riley User",
+        username: "user",
         email: "user@saltbox.local",
         role: "user",
         isActive: true,
@@ -31,6 +33,7 @@ describe("user data security", () => {
     expect(() =>
       assertNoSensitiveUserFields({
         name: "Casey",
+        username: "casey",
         email: "casey@saltbox.local",
         password: "password1",
         passwordHash: "scrypt:stolen",
@@ -45,6 +48,7 @@ describe("user data security", () => {
   it("rejects extra privilege fields when creating a user", () => {
     const result = CreateUserInputSchema.safeParse({
       name: "Casey New",
+      username: "casey",
       email: "casey@saltbox.local",
       password: "password1",
       role: "user",

@@ -27,24 +27,28 @@ export const DEMO_PASSWORD = "saltbox123";
 export const DEMO_ACCOUNTS: Array<{
   id: string;
   name: string;
+  username: string;
   email: string;
   role: UserRole;
 }> = [
   {
     id: USER_MANAGER,
     name: "Avery Manager",
+    username: "manager",
     email: "manager@saltbox.local",
     role: "manager",
   },
   {
     id: USER_ASSOCIATE,
     name: "Jordan Associate",
+    username: "associate",
     email: "associate@saltbox.local",
     role: "associate",
   },
   {
     id: USER_VIEWER,
     name: "Riley User",
+    username: "user",
     email: "user@saltbox.local",
     role: "user",
   },
@@ -203,6 +207,7 @@ export async function ensureDemoUsers(
     const user: User = {
       id: account.id,
       name: account.name,
+      username: account.username,
       email: account.email,
       passwordHash: await hashPassword(DEMO_PASSWORD),
       role: account.role,

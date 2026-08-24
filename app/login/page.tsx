@@ -24,9 +24,9 @@ export default async function LoginPage({
       <div className="grid w-full max-w-md gap-6">
         <div className="grid gap-1 text-center">
           <p className="text-sm font-semibold tracking-tight">Saltbox Inventory</p>
-          <h1 className="font-heading text-xl font-semibold">Sign in</h1>
+          <h1 className="font-heading text-xl font-semibold">Account access</h1>
           <p className="text-sm text-muted-foreground">
-            Warehouse access for users, associates, and managers.
+            Sign in, create a username and password, or recover forgotten credentials.
           </p>
         </div>
         <LoginForm from={nextPath} />

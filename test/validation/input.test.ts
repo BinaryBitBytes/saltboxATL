@@ -25,18 +25,21 @@ describe("user and inventory input validation", () => {
   it("enforces password complexity for new accounts but not login length leaks", () => {
     expect(CreateUserInputSchema.safeParse({
       name: "Casey New",
+      username: "casey",
       email: "casey@saltbox.local",
       password: "short",
       role: "user",
     }).success).to.equal(false);
     expect(CreateUserInputSchema.safeParse({
       name: "Casey New",
+      username: "casey",
       email: "casey@saltbox.local",
       password: "lettersonly",
       role: "user",
     }).success).to.equal(false);
     expect(CreateUserInputSchema.safeParse({
       name: "Casey New",
+      username: "casey",
       email: "casey@saltbox.local",
       password: "saltbox123",
       role: "associate",
@@ -45,14 +48,23 @@ describe("user and inventory input validation", () => {
       email: "user@saltbox.local",
       password: "x",
     }).success).to.equal(true);
+    expect(LoginInputSchema.safeParse({
+      identifier: "user",
+      password: "x",
+    }).success).to.equal(true);
   });
 
-  it("normalizes emails and caps field lengths", () => {
-    const parsed = LoginInputSchema.parse({
+  it("normalizes emails and usernames and caps field lengths", () => {
+    const byEmail = LoginInputSchema.parse({
       email: "  Manager@Saltbox.Local  ",
       password: "saltbox123",
     });
-    expect(parsed.email).to.equal("manager@saltbox.local");
+    expect(byEmail.identifier).to.equal("manager@saltbox.local");
+    const byUsername = LoginInputSchema.parse({
+      identifier: "  Manager  ",
+      password: "saltbox123",
+    });
+    expect(byUsername.identifier).to.equal("manager");
     expect(PersonNameSchema.safeParse("A".repeat(LIMITS.name + 1)).success).to.equal(false);
   });
 

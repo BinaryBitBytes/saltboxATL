@@ -93,4 +93,24 @@ describe("user authentication safeguards", () => {
     expect(safeRedirectPath("/receiving")).to.equal("/receiving");
     expect(safeRedirectPath("/putaway")).to.equal("/putaway");
   });
+
+  it("locks username recovery and password reset separately from sign-in", () => {
+    const recoverKey = "recover-username:user@saltbox.local";
+    const resetKey = "reset-password:user:user@saltbox.local";
+    const start = 1_700_000_000_000;
+    for (let i = 0; i < LIMITS.loginMaxFailures; i += 1) {
+      recordFailedLogin(recoverKey, start + i);
+    }
+    expect(() =>
+      assertLoginNotLocked(recoverKey, start + 1, "username recovery"),
+    ).to.throw(ValidationError, /username recovery/i);
+    expect(() => assertLoginNotLocked("user@saltbox.local", start + 1)).not.to.throw();
+
+    for (let i = 0; i < LIMITS.loginMaxFailures; i += 1) {
+      recordFailedLogin(resetKey, start + i);
+    }
+    expect(() =>
+      assertLoginNotLocked(resetKey, start + 1, "password reset"),
+    ).to.throw(ValidationError, /password reset/i);
+  });
 });

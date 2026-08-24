@@ -6,6 +6,7 @@ import {
   isPersonName,
   isSku,
   isUpc,
+  isUsername,
 } from "@/lib/validation/sanitize";
 
 const noControl = (value: string) => !hasControlChars(value);
@@ -59,6 +60,50 @@ export const EmailSchema = z
   .toLowerCase()
   .max(LIMITS.email)
   .pipe(z.email({ error: "Enter a valid email." }));
+
+export const UsernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(LIMITS.usernameMin, {
+    error: `Username must be at least ${LIMITS.usernameMin} characters.`,
+  })
+  .max(LIMITS.usernameMax, {
+    error: `Username must be ${LIMITS.usernameMax} characters or fewer.`,
+  })
+  .refine(noControl, { error: "Control characters are not allowed." })
+  .refine(noMarkup, { error: "HTML markup is not allowed." })
+  .refine(isUsername, {
+    error:
+      "Username must start with a letter and may include letters, numbers, periods, underscores, and hyphens.",
+  });
+
+export const LoginIdentifierSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, { error: "Username or email is required." })
+  .max(LIMITS.email)
+  .refine(noControl, { error: "Control characters are not allowed." })
+  .superRefine((value, ctx) => {
+    if (value.includes("@")) {
+      if (!EmailSchema.safeParse(value).success) {
+        ctx.addIssue({ code: "custom", message: "Enter a valid email." });
+      }
+      return;
+    }
+    if (!UsernameSchema.safeParse(value).success) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Enter a valid username or email.",
+      });
+    }
+  });
+
+export const ConfirmPasswordSchema = z
+  .string()
+  .min(1, { error: "Confirm your password." })
+  .max(LIMITS.passwordMax);
 
 export const PasswordSchema = z
   .string()

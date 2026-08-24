@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
+  ConfirmPasswordSchema,
   DescriptionSchema,
   EmailSchema,
   LocationCodeSchema,
+  LoginIdentifierSchema,
   LoginPasswordSchema,
   NonNegativeCountSchema,
   OptionalNotesSchema,
@@ -13,9 +15,14 @@ import {
   SafeTextSchema,
   SkuSchema,
   UpcSchema,
+  UsernameSchema,
 } from "@/lib/validation/fields";
 import { hasControlChars, hasHtmlMarkup } from "@/lib/validation/sanitize";
 import { LIMITS } from "@/lib/validation/limits";
+import {
+  refineConfirmPassword,
+  refinePasswordNotIdentity,
+} from "@/lib/validation/password-rules";
 
 /**
  * Canonical Zod models for the Saltbox inventory app.
@@ -404,6 +411,7 @@ export const USER_ROLES = UserRoleSchema.options;
 export const UserSchema = z.object({
   id: UuidSchema,
   name: PersonNameSchema,
+  username: UsernameSchema,
   email: EmailSchema,
   passwordHash: z.string().min(1).max(512),
   role: UserRoleSchema,
@@ -417,18 +425,42 @@ export type User = z.infer<typeof UserSchema>;
 export const PublicUserSchema = UserSchema.omit({ passwordHash: true });
 export type PublicUser = z.infer<typeof PublicUserSchema>;
 
-export const LoginInputSchema = z
-  .object({
-    email: EmailSchema,
-    password: LoginPasswordSchema,
-    from: z.string().optional(),
-  })
-  .strict();
+function loginIdentifierFrom(data: Record<string, unknown>): string {
+  for (const key of ["identifier", "email", "username"] as const) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+export const LoginInputSchema = z.preprocess(
+  (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return value;
+    }
+    const data = value as Record<string, unknown>;
+    return {
+      identifier: loginIdentifierFrom(data),
+      password: data.password,
+      from: data.from,
+    };
+  },
+  z
+    .object({
+      identifier: LoginIdentifierSchema,
+      password: LoginPasswordSchema,
+      from: z.string().optional(),
+    })
+    .strict(),
+);
 export type LoginInput = z.infer<typeof LoginInputSchema>;
 
 export const CreateUserInputSchema = z
   .object({
     name: PersonNameSchema,
+    username: UsernameSchema,
     email: EmailSchema,
     password: PasswordSchema,
     role: UserRoleSchema,
@@ -436,10 +468,46 @@ export const CreateUserInputSchema = z
   .strict();
 export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
 
+export const RegisterInputSchema = z
+  .object({
+    name: PersonNameSchema,
+    username: UsernameSchema,
+    email: EmailSchema,
+    password: PasswordSchema,
+    confirmPassword: ConfirmPasswordSchema,
+    from: z.string().optional(),
+  })
+  .strict()
+  .superRefine(refineConfirmPassword)
+  .superRefine(refinePasswordNotIdentity);
+export type RegisterInput = z.infer<typeof RegisterInputSchema>;
+
+export const RecoverUsernameInputSchema = z
+  .object({
+    name: PersonNameSchema,
+    email: EmailSchema,
+  })
+  .strict();
+export type RecoverUsernameInput = z.infer<typeof RecoverUsernameInputSchema>;
+
+export const ResetPasswordInputSchema = z
+  .object({
+    name: PersonNameSchema,
+    username: UsernameSchema,
+    email: EmailSchema,
+    password: PasswordSchema,
+    confirmPassword: ConfirmPasswordSchema,
+  })
+  .strict()
+  .superRefine(refineConfirmPassword)
+  .superRefine(refinePasswordNotIdentity);
+export type ResetPasswordInput = z.infer<typeof ResetPasswordInputSchema>;
+
 export const UpdateUserInputSchema = z
   .object({
     id: UuidSchema,
     name: PersonNameSchema.optional(),
+    username: UsernameSchema.optional(),
     email: EmailSchema.optional(),
     password: PasswordSchema.optional(),
     role: UserRoleSchema.optional(),

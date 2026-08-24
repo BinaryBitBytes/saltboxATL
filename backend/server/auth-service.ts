@@ -7,6 +7,11 @@ import { parseWithSchema } from "@/backend/server/safeParsing";
 import { readSystem, updateSystem } from "@/backend/server/store";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
+  findUserByLoginIdentifier,
+  findUserForPasswordReset,
+  findUserForUsernameRecovery,
+} from "@/lib/auth/account-identity";
+import {
   assertLoginNotLocked,
   clearFailedLogins,
   recordFailedLogin,
@@ -16,6 +21,9 @@ import { ValidationError } from "@/lib/validation/errors";
 import {
   CreateUserInputSchema,
   LoginInputSchema,
+  RecoverUsernameInputSchema,
+  RegisterInputSchema,
+  ResetPasswordInputSchema,
   UpdateUserInputSchema,
   type PublicUser,
 } from "@/lib/inventory-schema";
@@ -27,35 +35,141 @@ async function consumePasswordCheck(password: string): Promise<void> {
   await verifyPassword(password, dummyPasswordHash);
 }
 
+function claimUsernameAndEmail(
+  users: Array<{ id: string; username: string; email: string }>,
+  input: { username: string; email: string },
+  userId?: string,
+): void {
+  const usernameTaken = users.some(
+    (user) => user.username === input.username && user.id !== userId,
+  );
+  if (usernameTaken) {
+    throw new ServiceError("That username is already taken.");
+  }
+  const emailTaken = users.some(
+    (user) => user.email === input.email && user.id !== userId,
+  );
+  if (emailTaken) {
+    throw new ServiceError("A user with that email already exists.");
+  }
+}
+
 export async function authenticateUser(
-  email: string,
+  identifier: string,
   password: string,
 ): Promise<PublicUser> {
-  const parsed = parseWithSchema(LoginInputSchema, { email, password });
+  const parsed = parseWithSchema(LoginInputSchema, { identifier, password });
   if (!parsed.success) {
-    throw new ServiceError("Enter a valid email and password.");
+    throw new ServiceError("Enter a valid username or email and password.");
   }
 
-  assertLoginNotLocked(parsed.data.email);
+  const loginId = parsed.data.identifier;
+  assertLoginNotLocked(loginId);
 
   const system = await readSystem();
-  const user = system.users.find(
-    (entry) => entry.email === parsed.data.email,
-  );
+  const user = findUserByLoginIdentifier(system.users, loginId);
   if (!user || !user.isActive) {
     await consumePasswordCheck(parsed.data.password);
-    recordFailedLogin(parsed.data.email);
-    throw new ServiceError("Invalid email or password.", 401);
+    recordFailedLogin(loginId);
+    throw new ServiceError("Invalid username or password.", 401);
   }
 
   const matches = await verifyPassword(parsed.data.password, user.passwordHash);
   if (!matches) {
-    recordFailedLogin(parsed.data.email);
-    throw new ServiceError("Invalid email or password.", 401);
+    recordFailedLogin(loginId);
+    throw new ServiceError("Invalid username or password.", 401);
   }
 
-  clearFailedLogins(parsed.data.email);
+  clearFailedLogins(loginId);
+  clearFailedLogins(user.email);
+  clearFailedLogins(user.username);
   return toPublicUser(user);
+}
+
+export async function registerSelfServeUser(
+  rawData: unknown,
+): Promise<PublicUser> {
+  assertNoSensitiveUserFields(rawData);
+  const parsed = parseWithSchema(RegisterInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  return updateSystem(async (system) => {
+    claimUsernameAndEmail(system.users, parsed.data);
+
+    const now = nowIso();
+    const user = {
+      id: createId(),
+      name: parsed.data.name,
+      username: parsed.data.username,
+      email: parsed.data.email,
+      passwordHash: await hashPassword(parsed.data.password),
+      role: "user" as const,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: "self-register",
+    };
+    system.users.push(user);
+    return toPublicUser(user);
+  });
+}
+
+export async function recoverUsername(
+  rawData: unknown,
+): Promise<{ username: string }> {
+  assertNoSensitiveUserFields(rawData);
+  const parsed = parseWithSchema(RecoverUsernameInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  const lockKey = `recover-username:${parsed.data.email}`;
+  assertLoginNotLocked(lockKey, Date.now(), "username recovery");
+
+  const system = await readSystem();
+  const user = findUserForUsernameRecovery(
+    system.users,
+    parsed.data.name,
+    parsed.data.email,
+  );
+  if (!user) {
+    await consumePasswordCheck("recovery-dummy");
+    recordFailedLogin(lockKey);
+    throw new ServiceError("No matching account was found.");
+  }
+
+  clearFailedLogins(lockKey);
+  return { username: user.username };
+}
+
+export async function resetPasswordWithIdentity(
+  rawData: unknown,
+): Promise<void> {
+  assertNoSensitiveUserFields(rawData);
+  const parsed = parseWithSchema(ResetPasswordInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  const lockKey = `reset-password:${parsed.data.username}:${parsed.data.email}`;
+  assertLoginNotLocked(lockKey, Date.now(), "password reset");
+
+  await updateSystem(async (system) => {
+    const user = findUserForPasswordReset(system.users, parsed.data);
+    if (!user) {
+      await consumePasswordCheck(parsed.data.password);
+      recordFailedLogin(lockKey);
+      throw new ServiceError("No matching account was found.");
+    }
+
+    user.passwordHash = await hashPassword(parsed.data.password);
+    user.updatedAt = nowIso();
+    clearFailedLogins(lockKey);
+    clearFailedLogins(user.email);
+    clearFailedLogins(user.username);
+  });
 }
 
 export async function listPublicUsers(): Promise<PublicUser[]> {
@@ -74,16 +188,14 @@ export async function createUserRecord(
   }
 
   return updateSystem(async (system) => {
-    const email = parsed.data.email;
-    if (system.users.some((user) => user.email === email)) {
-      throw new ServiceError("A user with that email already exists.");
-    }
+    claimUsernameAndEmail(system.users, parsed.data);
 
     const now = nowIso();
     const user = {
       id: createId(),
       name: parsed.data.name,
-      email,
+      username: parsed.data.username,
+      email: parsed.data.email,
       passwordHash: await hashPassword(parsed.data.password),
       role: parsed.data.role,
       isActive: true,
@@ -113,13 +225,21 @@ export async function updateUserRecord(
     }
 
     if (parsed.data.email && parsed.data.email !== user.email) {
-      const duplicate = system.users.some(
-        (entry) => entry.email === parsed.data.email && entry.id !== user.id,
+      claimUsernameAndEmail(
+        system.users,
+        { username: parsed.data.username ?? user.username, email: parsed.data.email },
+        user.id,
       );
-      if (duplicate) {
-        throw new ServiceError("A user with that email already exists.");
-      }
       user.email = parsed.data.email;
+    }
+
+    if (parsed.data.username && parsed.data.username !== user.username) {
+      claimUsernameAndEmail(
+        system.users,
+        { username: parsed.data.username, email: parsed.data.email ?? user.email },
+        user.id,
+      );
+      user.username = parsed.data.username;
     }
 
     if (parsed.data.name) user.name = parsed.data.name;
