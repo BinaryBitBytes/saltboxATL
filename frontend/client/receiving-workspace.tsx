@@ -25,7 +25,6 @@ import {
   cancelReceiving,
   completeReceiving,
   removeReceivingCase,
-  reopenReceiving,
   selectWorkingPallet,
   updateReceivingCase,
 } from "@/backend/server/serverAction";
@@ -862,12 +861,21 @@ function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
   function reopen() {
     setError(null);
     startTransition(async () => {
-      const result = await reopenReceiving(
-        order.id,
-        needsExpectedCount ? { expectedPalletCount } : undefined,
-      );
-      if (!result.ok) {
-        setError(result.error);
+      const response = await fetch(`/api/receiving/${order.id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          needsExpectedCount
+            ? { action: "reopen", expectedPalletCount }
+            : { action: "reopen" },
+        ),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+      if (!response.ok || !json?.success) {
+        setError(json?.error || "Unable to reopen this order.");
         return;
       }
       router.refresh();
@@ -875,7 +883,13 @@ function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
   }
 
   return (
-    <div className="grid gap-3">
+    <form
+      className="grid gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        reopen();
+      }}
+    >
       {needsExpectedCount ? (
         <Field label="Expected pallets" htmlFor="reopen-expected-pallets">
           <Input
@@ -895,17 +909,12 @@ function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          size="lg"
-          disabled={pending}
-          onClick={reopen}
-        >
+        <Button type="submit" size="lg" disabled={pending}>
           {pending ? "Reopening…" : "Reopen as partialed"}
         </Button>
         <ErrorText error={error} />
       </div>
-    </div>
+    </form>
   );
 }
 
