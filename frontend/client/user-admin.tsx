@@ -18,6 +18,7 @@ import {
   PasswordSchema,
   PersonNameSchema,
   EmailSchema,
+  UsernameSchema,
 } from "@/lib/validation/fields";
 import { roleLabel } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import { Field, NativeSelect } from "@/frontend/client/field";
 
 const CreateUserFormSchema = z.object({
   name: PersonNameSchema,
+  username: UsernameSchema,
   email: EmailSchema,
   password: PasswordSchema,
   role: z.enum(USER_ROLES),
@@ -63,6 +65,7 @@ export function UserAdmin({
     resolver: zodResolver(CreateUserFormSchema),
     defaultValues: {
       name: "",
+      username: "",
       email: "",
       password: "",
       role: "associate",
@@ -77,7 +80,7 @@ export function UserAdmin({
         setError(result.error);
         return;
       }
-      form.reset({ name: "", email: "", password: "", role: "associate" });
+      form.reset({ name: "", username: "", email: "", password: "", role: "associate" });
       router.refresh();
     });
   });
@@ -111,6 +114,13 @@ export function UserAdmin({
           <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
             <Field label="Name" htmlFor="name" error={form.formState.errors.name?.message}>
               <Input id="name" {...form.register("name")} />
+            </Field>
+            <Field
+              label="Username"
+              htmlFor="username"
+              error={form.formState.errors.username?.message}
+            >
+              <Input id="username" autoComplete="username" {...form.register("username")} />
             </Field>
             <Field
               label="Email"
@@ -149,6 +159,7 @@ export function UserAdmin({
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
+            <TableHead>Username</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Status</TableHead>
@@ -159,6 +170,7 @@ export function UserAdmin({
           {users.map((user) => (
             <TableRow key={user.id}>
               <TableCell>{user.name}</TableCell>
+              <TableCell>{user.username}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell>
                 <NativeSelect

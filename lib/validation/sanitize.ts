@@ -1,6 +1,7 @@
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 const HTML_MARKUP = /<\/?[a-z][^>]*>/i;
 const PERSON_NAME = /^[\p{L}][\p{L}\s.'-]*$/u;
+const USERNAME = /^[a-z][a-z0-9._-]*$/;
 const SKU_OR_CODE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const UPC = /^[A-Za-z0-9-]{1,32}$/;
 
@@ -14,6 +15,10 @@ export function hasHtmlMarkup(value: string): boolean {
 
 export function isPersonName(value: string): boolean {
   return PERSON_NAME.test(value);
+}
+
+export function isUsername(value: string): boolean {
+  return USERNAME.test(value);
 }
 
 export function isSku(value: string): boolean {

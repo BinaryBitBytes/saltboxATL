@@ -7,6 +7,7 @@ import {
   ensureDemoUsers,
   ensureSystemDefaults,
 } from "@/backend/server/seed";
+import { backfillUsernames } from "@/lib/auth/username";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_PATH = path.join(DATA_DIR, "inventory.json");
@@ -16,13 +17,17 @@ let writeChain: Promise<unknown> = Promise.resolve();
 async function readFromDisk(): Promise<InventorySystem> {
   try {
     const raw = await readFile(DATA_PATH, "utf8");
-    const parsed = InventorySystemSchema.parse(JSON.parse(raw));
+    const json = JSON.parse(raw) as { users?: unknown };
+    const usernamesChanged = Array.isArray(json.users)
+      ? backfillUsernames(json.users as Array<Record<string, unknown>>)
+      : false;
+    const parsed = InventorySystemSchema.parse(json);
     const hadDamagedHold = parsed.locations.some(
       (location) => location.code === "DMG-01",
     );
     ensureSystemDefaults(parsed);
     const seededUsers = await ensureDemoUsers(parsed);
-    if (!hadDamagedHold || seededUsers) {
+    if (!hadDamagedHold || seededUsers || usernamesChanged) {
       await persist(parsed);
     }
     return parsed;

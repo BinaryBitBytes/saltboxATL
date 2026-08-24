@@ -12,6 +12,11 @@ import { ValidationError } from "@/lib/validation/errors";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { signSession, verifySessionToken } from "@/lib/auth/token";
 import { canAccessPath, hasPermission, safeRedirectPath } from "@/lib/auth/permissions";
+import {
+  accountLoginLockKeys,
+  passwordResetLockKey,
+  usernameRecoveryLockKey,
+} from "@/lib/auth/account-identity";
 
 describe("user authentication safeguards", () => {
   beforeEach(() => {
@@ -92,5 +97,48 @@ describe("user authentication safeguards", () => {
     expect(safeRedirectPath("/api/users")).to.equal("/");
     expect(safeRedirectPath("/receiving")).to.equal("/receiving");
     expect(safeRedirectPath("/putaway")).to.equal("/putaway");
+  });
+
+  it("locks username recovery and password reset separately from sign-in", () => {
+    const recoverKey = usernameRecoveryLockKey("user@saltbox.local");
+    const resetKey = passwordResetLockKey("user@saltbox.local");
+    const start = 1_700_000_000_000;
+    for (let i = 0; i < LIMITS.loginMaxFailures; i += 1) {
+      recordFailedLogin(recoverKey, start + i);
+    }
+    expect(() =>
+      assertLoginNotLocked(recoverKey, start + 1, "username recovery"),
+    ).to.throw(ValidationError, /username recovery/i);
+    expect(() => assertLoginNotLocked("user@saltbox.local", start + 1)).not.to.throw();
+
+    for (let i = 0; i < LIMITS.loginMaxFailures; i += 1) {
+      recordFailedLogin(resetKey, start + i);
+    }
+    expect(() =>
+      assertLoginNotLocked(resetKey, start + 1, "password reset"),
+    ).to.throw(ValidationError, /password reset/i);
+    expect(resetKey).to.equal("reset-password:user@saltbox.local");
+    expect(resetKey).not.to.include("user:user@");
+  });
+
+  it("shares a sign-in lock across username and email for the same account", () => {
+    const keys = accountLoginLockKeys({
+      email: "user@saltbox.local",
+      username: "user",
+    });
+    expect(keys).to.have.members(["user@saltbox.local", "user"]);
+    const start = 1_700_000_000_000;
+    for (let i = 0; i < LIMITS.loginMaxFailures; i += 1) {
+      for (const key of keys) {
+        recordFailedLogin(key, start + i);
+      }
+    }
+    expect(() => assertLoginNotLocked("user", start + 1)).to.throw(
+      ValidationError,
+      /too many failed/i,
+    );
+    expect(() =>
+      assertLoginNotLocked("user@saltbox.local", start + 1),
+    ).to.throw(ValidationError, /too many failed/i);
   });
 });
