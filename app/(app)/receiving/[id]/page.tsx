@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
-import { ReceivingWorkspace } from "@/frontend/client/receiving-workspace";
+import { ReceivingWorkspace, ReopenAsPartialControls } from "@/frontend/client/receiving-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { PhotoProofCollector } from "@/frontend/client/photo-proof";
 import { collectKnownProducts } from "@/lib/codes/product-codes";
@@ -30,6 +30,7 @@ export default async function ReceivingOrderPage({
   const photos = system.photos ?? [];
   const canEditPhotos = order.status !== "cancelled";
   const remaining = remainingExpectedPallets(order);
+  const canReopen = hasPermission(user.role, "reopenReceiving");
 
   return (
     <div className="grid gap-6">
@@ -43,10 +44,17 @@ export default async function ReceivingOrderPage({
             {formatDateTime(order.receivedAt)}
           </p>
         </div>
-        <ReceivingStatusBadge
-          status={order.status}
-          isPartialed={order.isPartialed}
-        />
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <ReceivingStatusBadge
+            status={order.status}
+            isPartialed={order.isPartialed}
+          />
+          {canReopen &&
+          order.status === "completed" &&
+          remaining > 0 ? (
+            <ReopenAsPartialControls order={order} compact />
+          ) : null}
+        </div>
       </div>
 
       <Card>
@@ -131,7 +139,7 @@ export default async function ReceivingOrderPage({
       <ReceivingWorkspace
         order={order}
         knownProducts={collectKnownProducts(system)}
-        canReopen={hasPermission(user.role, "reopenReceiving")}
+        canReopen={canReopen}
       />
     </div>
   );

@@ -28,7 +28,7 @@ import {
   selectWorkingPallet,
   updateReceivingCase,
 } from "@/backend/server/serverAction";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
@@ -848,7 +848,13 @@ function WorkingCaseForm({
   );
 }
 
-function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
+export function ReopenAsPartialControls({
+  order,
+  compact = false,
+}: {
+  order: ReceivingOrder;
+  compact?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -890,7 +896,7 @@ function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
         reopen();
       }}
     >
-      {needsExpectedCount ? (
+      {compact ? null : needsExpectedCount ? (
         <Field label="Expected pallets" htmlFor="reopen-expected-pallets">
           <Input
             id="reopen-expected-pallets"
@@ -909,9 +915,13 @@ function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="lg" disabled={pending}>
+        <button
+          type="submit"
+          disabled={pending}
+          className={cn(buttonVariants({ size: "lg" }), "cursor-pointer")}
+        >
           {pending ? "Reopening…" : "Reopen as partialed"}
-        </Button>
+        </button>
         <ErrorText error={error} />
       </div>
     </form>
