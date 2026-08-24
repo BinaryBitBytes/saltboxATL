@@ -864,7 +864,7 @@ function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
     startTransition(async () => {
       const result = await reopenReceiving(
         order.id,
-        needsExpectedCount ? { expectedPalletCount } : {},
+        needsExpectedCount ? { expectedPalletCount } : undefined,
       );
       if (!result.ok) {
         setError(result.error);
@@ -895,7 +895,12 @@ function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" disabled={pending} onClick={reopen}>
+        <Button
+          type="button"
+          size="lg"
+          disabled={pending}
+          onClick={reopen}
+        >
           {pending ? "Reopening…" : "Reopen as partialed"}
         </Button>
         <ErrorText error={error} />
@@ -914,7 +919,7 @@ function CompletedOrderActions({
   const remaining = remainingExpectedPallets(order);
 
   return (
-    <Card className="sticky bottom-3 z-20 print:hidden border-border bg-background/95 shadow-md backdrop-blur-md">
+    <Card className="print:hidden">
       <CardHeader>
         <CardTitle>Completed</CardTitle>
       </CardHeader>

@@ -73,9 +73,13 @@ export async function POST(
     if (body.action === "reopen") {
       const user = await requireApiPermission("reopenReceiving");
       return jsonOk(
-        await reopenReceivingOrder(id, user.name, {
-          expectedPalletCount: body.expectedPalletCount,
-        }),
+        await reopenReceivingOrder(
+          id,
+          user.name,
+          typeof body.expectedPalletCount === "number"
+            ? { expectedPalletCount: body.expectedPalletCount }
+            : {},
+        ),
       );
     }
 
