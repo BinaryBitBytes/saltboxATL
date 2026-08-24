@@ -1,4 +1,8 @@
-import type { PhotoAttachment, PhotoOwnerType } from "@/lib/inventory-schema";
+import type {
+  PhotoAttachment,
+  PhotoDocumentKind,
+  PhotoOwnerType,
+} from "@/lib/inventory-schema";
 import { compressProofPhoto } from "@/frontend/client/compress-image";
 
 export type PhotoApiResult<T> =
@@ -25,11 +29,13 @@ export async function uploadProofPhoto(input: {
   ownerId: string;
   file: File;
   caption?: string;
+  documentKind?: PhotoDocumentKind;
 }): Promise<PhotoApiResult<PhotoAttachment>> {
   const compressed = await compressProofPhoto(input.file);
   const form = new FormData();
   form.set("ownerType", input.ownerType);
   form.set("ownerId", input.ownerId);
+  form.set("documentKind", input.documentKind ?? "freight-proof");
   form.set("file", compressed, compressed.name);
   if (input.caption) form.set("caption", input.caption);
   const response = await fetch("/api/photos", { method: "POST", body: form });
@@ -41,6 +47,7 @@ export async function uploadProofPhotos(input: {
   ownerId: string;
   files: File[];
   caption?: string;
+  documentKind?: PhotoDocumentKind;
 }): Promise<PhotoApiResult<PhotoAttachment[]>> {
   const uploaded: PhotoAttachment[] = [];
   for (const file of input.files) {
@@ -49,6 +56,7 @@ export async function uploadProofPhotos(input: {
       ownerId: input.ownerId,
       file,
       caption: input.caption,
+      documentKind: input.documentKind,
     });
     if (!result.ok) {
       return { ok: false, error: result.error };

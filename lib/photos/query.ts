@@ -10,6 +10,17 @@ export function photosForOwner(
   );
 }
 
+export function photosForOwnerKind(
+  photos: PhotoAttachment[],
+  ownerType: PhotoOwnerType,
+  ownerId: string,
+  documentKind: PhotoAttachment["documentKind"] = "freight-proof",
+): PhotoAttachment[] {
+  return photosForOwner(photos, ownerType, ownerId).filter(
+    (photo) => (photo.documentKind ?? "freight-proof") === documentKind,
+  );
+}
+
 export function photosForReference(
   photos: PhotoAttachment[],
   referenceType: string | undefined,

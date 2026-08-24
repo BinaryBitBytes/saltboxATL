@@ -6,7 +6,7 @@ import type {
 } from "@/lib/inventory-schema";
 import type { PackSlipDocument, LoadManifestDocument } from "@/lib/shipping/documents";
 import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
-import { photosForOwner } from "@/lib/photos/query";
+import { photosForOwner, photosForOwnerKind } from "@/lib/photos/query";
 
 export type LogbookKind = "shipment" | "delivery" | "damage";
 
@@ -25,6 +25,7 @@ export type LogbookEntry = {
   title: string;
   subtitle: string;
   status?: string;
+  isPartialed?: boolean;
   actor?: string;
   carrier?: string;
   notes?: string;
@@ -66,10 +67,11 @@ export function buildLogbookEntries(input: {
       title: `Delivery ${order.orderNumber}`,
       subtitle: `PO ${order.poNumber} · ${order.vendor}`,
       status: order.status,
+      isPartialed: order.isPartialed,
       actor: order.receiverName,
       carrier: order.carrierInbound,
       notes: order.notes,
-      photos: photosForOwner(photos, "receiving-order", order.id),
+      photos: photosForOwnerKind(photos, "receiving-order", order.id, "freight-proof"),
       lines,
       totals: {
         units: lines.reduce((sum, line) => sum + line.quantity, 0),

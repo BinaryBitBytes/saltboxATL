@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Location, ReceivingOrder, Room } from "@/lib/inventory-schema";
 import { isAwaitingPutaway } from "@/lib/inventory-schema";
+import { casesPendingPutaway, isCasePutawayPosted } from "@/lib/receiving/reopen";
 import {
   assignReceivingPutawayLocation,
   completePutaway,
@@ -30,9 +31,9 @@ export function PutawayWorkspace({
   locations: Location[];
 }) {
   const awaiting = isAwaitingPutaway(order.status);
-  const cases = order.pallets.flatMap((pallet) => pallet.cases);
-  const missingLocations = cases.filter((item) => !item.putawayLocationId).length;
-  const totalUnits = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
+  const pendingCases = casesPendingPutaway(order);
+  const missingLocations = pendingCases.filter((item) => !item.putawayLocationId).length;
+  const totalUnits = pendingCases.reduce((sum, item) => sum + item.quantityInCase, 0);
   const locationCodes = useMemo(
     () => new Map(locations.map((location) => [location.id, location.code])),
     [locations],
@@ -92,7 +93,7 @@ export function PutawayWorkspace({
                 <ul className="mt-2 grid gap-3">
                   {pallet.cases.map((item) => (
                     <li key={`${item.id}:${item.putawayLocationId ?? "none"}`}>
-                      {awaiting ? (
+                      {awaiting && !isCasePutawayPosted(item) ? (
                         <PutawayCaseRow
                           orderId={order.id}
                           palletId={pallet.id}
@@ -105,10 +106,12 @@ export function PutawayWorkspace({
                         <p className="text-xs text-muted-foreground">
                           {item.sku} · UPC {item.upc} · qty {item.quantityInCase}
                           {" · "}
-                          {item.putawayLocationId
-                            ? locationCodes.get(item.putawayLocationId) ??
-                              item.putawayLocationId
-                            : "no location"}
+                          {isCasePutawayPosted(item)
+                            ? "on-hand"
+                            : item.putawayLocationId
+                              ? locationCodes.get(item.putawayLocationId) ??
+                                item.putawayLocationId
+                              : "no location"}
                         </p>
                       )}
                     </li>

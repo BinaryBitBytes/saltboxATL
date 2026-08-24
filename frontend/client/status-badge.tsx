@@ -31,10 +31,17 @@ const shippingVariant: Record<
 
 export function ReceivingStatusBadge({
   status,
+  isPartialed = false,
 }: {
   status: ReceivingOrderStatus;
+  isPartialed?: boolean;
 }) {
-  return <Badge variant={receivingVariant[status]}>{status}</Badge>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <Badge variant={receivingVariant[status]}>{status}</Badge>
+      {isPartialed ? <Badge variant="outline">partialed</Badge> : null}
+    </span>
+  );
 }
 
 export function ShippingStatusBadge({

@@ -7,6 +7,7 @@ import {
   CreateShippingOrderInputSchema,
   PalletInputSchema,
   PutawayLocationInputSchema,
+  ReopenReceivingInputSchema,
   isAwaitingPutaway,
   isReceivingEditable,
   type CaseItem,
@@ -47,6 +48,12 @@ import {
   collectKnownProducts,
   resolveReceivingProductCodes,
 } from "@/lib/codes/product-codes";
+import {
+  applyReopenAsPartial,
+  casesPendingPutaway,
+  hasPostedPutaway,
+  isCasePutawayPosted,
+} from "@/lib/receiving/reopen";
 
 export class ServiceError extends Error {
   constructor(
@@ -222,6 +229,7 @@ function caseFromInput(
     fiber,
     putawayRoomId: putaway.putawayRoomId,
     putawayLocationId: putaway.putawayLocationId,
+    putawayPostedAt: null,
   };
 }
 
@@ -312,6 +320,7 @@ export async function createReceivingOrderRecord(
     receiverName: parsed.data.receiverName,
     loadPalletCount: parsed.data.loadPalletCount,
     status: "in-progress",
+    isPartialed: false,
     workingPalletId: null,
     pallets: [],
     notes: parsed.data.notes,
@@ -430,6 +439,11 @@ export async function updateCaseOnPallet(
     if (index < 0) {
       throw new ServiceError("Case line was not found on this pallet.", 404);
     }
+    if (isCasePutawayPosted(pallet.cases[index])) {
+      throw new ServiceError(
+        "That case is already on-hand and cannot be edited.",
+      );
+    }
 
     assertLargeInputConfirmed(
       parsed.data.quantityInCase,
@@ -461,6 +475,11 @@ export async function removeCaseFromPallet(
     if (index < 0) {
       throw new ServiceError("Case line was not found on this pallet.", 404);
     }
+    if (isCasePutawayPosted(pallet.cases[index])) {
+      throw new ServiceError(
+        "That case is already on-hand and cannot be removed.",
+      );
+    }
     pallet.cases.splice(index, 1);
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
@@ -477,10 +496,12 @@ export async function completeReceivingOrder(
     const order = requireOrder(system, orderId);
     requireReceivingEditable(order);
 
-    const cases = order.pallets.flatMap((pallet) => pallet.cases);
+    const cases = casesPendingPutaway(order);
     if (cases.length === 0) {
       throw new ServiceError(
-        "Receive at least one case before completing this order.",
+        hasPostedPutaway(order)
+          ? "Receive at least one additional case before completing this partialed order."
+          : "Receive at least one case before completing this order.",
       );
     }
     const totalUnits = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
@@ -494,6 +515,34 @@ export async function completeReceivingOrder(
     order.status = "received";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
+    return order;
+  });
+}
+
+export async function reopenReceivingOrder(
+  orderId: string,
+  actorName: string,
+  rawData: unknown = {},
+): Promise<ReceivingOrder> {
+  const parsed = parseWithSchema(ReopenReceivingInputSchema, rawData ?? {});
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  return updateSystem((system) => {
+    const order = requireOrder(system, orderId);
+    try {
+      applyReopenAsPartial(
+        order,
+        actorName,
+        nowIso(),
+        parsed.data.expectedPalletCount,
+      );
+    } catch (error) {
+      throw new ServiceError(
+        error instanceof Error ? error.message : "Unable to reopen this order.",
+      );
+    }
     return order;
   });
 }
@@ -514,15 +563,19 @@ export async function assignPutawayLocation(
     requireAwaitingPutaway(order);
     const pallet = requirePallet(order, palletId);
     const putaway = applyPutawayLocation(system, parsed.data);
-    const targets = parsed.data.applyToPallet
+    const candidates = parsed.data.applyToPallet
       ? pallet.cases
       : pallet.cases.filter((entry) => entry.id === caseId);
+    const targets = candidates.filter((entry) => !isCasePutawayPosted(entry));
 
-    if (!parsed.data.applyToPallet && targets.length === 0) {
+    if (!parsed.data.applyToPallet && candidates.length === 0) {
       throw new ServiceError("Case line was not found on this pallet.", 404);
     }
+    if (candidates.some((entry) => isCasePutawayPosted(entry)) && !parsed.data.applyToPallet) {
+      throw new ServiceError("That case is already on-hand.");
+    }
     if (targets.length === 0) {
-      throw new ServiceError("This pallet has no cases to put away.");
+      throw new ServiceError("This pallet has no remaining cases to put away.");
     }
 
     for (const caseItem of targets) {
@@ -542,12 +595,12 @@ export async function completePutawayOrder(
     const order = requireOrder(system, orderId);
     requireAwaitingPutaway(order);
 
-    const cases = order.pallets.flatMap((pallet) => pallet.cases);
-    if (cases.length === 0) {
+    const pending = casesPendingPutaway(order);
+    if (pending.length === 0) {
       throw new ServiceError("There are no received cases to put away.");
     }
-    assertPutawayReady(cases);
-    const totalUnits = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
+    assertPutawayReady(pending);
+    const totalUnits = pending.reduce((sum, item) => sum + item.quantityInCase, 0);
     assertLargeInputConfirmed(
       totalUnits,
       confirmation,
@@ -556,7 +609,7 @@ export async function completePutawayOrder(
     );
 
     const now = nowIso();
-    const result = putAwayCases(system.inventoryItems, cases, now);
+    const result = putAwayCases(system.inventoryItems, pending, now);
     system.inventoryItems = result.items;
     appendTransactions(system, "putaway", result.changes, {
       occurredAt: now,
@@ -565,6 +618,9 @@ export async function completePutawayOrder(
       createdBy: order.createdBy ?? order.receiverName,
       reason: `Putaway ${order.orderNumber}`,
     });
+    for (const item of pending) {
+      item.putawayPostedAt = now;
+    }
     order.status = "completed";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
@@ -578,6 +634,11 @@ export async function cancelReceivingOrder(
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
     requireCancellable(order);
+    if (hasPostedPutaway(order)) {
+      throw new ServiceError(
+        "This order already has on-hand inventory and cannot be cancelled. Keep it open as a partialed PO until remaining freight arrives.",
+      );
+    }
     order.status = "cancelled";
     order.workingPalletId = null;
     order.updatedAt = nowIso();

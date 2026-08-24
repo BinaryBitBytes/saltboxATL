@@ -8,7 +8,7 @@ import {
   Delete02Icon,
   Image01Icon,
 } from "@hugeicons/core-free-icons";
-import type { PhotoAttachment, PhotoOwnerType } from "@/lib/inventory-schema";
+import type { PhotoAttachment, PhotoDocumentKind, PhotoOwnerType } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -313,6 +313,8 @@ export function PhotoProofCollector({
   canEdit = true,
   title,
   description,
+  documentKind = "freight-proof",
+  emptyLabel = "No proof photos attached yet.",
 }: {
   ownerType: PhotoOwnerType;
   ownerId: string;
@@ -320,6 +322,8 @@ export function PhotoProofCollector({
   canEdit?: boolean;
   title: string;
   description?: string;
+  documentKind?: PhotoDocumentKind;
+  emptyLabel?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -339,6 +343,7 @@ export function PhotoProofCollector({
           ownerId,
           file,
           caption: caption.trim() || undefined,
+          documentKind,
         });
         if (!result.ok) {
           setError(result.error);
@@ -393,9 +398,7 @@ export function PhotoProofCollector({
           </>
         ) : null}
         {photos.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No proof photos attached yet.
-          </p>
+          <p className="text-sm text-muted-foreground">{emptyLabel}</p>
         ) : (
           <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
             {photos.map((photo) => (
