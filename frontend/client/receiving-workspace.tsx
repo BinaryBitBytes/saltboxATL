@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useFormStatus } from "react-dom";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -849,6 +850,23 @@ function WorkingCaseForm({
   );
 }
 
+function ReopenSubmitButton({ compact = false }: { compact?: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      name="reopenAsPartial"
+      disabled={pending}
+      className={cn(
+        buttonVariants({ size: compact ? "sm" : "lg" }),
+        "cursor-pointer",
+      )}
+    >
+      {pending ? "Reopening…" : "Reopen as partialed"}
+    </button>
+  );
+}
+
 export function ReopenAsPartialControls({
   order,
   compact = false,
@@ -864,7 +882,7 @@ export function ReopenAsPartialControls({
   const reopen = reopenReceivingForm.bind(null, order.id);
 
   return (
-    <form action={reopen} className="grid gap-3">
+    <form action={reopen} className={compact ? undefined : "grid gap-3"}>
       {compact ? null : needsExpectedCount ? (
         <Field label="Expected pallets" htmlFor="reopen-expected-pallets">
           <Input
@@ -891,13 +909,8 @@ export function ReopenAsPartialControls({
           value={expectedPalletCount}
         />
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="submit"
-          className={cn(buttonVariants({ size: "lg" }), "cursor-pointer")}
-        >
-          Reopen as partialed
-        </button>
+      <div className={compact ? undefined : "flex flex-wrap items-center gap-2"}>
+        <ReopenSubmitButton compact={compact} />
       </div>
     </form>
   );
