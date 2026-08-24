@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,6 +27,7 @@ import {
   completeReceiving,
   removeReceivingCase,
   reopenReceivingForm,
+  type ReopenReceivingState,
   selectWorkingPallet,
   updateReceivingCase,
 } from "@/backend/server/serverAction";
@@ -867,6 +868,8 @@ function ReopenSubmitButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
+const initialReopen: ReopenReceivingState = {};
+
 export function ReopenAsPartialControls({
   order,
   compact = false,
@@ -880,9 +883,10 @@ export function ReopenAsPartialControls({
     defaultReopenExpectedPalletCount(order),
   );
   const reopen = reopenReceivingForm.bind(null, order.id);
+  const [state, action] = useActionState(reopen, initialReopen);
 
   return (
-    <form action={reopen} className={compact ? undefined : "grid gap-3"}>
+    <form action={action} className={compact ? "grid gap-2" : "grid gap-3"}>
       {compact ? null : needsExpectedCount ? (
         <Field label="Expected pallets" htmlFor="reopen-expected-pallets">
           <Input
@@ -909,6 +913,7 @@ export function ReopenAsPartialControls({
           value={expectedPalletCount}
         />
       ) : null}
+      <ErrorText error={state.error ?? null} />
       <div className={compact ? undefined : "flex flex-wrap items-center gap-2"}>
         <ReopenSubmitButton compact={compact} />
       </div>

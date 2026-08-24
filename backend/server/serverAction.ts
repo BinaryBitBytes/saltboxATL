@@ -172,23 +172,34 @@ export async function reopenReceiving(
   }
 }
 
+export type ReopenReceivingState = {
+  error?: string;
+};
+
 export async function reopenReceivingForm(
   orderId: string,
+  _state: ReopenReceivingState,
   formData: FormData,
-): Promise<void> {
-  const user = await requireApiPermission("reopenReceiving");
+): Promise<ReopenReceivingState> {
   const raw = formData.get("expectedPalletCount");
   const expectedPalletCount =
     typeof raw === "string" && raw.trim().length > 0
       ? Number(raw)
       : undefined;
-  await reopenReceivingOrder(
-    orderId,
-    user.name,
-    Number.isFinite(expectedPalletCount)
-      ? { expectedPalletCount }
-      : {},
-  );
+
+  try {
+    const user = await requireApiPermission("reopenReceiving");
+    await reopenReceivingOrder(
+      orderId,
+      user.name,
+      Number.isFinite(expectedPalletCount)
+        ? { expectedPalletCount }
+        : {},
+    );
+  } catch (error) {
+    return { error: fail(error).error };
+  }
+
   revalidateInventory();
   revalidatePath(`/receiving/${orderId}`);
   revalidatePath(`/putaway/${orderId}`);
