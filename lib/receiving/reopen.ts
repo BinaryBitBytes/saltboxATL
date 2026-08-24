@@ -7,6 +7,13 @@ export function remainingExpectedPallets(order: {
   return Math.max(0, order.loadPalletCount - order.pallets.length);
 }
 
+export function defaultReopenExpectedPalletCount(order: {
+  loadPalletCount: number;
+  pallets: unknown[];
+}): number {
+  return Math.max(order.loadPalletCount, order.pallets.length + 1);
+}
+
 export function isCasePutawayPosted(item: Pick<CaseItem, "putawayPostedAt">): boolean {
   return Boolean(item.putawayPostedAt);
 }

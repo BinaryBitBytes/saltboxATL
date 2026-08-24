@@ -14,7 +14,7 @@ import {
   type ReceivingOrder,
 } from "@/lib/inventory-schema";
 import {
-  canReopenClosedReceiving,
+  defaultReopenExpectedPalletCount,
   hasPostedPutaway,
   isCasePutawayPosted,
   remainingExpectedPallets,
@@ -241,22 +241,14 @@ export function ReceivingWorkspace({
 
       {order.status === "received" ? (
         <ReceivedOrderActions
-          orderId={order.id}
+          order={order}
           canCancel={!hasPostedPutaway(order)}
+          canReopen={canReopen}
         />
       ) : null}
 
       {order.status === "completed" ? (
-        <p className="text-sm text-muted-foreground">
-          This order has been put away. On-hand inventory includes these cases.
-          {order.isPartialed
-            ? " It is marked partialed until remaining freight is received."
-            : ""}
-        </p>
-      ) : null}
-
-      {canReopen && canReopenClosedReceiving(order) ? (
-        <ReopenPartialOrderCard order={order} />
+        <CompletedOrderActions order={order} canReopen={canReopen} />
       ) : null}
 
       {editable ? (
@@ -857,32 +849,35 @@ function WorkingCaseForm({
   );
 }
 
-function ReopenPartialOrderCard({ order }: { order: ReceivingOrder }) {
+function ReopenAsPartialControls({ order }: { order: ReceivingOrder }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const remaining = remainingExpectedPallets(order);
+  const needsExpectedCount = remaining === 0;
   const [expectedPalletCount, setExpectedPalletCount] = useState(
-    Math.max(order.loadPalletCount, order.pallets.length + 1),
+    defaultReopenExpectedPalletCount(order),
   );
 
+  function reopen() {
+    setError(null);
+    startTransition(async () => {
+      const result = await reopenReceiving(
+        order.id,
+        needsExpectedCount ? { expectedPalletCount } : {},
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Reopen as partialed PO</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        <p className="text-sm text-muted-foreground">
-          This order was closed with {order.pallets.length} of{" "}
-          {order.loadPalletCount} expected pallets
-          {order.isPartialed ? " and is already marked partialed" : ""}. Reopen
-          it so receivers can check in remaining freight without reversing
-          stock already put away.
-        </p>
-        <Field
-          label="Expected pallets"
-          htmlFor="reopen-expected-pallets"
-        >
+    <div className="grid gap-3">
+      {needsExpectedCount ? (
+        <Field label="Expected pallets" htmlFor="reopen-expected-pallets">
           <Input
             id="reopen-expected-pallets"
             type="number"
@@ -893,44 +888,59 @@ function ReopenPartialOrderCard({ order }: { order: ReceivingOrder }) {
             }
           />
         </Field>
-        <p className="text-[0.625rem] text-muted-foreground">
-          {remaining > 0
-            ? `${remaining} pallet${remaining === 1 ? "" : "s"} still expected on the original count.`
-            : "Increase the expected pallet count to reopen for additional freight."}
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {remaining} pallet{remaining === 1 ? "" : "s"} still expected. Reopen
+          as a partialed PO so remaining freight can be checked in.
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              setError(null);
-              startTransition(async () => {
-                const result = await reopenReceiving(order.id, {
-                  expectedPalletCount,
-                });
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                router.refresh();
-              });
-            }}
-          >
-            {pending ? "Reopening…" : "Reopen as partialed"}
-          </Button>
-          <ErrorText error={error} />
-        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" disabled={pending} onClick={reopen}>
+          {pending ? "Reopening…" : "Reopen as partialed"}
+        </Button>
+        <ErrorText error={error} />
+      </div>
+    </div>
+  );
+}
+
+function CompletedOrderActions({
+  order,
+  canReopen,
+}: {
+  order: ReceivingOrder;
+  canReopen: boolean;
+}) {
+  const remaining = remainingExpectedPallets(order);
+
+  return (
+    <Card className="sticky bottom-3 z-20 print:hidden border-border bg-background/95 shadow-md backdrop-blur-md">
+      <CardHeader>
+        <CardTitle>Completed</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <p className="text-sm text-muted-foreground">
+          This order has been put away. On-hand inventory includes these cases.
+          {order.isPartialed
+            ? " It is marked partialed until remaining freight is received."
+            : remaining > 0
+              ? ` It was closed with ${order.pallets.length} of ${order.loadPalletCount} expected pallets.`
+              : ""}
+        </p>
+        {canReopen ? <ReopenAsPartialControls order={order} /> : null}
       </CardContent>
     </Card>
   );
 }
 
 function ReceivedOrderActions({
-  orderId,
+  order,
   canCancel = true,
+  canReopen = false,
 }: {
-  orderId: string;
+  order: ReceivingOrder;
   canCancel?: boolean;
+  canReopen?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -948,7 +958,7 @@ function ReceivedOrderActions({
           stock to on-hand inventory.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button nativeButton={false} render={<Link href={`/putaway/${orderId}`} />}>
+          <Button nativeButton={false} render={<Link href={`/putaway/${order.id}`} />}>
             Open putaway
           </Button>
           {canCancel ? (
@@ -959,7 +969,7 @@ function ReceivedOrderActions({
               onClick={() => {
                 setError(null);
                 startTransition(async () => {
-                  const result = await cancelReceiving(orderId);
+                  const result = await cancelReceiving(order.id);
                   if (!result.ok) {
                     setError(result.error);
                     return;
@@ -975,6 +985,7 @@ function ReceivedOrderActions({
           ) : null}
           <ErrorText error={error} />
         </div>
+        {canReopen ? <ReopenAsPartialControls order={order} /> : null}
       </CardContent>
     </Card>
   );

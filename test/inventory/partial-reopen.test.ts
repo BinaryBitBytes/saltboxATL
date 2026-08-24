@@ -5,6 +5,7 @@ import {
   applyReopenAsPartial,
   canReopenClosedReceiving,
   casesPendingPutaway,
+  defaultReopenExpectedPalletCount,
   hasPostedPutaway,
   isCasePutawayPosted,
   remainingExpectedPallets,
@@ -66,6 +67,7 @@ describe("partial PO reopen", () => {
   it("counts remaining expected pallets on an early-closed order", () => {
     const order = makeOrder({ loadPalletCount: 4, pallets: [makePallet()] });
     expect(remainingExpectedPallets(order)).to.equal(3);
+    expect(defaultReopenExpectedPalletCount(order)).to.equal(4);
     expect(isClosedReceiving("completed")).to.equal(true);
     expect(isReceivingEditable("completed")).to.equal(false);
   });
@@ -101,6 +103,7 @@ describe("partial PO reopen", () => {
     expect(() => applyReopenAsPartial(order, "Avery Manager", "2026-08-24T18:00:00.000Z")).to.throw(
       /increase the expected pallet count/i,
     );
+    expect(defaultReopenExpectedPalletCount(order)).to.equal(2);
     applyReopenAsPartial(order, "Avery Manager", "2026-08-24T18:00:00.000Z", 3);
     expect(order.loadPalletCount).to.equal(3);
     expect(order.status).to.equal("in-progress");
