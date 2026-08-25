@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FileExportIcon, FileImportIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -16,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { LargeInputConfirm } from "@/frontend/client/large-input-confirm";
+import { cn } from "@/lib/utils";
 import type { SpreadsheetImportPlan } from "@/lib/inventory/spreadsheet";
 
 type ImportResult = SpreadsheetImportPlan & {
@@ -30,6 +30,7 @@ export function InventorySpreadsheetCard({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"set" | "add">("set");
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +41,17 @@ export function InventorySpreadsheetCard({
     "",
   );
 
+  function selectedFile(): File | null {
+    return fileInputRef.current?.files?.[0] ?? file;
+  }
+
   async function postImport(dryRun: boolean): Promise<ImportResult> {
-    if (!file) {
+    const spreadsheet = selectedFile();
+    if (!spreadsheet) {
       throw new Error("Choose a CSV spreadsheet to import.");
     }
     const form = new FormData();
-    form.set("file", file);
+    form.set("file", spreadsheet);
     form.set("mode", mode);
     form.set("dryRun", dryRun ? "1" : "0");
     if (confirmLargeInput) form.set("confirmLargeInput", "1");
@@ -142,16 +148,24 @@ export function InventorySpreadsheetCard({
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="CSV file" htmlFor="inventory-spreadsheet">
-                <Input
+                <input
+                  ref={fileInputRef}
                   id="inventory-spreadsheet"
                   type="file"
                   accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
+                  className={cn(
+                    "h-7 w-full min-w-0 rounded-md border border-input bg-input/20 px-2 py-0.5 text-sm outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-xs/relaxed file:font-medium",
+                  )}
                   onChange={(event) => {
-                    setFile(event.target.files?.[0] ?? null);
+                    const next = event.target.files?.[0] ?? null;
+                    setFile(next);
                     setPreview(null);
                     setError(null);
                   }}
                 />
+                {file ? (
+                  <p className="text-xs text-muted-foreground">Selected: {file.name}</p>
+                ) : null}
               </Field>
               <Field label="Import mode" htmlFor="inventory-import-mode">
                 <NativeSelect
