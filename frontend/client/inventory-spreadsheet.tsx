@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { LargeInputConfirm } from "@/frontend/client/large-input-confirm";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { SpreadsheetImportPlan } from "@/lib/inventory/spreadsheet";
 
@@ -32,6 +33,7 @@ export function InventorySpreadsheetCard({
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [pasted, setPasted] = useState("");
   const [mode, setMode] = useState<"set" | "add">("set");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportResult | null>(null);
@@ -47,11 +49,13 @@ export function InventorySpreadsheetCard({
 
   async function postImport(dryRun: boolean): Promise<ImportResult> {
     const spreadsheet = selectedFile();
-    if (!spreadsheet) {
-      throw new Error("Choose a CSV spreadsheet to import.");
+    const pastedText = pasted.trim();
+    if (!spreadsheet && !pastedText) {
+      throw new Error("Choose a CSV spreadsheet or paste rows to import.");
     }
     const form = new FormData();
-    form.set("file", spreadsheet);
+    if (spreadsheet) form.set("file", spreadsheet);
+    if (pastedText) form.set("text", pastedText);
     form.set("mode", mode);
     form.set("dryRun", dryRun ? "1" : "0");
     if (confirmLargeInput) form.set("confirmLargeInput", "1");
@@ -96,6 +100,8 @@ export function InventorySpreadsheetCard({
       const result = await postImport(false);
       setPreview(result);
       setFile(null);
+      setPasted("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       await queryClient.invalidateQueries({ queryKey: ["inventory"] });
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       router.refresh();
@@ -106,6 +112,7 @@ export function InventorySpreadsheetCard({
     }
   }
 
+  const hasSource = Boolean(file || pasted.trim());
   const confirmationTotal = Math.abs(preview?.unitsDelta ?? 0);
   const canApply =
     Boolean(preview) &&
@@ -143,8 +150,8 @@ export function InventorySpreadsheetCard({
         {canImport ? (
           <div className="grid gap-3 border-t border-border pt-3">
             <p className="text-xs text-muted-foreground">
-              Save workbooks as CSV UTF-8. Format SKU, UPC, and Location as
-              text so Excel does not drop leading zeros.
+              Save workbooks as CSV UTF-8, or paste rows copied from Excel.
+              Format SKU, UPC, and Location as text so leading zeros are kept.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="CSV file" htmlFor="inventory-spreadsheet">
@@ -181,11 +188,24 @@ export function InventorySpreadsheetCard({
                 </NativeSelect>
               </Field>
             </div>
+              <Field label="Or paste CSV / Excel rows" htmlFor="inventory-spreadsheet-paste">
+                <Textarea
+                  id="inventory-spreadsheet-paste"
+                  rows={5}
+                  value={pasted}
+                  placeholder={"SKU,UPC,Description,Batch,Qty,Location\nPATCH-SM-100,010000000099,Patch panel,,7,A-01-02"}
+                  onChange={(event) => {
+                    setPasted(event.target.value);
+                    setPreview(null);
+                    setError(null);
+                  }}
+                />
+              </Field>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="outline"
-                disabled={!file || pending}
+                disabled={!hasSource || pending}
                 onClick={() => void handlePreview()}
               >
                 Preview import
