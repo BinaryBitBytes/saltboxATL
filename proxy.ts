@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { canAccessPath } from "@/lib/auth/permissions";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
-
-const PUBLIC_PATHS = new Set(["/login"]);
-const PUBLIC_API_PATHS = new Set(["/api/auth/login", "/api/auth/logout"]);
+import {
+  isPublicAppPath,
+  isPublicPagePath,
+} from "@/lib/pwa/public-paths";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -12,8 +13,8 @@ export function proxy(request: NextRequest) {
     request.cookies.get(SESSION_COOKIE)?.value,
   );
 
-  if (PUBLIC_PATHS.has(pathname) || PUBLIC_API_PATHS.has(pathname)) {
-    if (session && pathname === "/login") {
+  if (isPublicAppPath(pathname)) {
+    if (session && isPublicPagePath(pathname)) {
       return NextResponse.redirect(new URL("/", request.url));
     }
     return NextResponse.next();
@@ -48,6 +49,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|webmanifest)$).*)",
   ],
 };

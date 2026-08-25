@@ -23,6 +23,7 @@ import type { PublicUser } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/frontend/client/theme-toggle";
+import { InstallAppButton } from "@/frontend/client/pwa-install";
 
 const NAV: Array<{
   href: string;
@@ -61,6 +62,7 @@ export function AppShell({
               Saltbox Inventory
             </Link>
             <div className="flex items-center gap-1 sm:hidden">
+              <InstallAppButton />
               <ThemeToggle />
               <Badge variant="outline">{roleLabel(user.role)}</Badge>
               <form action={logoutAction}>
@@ -97,6 +99,7 @@ export function AppShell({
             })}
           </nav>
           <div className="hidden min-w-0 items-center gap-2 sm:flex">
+            <InstallAppButton />
             <ThemeToggle />
             <span className="hidden truncate text-xs text-muted-foreground md:inline">
               {user.name}
