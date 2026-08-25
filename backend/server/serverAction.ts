@@ -30,6 +30,7 @@ export type ActionFailure = {
   ok: false;
   error: string;
   fieldErrors?: Record<string, string[]>;
+  sourceText?: string;
 };
 
 export type ActionResult<T> =
@@ -353,12 +354,13 @@ export async function importInventoryForm(
     importId?: string;
   }>
 > {
+  let sourceText = String(formData.get("text") ?? "");
   try {
     const user = await requireApiPermission("adjustInventory");
-    const text = await spreadsheetTextFromForm(formData);
+    sourceText = await spreadsheetTextFromForm(formData);
     const confirmationRaw = String(formData.get("confirmationQuantity") ?? "").trim();
     const data = await importInventorySpreadsheet({
-      text,
+      text: sourceText,
       mode: formData.get("mode") === "add" ? "add" : "set",
       dryRun: formData.get("intent") !== "apply",
       createdBy: user.name,
@@ -370,8 +372,8 @@ export async function importInventoryForm(
     if (data.applied) {
       revalidateInventory();
     }
-    return { ok: true, data: { ...data, sourceText: text } };
+    return { ok: true, data: { ...data, sourceText } };
   } catch (error) {
-    return fail(error);
+    return { ...fail(error), sourceText };
   }
 }

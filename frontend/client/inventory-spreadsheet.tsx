@@ -48,6 +48,7 @@ export function InventorySpreadsheetCard({
   );
   const result = state?.ok ? state.data : null;
   const error = state && !state.ok ? state.error : null;
+  const sourceText = state?.ok ? state.data.sourceText : state?.sourceText;
   const confirmationTotal = Math.abs(result?.unitsDelta ?? 0);
 
   useEffect(() => {
@@ -115,8 +116,8 @@ export function InventorySpreadsheetCard({
                 id="inventory-spreadsheet-paste"
                 name="text"
                 rows={5}
-                key={result?.sourceText ?? "blank"}
-                defaultValue={result?.sourceText ?? ""}
+                key={sourceText ?? "blank"}
+                defaultValue={sourceText ?? ""}
                 placeholder={"SKU,UPC,Description,Batch,Qty,Location\nPATCH-SM-100,010000000099,Patch panel,,7,A-01-02"}
                 className={cn(
                   "flex min-h-16 w-full resize-y rounded-md border border-input bg-input/20 px-2 py-2 text-sm outline-none",
