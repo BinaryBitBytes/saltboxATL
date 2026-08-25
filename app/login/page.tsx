@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/backend/server/dal";
 import { LoginForm } from "@/frontend/client/login-form";
+import { InstallAppCard } from "@/frontend/client/pwa-install";
 import { ThemeToggle } from "@/frontend/client/theme-toggle";
 import { safeRedirectPath } from "@/lib/auth/permissions";
 
@@ -30,6 +31,7 @@ export default async function LoginPage({
           </p>
         </div>
         <LoginForm from={nextPath} />
+        <InstallAppCard />
       </div>
     </div>
   );

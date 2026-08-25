@@ -18,6 +18,12 @@ Demo accounts (password `saltbox123`) are seeded on first boot:
 
 Set `SESSION_SECRET` in production. If it is missing, the app writes a generated secret to `data/.session-secret`.
 
+## Install as an app
+
+Saltbox is a Progressive Web App. On a phone or desktop, open the site in Chrome, Edge, or Safari and use **Install app**, **Add to Dock**, or **Add to Home Screen**. The sign-in page also shows install help, and Chromium browsers get an **Install app** button after the install prompt is available.
+
+Installed windows open in standalone mode (no browser chrome) and still use the same sign-in session.
+
 ## Validation and tests
 
 Input is checked with Zod plus inventory/auth safeguards:

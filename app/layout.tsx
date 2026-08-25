@@ -4,7 +4,9 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Providers } from "@/frontend/client/providers";
+import { PwaRegister } from "@/frontend/client/pwa-register";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { PWA_THEME_COLOR } from "@/lib/pwa/manifest";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -20,6 +22,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Saltbox Inventory",
+  applicationName: "Saltbox Inventory",
   description: "Receive, put away, and ship warehouse inventory.",
   appleWebApp: {
     capable: true,
@@ -38,7 +41,7 @@ export const viewport: Viewport = {
   colorScheme: "light dark",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#252525" },
+    { media: "(prefers-color-scheme: dark)", color: PWA_THEME_COLOR },
   ],
 };
 
@@ -60,7 +63,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
         />
-        <Providers>{children}</Providers>
+        <Providers>
+          <PwaRegister />
+          {children}
+        </Providers>
       </body>
     </html>
   );

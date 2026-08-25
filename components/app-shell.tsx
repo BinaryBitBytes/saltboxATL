@@ -23,6 +23,7 @@ import type { PublicUser } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/frontend/client/theme-toggle";
+import { InstallAppButton } from "@/frontend/client/pwa-install";
 
 const NAV: Array<{
   href: string;
@@ -57,9 +58,12 @@ export function AppShell({
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75 print:hidden">
         <div className="page-container flex flex-col gap-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] short:py-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between landscape:short:flex-row landscape:short:items-center">
           <div className="flex min-w-0 items-center justify-between gap-2">
-            <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight">
-              Saltbox Inventory
-            </Link>
+            <div className="flex min-w-0 items-center gap-2">
+              <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight">
+                Saltbox Inventory
+              </Link>
+              <InstallAppButton />
+            </div>
             <div className="flex items-center gap-1 sm:hidden">
               <ThemeToggle />
               <Badge variant="outline">{roleLabel(user.role)}</Badge>
