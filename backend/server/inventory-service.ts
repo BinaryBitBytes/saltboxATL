@@ -29,6 +29,7 @@ import {
   pickFromInventory,
   putAwayCases,
   recountPallet,
+  setOnHandQuantity,
   type StockChange,
 } from "@/backend/server/inventory-ops";
 import { readSystem, updateSystem } from "@/backend/server/store";
@@ -54,6 +55,13 @@ import {
   hasPostedPutaway,
   isCasePutawayPosted,
 } from "@/lib/receiving/reopen";
+import {
+  formatImportErrors,
+  parseInventorySpreadsheet,
+  planInventoryImport,
+  type SpreadsheetImportMode,
+  type SpreadsheetImportPlan,
+} from "@/lib/inventory/spreadsheet";
 
 export class ServiceError extends Error {
   constructor(
@@ -785,6 +793,101 @@ export async function createLocationRecord(
 export async function getInventoryRows(): Promise<InventoryRow[]> {
   const system = await readSystem();
   return enrichInventory(system);
+}
+
+export type InventorySpreadsheetImportResult = SpreadsheetImportPlan & {
+  dryRun: boolean;
+  applied: boolean;
+};
+
+export async function importInventorySpreadsheet(input: {
+  text: string;
+  mode: SpreadsheetImportMode;
+  dryRun?: boolean;
+  createdBy?: string;
+  confirmLargeInput?: boolean;
+  confirmationQuantity?: number;
+}): Promise<InventorySpreadsheetImportResult> {
+  const rows = parseInventorySpreadsheet(input.text);
+  if (rows.length === 0) {
+    throw new ServiceError("Spreadsheet has a header row but no inventory lines.");
+  }
+
+  const system = await readSystem();
+  const products = collectKnownProducts(system);
+  const plan = planInventoryImport({
+    rows,
+    items: system.inventoryItems,
+    locations: system.locations,
+    rooms: system.rooms,
+    products,
+    mode: input.mode,
+  });
+
+  if (input.dryRun) {
+    return { ...plan, dryRun: true, applied: false };
+  }
+
+  if (plan.errors.length > 0) {
+    throw new ServiceError(formatImportErrors(plan.errors));
+  }
+
+  if (plan.created === 0 && plan.updated === 0) {
+    throw new ServiceError("Spreadsheet matches on-hand inventory. Nothing to import.");
+  }
+
+  assertLargeInputConfirmed(
+    Math.abs(plan.unitsDelta),
+    input,
+    LIMITS.largeQuantity,
+    "spreadsheet unit change",
+  );
+
+  return updateSystem((current) => {
+    const now = nowIso();
+    const importId = createId();
+    const latestPlan = planInventoryImport({
+      rows,
+      items: current.inventoryItems,
+      locations: current.locations,
+      rooms: current.rooms,
+      products: collectKnownProducts(current),
+      mode: input.mode,
+    });
+    if (latestPlan.errors.length > 0) {
+      throw new ServiceError(formatImportErrors(latestPlan.errors));
+    }
+
+    let items = current.inventoryItems;
+    const stockChanges: StockChange[] = [];
+    for (const change of latestPlan.changes) {
+      if (change.action === "unchanged") continue;
+      const result = setOnHandQuantity(items, {
+        sku: change.sku,
+        upc: change.upc,
+        batch: change.batch,
+        locationId: change.locationId,
+        quantity: change.quantityAfter,
+        description: change.description,
+        now,
+      });
+      items = result.items;
+      if (result.change) stockChanges.push(result.change);
+    }
+
+    current.inventoryItems = items;
+    appendTransactions(current, "import", stockChanges, {
+      occurredAt: now,
+      reason:
+        input.mode === "add"
+          ? "Spreadsheet import (add to on-hand)"
+          : "Spreadsheet import (set on-hand)",
+      createdBy: input.createdBy,
+      referenceType: "spreadsheet-import",
+      referenceId: importId,
+    });
+    return { ...latestPlan, dryRun: false, applied: true };
+  });
 }
 
 export async function getTransactionRows(): Promise<InventoryTransactionRow[]> {

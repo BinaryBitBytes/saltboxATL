@@ -131,6 +131,7 @@ export function TransactionsTable({
           <option value="overage">Overage</option>
           <option value="shortage">Shortage</option>
           <option value="damage">Damage</option>
+          <option value="import">Import</option>
         </NativeSelect>
       </div>
       <Table>

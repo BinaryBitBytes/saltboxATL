@@ -5,6 +5,7 @@ import type { InventoryRow, Location, Room } from "@/lib/inventory-schema";
 import { InventoryTable } from "@/frontend/client/inventory-table";
 import { AdjustmentForm } from "@/frontend/client/adjustment-form";
 import { LocationLabelMaker } from "@/frontend/client/location-label-maker";
+import { InventorySpreadsheetCard } from "@/frontend/client/inventory-spreadsheet";
 
 export function InventoryWorkspace({
   rows,
@@ -21,6 +22,7 @@ export function InventoryWorkspace({
 
   return (
     <div className="grid gap-6">
+      <InventorySpreadsheetCard canImport={canAdjust} />
       <div
         className={
           canAdjust

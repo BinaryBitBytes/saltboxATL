@@ -5,20 +5,16 @@ import type {
   Pallet,
   ShippingPick,
 } from "@/lib/inventory-schema";
+import { inventoryKey } from "@/lib/inventory/keys";
 import {
   assertEnoughOnHand,
+  assertFiniteQuantity,
   assertPositiveQuantity,
   assertStockDoesNotGoNegative,
   findInventoryLine,
 } from "@/lib/validation/inventory-guards";
 
-export function inventoryKey(
-  sku: string,
-  batch: string | null,
-  locationId: string,
-): string {
-  return `${sku}::${batch ?? ""}::${locationId}`;
-}
+export { inventoryKey };
 
 export type StockChange = {
   inventoryItemId: string;
@@ -153,6 +149,85 @@ export function putAwayCases(
   }
 
   return { items: next, changes };
+}
+
+export function setOnHandQuantity(
+  items: InventoryItem[],
+  input: {
+    sku: string;
+    upc?: string;
+    batch: string | null;
+    locationId: string;
+    quantity: number;
+    description?: string;
+    now: string;
+  },
+): { items: InventoryItem[]; change: StockChange | null } {
+  assertFiniteQuantity(input.quantity);
+  const map = itemMap(items);
+  const key = inventoryKey(input.sku, input.batch, input.locationId);
+  const existing = map.get(key);
+
+  if (!existing) {
+    if (input.quantity === 0) {
+      return { items, change: null };
+    }
+    const created: InventoryItem = {
+      id: createId(),
+      sku: input.sku,
+      upc: input.upc,
+      batch: input.batch,
+      locationId: input.locationId,
+      quantity: input.quantity,
+      description: input.description,
+      lastMovedAt: input.now,
+      updatedAt: input.now,
+    };
+    map.set(key, created);
+    return {
+      items: [...map.values()],
+      change: {
+        inventoryItemId: created.id,
+        sku: created.sku,
+        upc: created.upc,
+        batch: created.batch,
+        locationId: created.locationId,
+        quantityDelta: created.quantity,
+        quantityBefore: 0,
+        quantityAfter: created.quantity,
+        description: created.description,
+      },
+    };
+  }
+
+  if (existing.quantity === input.quantity) {
+    return { items, change: null };
+  }
+
+  const quantityBefore = existing.quantity;
+  const next: InventoryItem = {
+    ...existing,
+    quantity: input.quantity,
+    upc: existing.upc ?? input.upc,
+    description: existing.description ?? input.description,
+    lastMovedAt: input.now,
+    updatedAt: input.now,
+  };
+  map.set(key, next);
+  return {
+    items: [...map.values()],
+    change: {
+      inventoryItemId: next.id,
+      sku: next.sku,
+      upc: next.upc,
+      batch: next.batch,
+      locationId: next.locationId,
+      quantityDelta: input.quantity - quantityBefore,
+      quantityBefore,
+      quantityAfter: input.quantity,
+      description: next.description,
+    },
+  };
 }
 
 export function pickFromInventory(
