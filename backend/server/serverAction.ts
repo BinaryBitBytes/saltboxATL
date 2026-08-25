@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   cancelReceivingOrder,
   completeReceivingOrder,
@@ -23,11 +24,17 @@ import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
 import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
 import { ValidationError } from "@/lib/validation/errors";
 
+export type ActionFailure = {
+  ok: false;
+  error: string;
+  fieldErrors?: Record<string, string[]>;
+};
+
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
+  | ActionFailure;
 
-function fail(error: unknown): ActionResult<never> {
+function fail(error: unknown): ActionFailure {
   if (error instanceof ServiceError || error instanceof ValidationError) {
     return { ok: false, error: error.message };
   }
@@ -169,6 +176,40 @@ export async function reopenReceiving(
   } catch (error) {
     return fail(error);
   }
+}
+
+export type ReopenReceivingState = {
+  error?: string;
+};
+
+export async function reopenReceivingForm(
+  orderId: string,
+  _state: ReopenReceivingState,
+  formData: FormData,
+): Promise<ReopenReceivingState> {
+  const raw = formData.get("expectedPalletCount");
+  const expectedPalletCount =
+    typeof raw === "string" && raw.trim().length > 0
+      ? Number(raw)
+      : undefined;
+
+  try {
+    const user = await requireApiPermission("reopenReceiving");
+    await reopenReceivingOrder(
+      orderId,
+      user.name,
+      Number.isFinite(expectedPalletCount)
+        ? { expectedPalletCount }
+        : {},
+    );
+  } catch (error) {
+    return { error: fail(error).error };
+  }
+
+  revalidateInventory();
+  revalidatePath(`/receiving/${orderId}`);
+  revalidatePath(`/putaway/${orderId}`);
+  redirect(`/receiving/${orderId}`);
 }
 
 export async function cancelReceiving(
