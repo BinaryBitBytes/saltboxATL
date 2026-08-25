@@ -8,25 +8,22 @@ export function PwaRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    let cancelled = false;
-
-    async function register() {
-      try {
-        await navigator.serviceWorker.register(SW_PATH, {
+    const register = () => {
+      void navigator.serviceWorker
+        .register(SW_PATH, {
           scope: "/",
           updateViaCache: "none",
+        })
+        .catch((error) => {
+          console.error("Saltbox service worker failed to register", error);
         });
-      } catch {
-        if (!cancelled) {
-          // Registration can fail on insecure origins besides localhost.
-        }
-      }
-    }
-
-    void register();
-    return () => {
-      cancelled = true;
     };
+
+    if (document.readyState === "complete") {
+      register();
+    } else {
+      window.addEventListener("load", register, { once: true });
+    }
   }, []);
 
   return null;
