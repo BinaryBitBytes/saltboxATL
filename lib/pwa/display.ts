@@ -11,6 +11,10 @@ export function isIosDevice(win: Window): boolean {
   return /iPad|iPhone|iPod/.test(win.navigator.userAgent) && !("MSStream" in win);
 }
 
-export function shouldShowInstallHelp(ready: boolean, standalone: boolean): boolean {
-  return ready && !standalone;
+export function shouldShowInstallHelp(
+  ready: boolean,
+  standalone: boolean,
+  installedThisSession = false,
+): boolean {
+  return ready && !standalone && !installedThisSession;
 }

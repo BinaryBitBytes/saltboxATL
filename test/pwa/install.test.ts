@@ -64,6 +64,10 @@ describe("progressive web app install", () => {
     expect(shouldShowInstallHelp(true, false)).to.equal(true);
   });
 
+  it("hides install help in the original tab after this session installs the app", () => {
+    expect(shouldShowInstallHelp(true, false, true)).to.equal(false);
+  });
+
   it("detects standalone display and iOS home-screen apps", () => {
     const browserTab = {
       matchMedia: (query: string) => ({ matches: false, media: query }),
