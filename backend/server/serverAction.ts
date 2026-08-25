@@ -333,6 +333,7 @@ export async function importInventoryForm(
     rowsRead: number;
     requiresConfirmation: boolean;
     errors: Array<{ row: number; message: string }>;
+    sourceText: string;
   }> | null,
   formData: FormData,
 ): Promise<
@@ -379,7 +380,7 @@ export async function importInventoryForm(
     if (data.applied) {
       revalidateInventory();
     }
-    return { ok: true, data };
+    return { ok: true, data: { ...data, sourceText: text } };
   } catch (error) {
     return fail(error);
   }
