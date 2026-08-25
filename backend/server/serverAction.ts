@@ -23,7 +23,11 @@ import {
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
 import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
-import { spreadsheetTextFromForm } from "@/lib/inventory/spreadsheet-source";
+import {
+  replaySpreadsheetText,
+  spreadsheetTextFromForm,
+  type SpreadsheetFormText,
+} from "@/lib/inventory/spreadsheet-source";
 import { ValidationError } from "@/lib/validation/errors";
 
 export type ActionFailure = {
@@ -354,13 +358,16 @@ export async function importInventoryForm(
     importId?: string;
   }>
 > {
-  let sourceText = String(formData.get("text") ?? "");
+  let source: SpreadsheetFormText = {
+    text: String(formData.get("text") ?? ""),
+    source: "paste",
+  };
   try {
     const user = await requireApiPermission("adjustInventory");
-    sourceText = await spreadsheetTextFromForm(formData);
+    source = await spreadsheetTextFromForm(formData);
     const confirmationRaw = String(formData.get("confirmationQuantity") ?? "").trim();
     const data = await importInventorySpreadsheet({
-      text: sourceText,
+      text: source.text,
       mode: formData.get("mode") === "add" ? "add" : "set",
       dryRun: formData.get("intent") !== "apply",
       createdBy: user.name,
@@ -372,8 +379,14 @@ export async function importInventoryForm(
     if (data.applied) {
       revalidateInventory();
     }
-    return { ok: true, data: { ...data, sourceText } };
+    return {
+      ok: true,
+      data: { ...data, sourceText: replaySpreadsheetText(source, false) },
+    };
   } catch (error) {
-    return { ...fail(error), sourceText };
+    return {
+      ...fail(error),
+      sourceText: replaySpreadsheetText(source, true),
+    };
   }
 }

@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireApiPermission("adjustInventory");
     const form = await request.formData();
-    const text = await spreadsheetTextFromForm(form);
+    const { text } = await spreadsheetTextFromForm(form);
 
     const confirmationRaw = form.get("confirmationQuantity");
     const confirmationQuantity =

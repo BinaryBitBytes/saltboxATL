@@ -10,6 +10,7 @@ import {
 } from "@/lib/inventory/spreadsheet";
 import {
   assertSpreadsheetSize,
+  replaySpreadsheetText,
   spreadsheetTextFromForm,
 } from "@/lib/inventory/spreadsheet-source";
 import { setOnHandQuantity } from "@/backend/server/inventory-ops";
@@ -285,6 +286,27 @@ describe("inventory spreadsheet import and export", () => {
       expect(error).to.be.instanceOf(ValidationError);
       expect((error as Error).message).to.match(/CSV UTF-8/);
     }
+
+    const csv = new File(["SKU,Qty,Location\nFBR-LC-12-100,1,A-01-01\n"], "stock.csv");
+    const uploaded = new FormData();
+    uploaded.set("file", csv);
+    const fromFile = await spreadsheetTextFromForm(uploaded);
+    expect(fromFile.source).to.equal("file");
+    expect(replaySpreadsheetText(fromFile, true)).to.equal("");
+    expect(replaySpreadsheetText(fromFile, false)).to.equal(fromFile.text);
+
+    const pasted = new FormData();
+    pasted.set("text", "SKU,Qty,Location\nFBR-LC-12-100,1,A-01-01\n");
+    const fromPaste = await spreadsheetTextFromForm(pasted);
+    expect(fromPaste.source).to.equal("paste");
+    expect(replaySpreadsheetText(fromPaste, true)).to.equal(fromPaste.text);
+
+    const stalePaste = new FormData();
+    stalePaste.set("text", "SKU,Qty,Location\nOLD,1,A-01-01\n");
+    stalePaste.set("file", new File(["SKU,Qty,Location\nNEW,2,A-01-01\n"], "fixed.csv"));
+    const preferred = await spreadsheetTextFromForm(stalePaste);
+    expect(preferred.source).to.equal("file");
+    expect(preferred.text).to.match(/NEW,2/);
   });
 
   it("writes on-hand quantity through setOnHandQuantity", () => {
