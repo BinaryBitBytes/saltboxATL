@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Download01Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -11,68 +11,113 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  isIosDevice,
+  isStandaloneDisplay,
+  shouldShowInstallHelp,
+} from "@/lib/pwa/display";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-function isStandaloneDisplay(): boolean {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    window.matchMedia("(display-mode: window-controls-overlay)").matches ||
-    ("standalone" in navigator &&
-      Boolean((navigator as Navigator & { standalone?: boolean }).standalone))
-  );
+const emptySubscribe = () => () => undefined;
+
+let promptEvent: BeforeInstallPromptEvent | null = null;
+let listening = false;
+const promptListeners = new Set<() => void>();
+
+function emitPrompt() {
+  for (const listener of promptListeners) listener();
 }
 
-function isIosDevice(): boolean {
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-    !("MSStream" in window)
-  );
+function onBeforeInstallPrompt(event: Event) {
+  event.preventDefault();
+  promptEvent = event as BeforeInstallPromptEvent;
+  emitPrompt();
+}
+
+function onAppInstalled() {
+  promptEvent = null;
+  emitPrompt();
+}
+
+function ensurePromptListeners() {
+  if (listening || typeof window === "undefined") return;
+  listening = true;
+  window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+  window.addEventListener("appinstalled", onAppInstalled);
+}
+
+function subscribePrompt(onStoreChange: () => void) {
+  ensurePromptListeners();
+  promptListeners.add(onStoreChange);
+  return () => {
+    promptListeners.delete(onStoreChange);
+  };
+}
+
+function getPromptSnapshot() {
+  return promptEvent;
+}
+
+function subscribeStandalone(onStoreChange: () => void) {
+  const standaloneQuery = window.matchMedia("(display-mode: standalone)");
+  const overlayQuery = window.matchMedia("(display-mode: window-controls-overlay)");
+  standaloneQuery.addEventListener("change", onStoreChange);
+  overlayQuery.addEventListener("change", onStoreChange);
+  window.addEventListener("appinstalled", onStoreChange);
+  return () => {
+    standaloneQuery.removeEventListener("change", onStoreChange);
+    overlayQuery.removeEventListener("change", onStoreChange);
+    window.removeEventListener("appinstalled", onStoreChange);
+  };
+}
+
+function useClientReady() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
 }
 
 export function usePwaInstall() {
-  const [standalone, setStandalone] = useState(false);
-  const [ios, setIos] = useState(false);
-  const [promptEvent, setPromptEvent] =
-    useState<BeforeInstallPromptEvent | null>(null);
-
-  useEffect(() => {
-    setStandalone(isStandaloneDisplay());
-    setIos(isIosDevice());
-
-    const onPrompt = (event: Event) => {
-      event.preventDefault();
-      setPromptEvent(event as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => {
-      setPromptEvent(null);
-      setStandalone(true);
-    };
-
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
+  const ready = useClientReady();
+  const standalone = useSyncExternalStore(
+    subscribeStandalone,
+    () => isStandaloneDisplay(window),
+    () => true,
+  );
+  const ios = useSyncExternalStore(
+    emptySubscribe,
+    () => isIosDevice(window),
+    () => false,
+  );
+  const deferredPrompt = useSyncExternalStore(
+    subscribePrompt,
+    getPromptSnapshot,
+    () => null,
+  );
 
   async function install() {
-    if (!promptEvent) return;
-    await promptEvent.prompt();
-    await promptEvent.userChoice;
-    setPromptEvent(null);
+    if (!deferredPrompt) return;
+    await deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    promptEvent = null;
+    emitPrompt();
   }
 
-  return { standalone, ios, canPrompt: Boolean(promptEvent), install };
+  return {
+    ready,
+    standalone,
+    ios,
+    canPrompt: Boolean(deferredPrompt),
+    showHelp: shouldShowInstallHelp(ready, standalone),
+    install,
+  };
 }
 
 export function InstallAppButton() {
-  const { standalone, canPrompt, install } = usePwaInstall();
-  if (standalone || !canPrompt) return null;
+  const { showHelp, canPrompt, install } = usePwaInstall();
+  if (!showHelp || !canPrompt) return null;
 
   return (
     <Button type="button" variant="outline" size="sm" onClick={() => void install()}>
@@ -83,8 +128,8 @@ export function InstallAppButton() {
 }
 
 export function InstallAppCard() {
-  const { standalone, ios, canPrompt, install } = usePwaInstall();
-  if (standalone) return null;
+  const { showHelp, ios, canPrompt, install } = usePwaInstall();
+  if (!showHelp) return null;
 
   return (
     <Card>

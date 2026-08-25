@@ -4,6 +4,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createSaltboxManifest } from "@/lib/pwa/manifest";
 import {
+  isIosDevice,
+  isStandaloneDisplay,
+  shouldShowInstallHelp,
+} from "@/lib/pwa/display";
+import {
   isPublicApiPath,
   isPublicAppPath,
   isPublicPagePath,
@@ -51,5 +56,34 @@ describe("progressive web app install", () => {
     expect(source).to.match(/addEventListener\(\s*["']fetch["']/);
     expect(source).to.match(/skipWaiting/);
     expect(source).to.match(/clients\.claim/);
+  });
+
+  it("hides install help until the client knows this is not an installed app", () => {
+    expect(shouldShowInstallHelp(false, false)).to.equal(false);
+    expect(shouldShowInstallHelp(true, true)).to.equal(false);
+    expect(shouldShowInstallHelp(true, false)).to.equal(true);
+  });
+
+  it("detects standalone display and iOS home-screen apps", () => {
+    const browserTab = {
+      matchMedia: (query: string) => ({ matches: false, media: query }),
+      navigator: { userAgent: "Mozilla/5.0 (Windows NT 10.0; Chrome/120)" },
+    } as unknown as Window;
+    const installed = {
+      matchMedia: (query: string) => ({
+        matches: query.includes("display-mode: standalone"),
+        media: query,
+      }),
+      navigator: { userAgent: "Mozilla/5.0 (Windows NT 10.0; Chrome/120)" },
+    } as unknown as Window;
+    const iphoneSafari = {
+      matchMedia: (query: string) => ({ matches: false, media: query }),
+      navigator: { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" },
+    } as unknown as Window;
+
+    expect(isStandaloneDisplay(browserTab)).to.equal(false);
+    expect(isStandaloneDisplay(installed)).to.equal(true);
+    expect(isIosDevice(iphoneSafari)).to.equal(true);
+    expect(isIosDevice(browserTab)).to.equal(false);
   });
 });
