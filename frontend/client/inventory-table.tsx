@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createColumnHelper,
   tableFeatures,
@@ -68,11 +68,16 @@ export function InventoryTable({
 }) {
   const [query, setQuery] = useState("");
   const [codesFor, setCodesFor] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const inventoryQuery = useQuery({
     queryKey: ["inventory"],
     queryFn: fetchInventory,
     initialData: initialRows,
   });
+
+  useEffect(() => {
+    queryClient.setQueryData(["inventory"], initialRows);
+  }, [initialRows, queryClient]);
 
   const filtered = useMemo(() => {
     const rows = inventoryQuery.data ?? EMPTY_ROWS;
