@@ -24,11 +24,17 @@ import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
 import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
 import { ValidationError } from "@/lib/validation/errors";
 
+export type ActionFailure = {
+  ok: false;
+  error: string;
+  fieldErrors?: Record<string, string[]>;
+};
+
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
+  | ActionFailure;
 
-function fail(error: unknown): ActionResult<never> {
+function fail(error: unknown): ActionFailure {
   if (error instanceof ServiceError || error instanceof ValidationError) {
     return { ok: false, error: error.message };
   }
