@@ -1,8 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FileExportIcon, FileImportIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -14,14 +12,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
-import { LargeInputConfirm } from "@/frontend/client/large-input-confirm";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { SpreadsheetImportPlan } from "@/lib/inventory/spreadsheet";
+import {
+  importInventoryForm,
+  type ActionResult,
+} from "@/backend/server/serverAction";
 
-type ImportResult = SpreadsheetImportPlan & {
+type ImportData = {
   dryRun: boolean;
   applied: boolean;
+  created: number;
+  updated: number;
+  unchanged: number;
+  unitsDelta: number;
+  rowsRead: number;
+  requiresConfirmation: boolean;
+  errors: Array<{ row: number; message: string }>;
 };
 
 export function InventorySpreadsheetCard({
@@ -29,95 +35,13 @@ export function InventorySpreadsheetCard({
 }: {
   canImport?: boolean;
 }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [pasted, setPasted] = useState("");
-  const [mode, setMode] = useState<"set" | "add">("set");
-  const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<ImportResult | null>(null);
-  const [pending, setPending] = useState(false);
-  const [confirmLargeInput, setConfirmLargeInput] = useState(false);
-  const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">(
-    "",
+  const [state, formAction, pending] = useActionState(
+    importInventoryForm,
+    null as ActionResult<ImportData> | null,
   );
-
-  function selectedFile(): File | null {
-    return fileInputRef.current?.files?.[0] ?? file;
-  }
-
-  async function postImport(dryRun: boolean): Promise<ImportResult> {
-    const spreadsheet = selectedFile();
-    const pastedText = pasted.trim();
-    if (!spreadsheet && !pastedText) {
-      throw new Error("Choose a CSV spreadsheet or paste rows to import.");
-    }
-    const form = new FormData();
-    if (spreadsheet) form.set("file", spreadsheet);
-    if (pastedText) form.set("text", pastedText);
-    form.set("mode", mode);
-    form.set("dryRun", dryRun ? "1" : "0");
-    if (confirmLargeInput) form.set("confirmLargeInput", "1");
-    if (confirmationQuantity !== "") {
-      form.set("confirmationQuantity", String(confirmationQuantity));
-    }
-    const response = await fetch("/api/inventory/import", {
-      method: "POST",
-      body: form,
-    });
-    const json = (await response.json()) as {
-      success?: boolean;
-      data?: ImportResult;
-      error?: string;
-    };
-    if (!response.ok || !json.success || !json.data) {
-      throw new Error(json.error || "Unable to import that spreadsheet.");
-    }
-    return json.data;
-  }
-
-  async function handlePreview() {
-    setError(null);
-    setPreview(null);
-    setPending(true);
-    try {
-      const result = await postImport(true);
-      setPreview(result);
-      setConfirmLargeInput(false);
-      setConfirmationQuantity("");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Preview failed.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function handleImport() {
-    setError(null);
-    setPending(true);
-    try {
-      const result = await postImport(false);
-      setPreview(result);
-      setFile(null);
-      setPasted("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      await queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      await queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      router.refresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Import failed.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  const hasSource = Boolean(file || pasted.trim());
-  const confirmationTotal = Math.abs(preview?.unitsDelta ?? 0);
-  const canApply =
-    Boolean(preview) &&
-    preview?.errors.length === 0 &&
-    ((preview?.created ?? 0) > 0 || (preview?.updated ?? 0) > 0);
+  const result = state?.ok ? state.data : null;
+  const error = state && !state.ok ? state.error : null;
+  const confirmationTotal = Math.abs(result?.unitsDelta ?? 0);
 
   return (
     <Card>
@@ -148,7 +72,7 @@ export function InventorySpreadsheetCard({
           </Button>
         </div>
         {canImport ? (
-          <div className="grid gap-3 border-t border-border pt-3">
+          <form action={formAction} className="grid gap-3 border-t border-border pt-3">
             <p className="text-xs text-muted-foreground">
               Save workbooks as CSV UTF-8, or paste rows copied from Excel.
               Format SKU, UPC, and Location as text so leading zeros are kept.
@@ -156,82 +80,65 @@ export function InventorySpreadsheetCard({
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="CSV file" htmlFor="inventory-spreadsheet">
                 <input
-                  ref={fileInputRef}
                   id="inventory-spreadsheet"
+                  name="file"
                   type="file"
                   accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
                   className={cn(
                     "h-7 w-full min-w-0 rounded-md border border-input bg-input/20 px-2 py-0.5 text-sm outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-xs/relaxed file:font-medium",
                   )}
-                  onChange={(event) => {
-                    const next = event.target.files?.[0] ?? null;
-                    setFile(next);
-                    setPreview(null);
-                    setError(null);
-                  }}
                 />
-                {file ? (
-                  <p className="text-xs text-muted-foreground">Selected: {file.name}</p>
-                ) : null}
               </Field>
               <Field label="Import mode" htmlFor="inventory-import-mode">
-                <NativeSelect
-                  id="inventory-import-mode"
-                  value={mode}
-                  onChange={(event) => {
-                    setMode(event.target.value as "set" | "add");
-                    setPreview(null);
-                  }}
-                >
+                <NativeSelect id="inventory-import-mode" name="mode" defaultValue="set">
                   <option value="set">Set on-hand quantities</option>
                   <option value="add">Add to existing quantities</option>
                 </NativeSelect>
               </Field>
             </div>
-              <Field label="Or paste CSV / Excel rows" htmlFor="inventory-spreadsheet-paste">
-                <Textarea
-                  id="inventory-spreadsheet-paste"
-                  rows={5}
-                  value={pasted}
-                  placeholder={"SKU,UPC,Description,Batch,Qty,Location\nPATCH-SM-100,010000000099,Patch panel,,7,A-01-02"}
-                  onChange={(event) => {
-                    setPasted(event.target.value);
-                    setPreview(null);
-                    setError(null);
-                  }}
-                />
-              </Field>
+            <Field label="Or paste CSV / Excel rows" htmlFor="inventory-spreadsheet-paste">
+              <textarea
+                id="inventory-spreadsheet-paste"
+                name="text"
+                rows={5}
+                placeholder={"SKU,UPC,Description,Batch,Qty,Location\nPATCH-SM-100,010000000099,Patch panel,,7,A-01-02"}
+                className={cn(
+                  "flex min-h-16 w-full resize-y rounded-md border border-input bg-input/20 px-2 py-2 text-sm outline-none",
+                )}
+              />
+            </Field>
+            {result?.requiresConfirmation ? (
+              <div className="grid gap-2 rounded-md border border-border p-3">
+                <p className="text-xs text-muted-foreground">
+                  This spreadsheet unit change of {confirmationTotal} is large.
+                  Check the box and re-enter {confirmationTotal} to import.
+                </p>
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" name="confirmLargeInput" value="1" />
+                  I confirm this spreadsheet unit change is {confirmationTotal}
+                </label>
+                <Field label="Re-enter spreadsheet unit change" htmlFor="spreadsheet-confirm-qty">
+                  <input
+                    id="spreadsheet-confirm-qty"
+                    name="confirmationQuantity"
+                    type="number"
+                    className="h-7 w-full rounded-md border border-input bg-input/20 px-2 text-sm"
+                  />
+                </Field>
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!hasSource || pending}
-                onClick={() => void handlePreview()}
-              >
-                Preview import
+              <Button type="submit" name="intent" value="preview" variant="outline" disabled={pending}>
+                {pending ? "Working…" : "Preview import"}
               </Button>
-              <Button
-                type="button"
-                disabled={!canApply || pending}
-                onClick={() => void handleImport()}
-              >
+              <Button type="submit" name="intent" value="apply" disabled={pending}>
                 <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />
-                {pending ? "Working…" : "Import spreadsheet"}
+                Import spreadsheet
               </Button>
             </div>
-            {preview?.requiresConfirmation && canApply ? (
-              <LargeInputConfirm
-                total={confirmationTotal}
-                label="spreadsheet unit change"
-                confirmed={confirmLargeInput}
-                onConfirmedChange={setConfirmLargeInput}
-                confirmationQuantity={confirmationQuantity}
-                onConfirmationQuantityChange={setConfirmationQuantity}
-              />
-            ) : null}
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            {preview ? <ImportSummary result={preview} /> : null}
-          </div>
+            {result ? <ImportSummary result={result} /> : null}
+          </form>
         ) : (
           <p className="text-xs text-muted-foreground">
             Anyone who can view inventory can export. Managers import
@@ -243,7 +150,7 @@ export function InventorySpreadsheetCard({
   );
 }
 
-function ImportSummary({ result }: { result: ImportResult }) {
+function ImportSummary({ result }: { result: ImportData }) {
   return (
     <div className="grid gap-2 text-sm">
       <p>
@@ -254,9 +161,9 @@ function ImportSummary({ result }: { result: ImportResult }) {
       </p>
       {result.errors.length > 0 ? (
         <ul className="grid gap-1 text-destructive">
-          {result.errors.slice(0, 8).map((error) => (
-            <li key={`${error.row}-${error.message}`}>
-              Row {error.row}: {error.message}
+          {result.errors.slice(0, 8).map((entry) => (
+            <li key={`${entry.row}-${entry.message}`}>
+              Row {entry.row}: {entry.message}
             </li>
           ))}
           {result.errors.length > 8 ? (

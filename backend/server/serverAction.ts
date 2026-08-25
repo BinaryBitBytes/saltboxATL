@@ -18,6 +18,7 @@ import {
   removeCaseFromPallet,
   assignPutawayLocation,
   completePutawayOrder,
+  importInventorySpreadsheet,
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
@@ -316,6 +317,69 @@ export async function createAdjustment(
         referenceId: data.referenceId,
       },
     };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function importInventoryForm(
+  _previous: ActionResult<{
+    dryRun: boolean;
+    applied: boolean;
+    created: number;
+    updated: number;
+    unchanged: number;
+    unitsDelta: number;
+    rowsRead: number;
+    requiresConfirmation: boolean;
+    errors: Array<{ row: number; message: string }>;
+  }> | null,
+  formData: FormData,
+): Promise<
+  ActionResult<{
+    dryRun: boolean;
+    applied: boolean;
+    created: number;
+    updated: number;
+    unchanged: number;
+    unitsDelta: number;
+    rowsRead: number;
+    requiresConfirmation: boolean;
+    errors: Array<{ row: number; message: string }>;
+  }>
+> {
+  try {
+    const user = await requireApiPermission("adjustInventory");
+    const pasted = String(formData.get("text") ?? "").trim();
+    const file = formData.get("file");
+    let text = pasted;
+    if (!text && file instanceof File && file.size > 0) {
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        throw new ServiceError(
+          "Save the workbook as CSV UTF-8 (Excel: File → Save As → CSV UTF-8) and import that file.",
+        );
+      }
+      text = (await file.text()).trim();
+    }
+    if (!text) {
+      throw new ServiceError("Choose a CSV spreadsheet or paste rows to import.");
+    }
+    const confirmationRaw = String(formData.get("confirmationQuantity") ?? "").trim();
+    const data = await importInventorySpreadsheet({
+      text,
+      mode: formData.get("mode") === "add" ? "add" : "set",
+      dryRun: formData.get("intent") !== "apply",
+      createdBy: user.name,
+      confirmLargeInput:
+        formData.get("confirmLargeInput") === "on" ||
+        formData.get("confirmLargeInput") === "1",
+      confirmationQuantity: confirmationRaw ? Number(confirmationRaw) : undefined,
+    });
+    if (data.applied) {
+      revalidateInventory();
+    }
+    return { ok: true, data };
   } catch (error) {
     return fail(error);
   }
