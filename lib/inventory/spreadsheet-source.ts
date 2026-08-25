@@ -23,6 +23,8 @@ export async function spreadsheetTextFromForm(
   form: FormData,
 ): Promise<SpreadsheetFormText> {
   const file = form.get("file");
+  // A file chosen on this submit wins. The Inventory form remounts the file
+  // input after each result so leftover selections do not override paste edits.
   if (file instanceof File && file.size > 0) {
     return { text: await spreadsheetTextFromUpload(file), source: "file" };
   }

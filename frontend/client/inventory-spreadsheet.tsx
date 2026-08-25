@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useActionState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -49,7 +49,13 @@ export function InventorySpreadsheetCard({
   const result = state?.ok ? state.data : null;
   const error = state && !state.ok ? state.error : null;
   const sourceText = state?.ok ? state.data.sourceText : state?.sourceText;
+  const [fileEpoch, setFileEpoch] = useState(0);
   const confirmationTotal = Math.abs(result?.unitsDelta ?? 0);
+
+  useEffect(() => {
+    if (!state) return;
+    setFileEpoch((epoch) => epoch + 1);
+  }, [state]);
 
   useEffect(() => {
     if (!result?.importId) return;
@@ -95,6 +101,7 @@ export function InventorySpreadsheetCard({
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="CSV file" htmlFor="inventory-spreadsheet">
                 <input
+                  key={fileEpoch}
                   id="inventory-spreadsheet"
                   name="file"
                   type="file"
