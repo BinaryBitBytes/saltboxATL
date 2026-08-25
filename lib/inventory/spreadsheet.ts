@@ -266,6 +266,17 @@ export function formatImportErrors(errors: SpreadsheetImportError[]): string {
   return `Fix ${errors.length} spreadsheet errors before importing. ${preview}`;
 }
 
+export function assertImportPlanReady(plan: SpreadsheetImportPlan): void {
+  if (plan.errors.length > 0) {
+    throw new ValidationError(formatImportErrors(plan.errors));
+  }
+  if (plan.created === 0 && plan.updated === 0) {
+    throw new ValidationError(
+      "Spreadsheet matches on-hand inventory. Nothing to import.",
+    );
+  }
+}
+
 export function spreadsheetFileName(kind: "inventory" | "template" = "inventory"): string {
   if (kind === "template") return "saltbox-inventory-template.csv";
   const stamp = new Date().toISOString().slice(0, 10);

@@ -31,7 +31,8 @@ type ImportData = {
   rowsRead: number;
   requiresConfirmation: boolean;
   errors: Array<{ row: number; message: string }>;
-  sourceText?: string;
+  sourceText: string;
+  importId?: string;
 };
 
 export function InventorySpreadsheetCard({
@@ -40,6 +41,7 @@ export function InventorySpreadsheetCard({
   canImport?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(
     importInventoryForm,
     null as ActionResult<ImportData> | null,
@@ -49,10 +51,11 @@ export function InventorySpreadsheetCard({
   const confirmationTotal = Math.abs(result?.unitsDelta ?? 0);
 
   useEffect(() => {
-    if (!result?.applied) return;
+    if (!result?.importId) return;
     void queryClient.invalidateQueries({ queryKey: ["inventory"] });
     void queryClient.invalidateQueries({ queryKey: ["transactions"] });
-  }, [queryClient, result?.applied]);
+    router.refresh();
+  }, [queryClient, result?.importId, router]);
 
   return (
     <Card>

@@ -23,6 +23,7 @@ import {
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
 import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
+import { spreadsheetTextFromForm } from "@/lib/inventory/spreadsheet-source";
 import { ValidationError } from "@/lib/validation/errors";
 
 export type ActionFailure = {
@@ -334,6 +335,7 @@ export async function importInventoryForm(
     requiresConfirmation: boolean;
     errors: Array<{ row: number; message: string }>;
     sourceText: string;
+    importId?: string;
   }> | null,
   formData: FormData,
 ): Promise<
@@ -347,25 +349,13 @@ export async function importInventoryForm(
     rowsRead: number;
     requiresConfirmation: boolean;
     errors: Array<{ row: number; message: string }>;
+    sourceText: string;
+    importId?: string;
   }>
 > {
   try {
     const user = await requireApiPermission("adjustInventory");
-    const pasted = String(formData.get("text") ?? "").trim();
-    const file = formData.get("file");
-    let text = pasted;
-    if (!text && file instanceof File && file.size > 0) {
-      const name = file.name.toLowerCase();
-      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-        throw new ServiceError(
-          "Save the workbook as CSV UTF-8 (Excel: File → Save As → CSV UTF-8) and import that file.",
-        );
-      }
-      text = (await file.text()).trim();
-    }
-    if (!text) {
-      throw new ServiceError("Choose a CSV spreadsheet or paste rows to import.");
-    }
+    const text = await spreadsheetTextFromForm(formData);
     const confirmationRaw = String(formData.get("confirmationQuantity") ?? "").trim();
     const data = await importInventorySpreadsheet({
       text,

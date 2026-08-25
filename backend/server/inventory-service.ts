@@ -56,9 +56,9 @@ import {
   isCasePutawayPosted,
 } from "@/lib/receiving/reopen";
 import {
-  formatImportErrors,
   parseInventorySpreadsheet,
   planInventoryImport,
+  assertImportPlanReady,
   type SpreadsheetImportMode,
   type SpreadsheetImportPlan,
 } from "@/lib/inventory/spreadsheet";
@@ -798,6 +798,7 @@ export async function getInventoryRows(): Promise<InventoryRow[]> {
 export type InventorySpreadsheetImportResult = SpreadsheetImportPlan & {
   dryRun: boolean;
   applied: boolean;
+  importId?: string;
 };
 
 export async function importInventorySpreadsheet(input: {
@@ -814,13 +815,12 @@ export async function importInventorySpreadsheet(input: {
   }
 
   const system = await readSystem();
-  const products = collectKnownProducts(system);
   const plan = planInventoryImport({
     rows,
     items: system.inventoryItems,
     locations: system.locations,
     rooms: system.rooms,
-    products,
+    products: collectKnownProducts(system),
     mode: input.mode,
   });
 
@@ -828,14 +828,7 @@ export async function importInventorySpreadsheet(input: {
     return { ...plan, dryRun: true, applied: false };
   }
 
-  if (plan.errors.length > 0) {
-    throw new ServiceError(formatImportErrors(plan.errors));
-  }
-
-  if (plan.created === 0 && plan.updated === 0) {
-    throw new ServiceError("Spreadsheet matches on-hand inventory. Nothing to import.");
-  }
-
+  assertImportPlanReady(plan);
   assertLargeInputConfirmed(
     Math.abs(plan.unitsDelta),
     input,
@@ -854,9 +847,13 @@ export async function importInventorySpreadsheet(input: {
       products: collectKnownProducts(current),
       mode: input.mode,
     });
-    if (latestPlan.errors.length > 0) {
-      throw new ServiceError(formatImportErrors(latestPlan.errors));
-    }
+    assertImportPlanReady(latestPlan);
+    assertLargeInputConfirmed(
+      Math.abs(latestPlan.unitsDelta),
+      input,
+      LIMITS.largeQuantity,
+      "spreadsheet unit change",
+    );
 
     let items = current.inventoryItems;
     const stockChanges: StockChange[] = [];
@@ -874,6 +871,9 @@ export async function importInventorySpreadsheet(input: {
       items = result.items;
       if (result.change) stockChanges.push(result.change);
     }
+    if (stockChanges.length === 0) {
+      throw new ServiceError("Spreadsheet matches on-hand inventory. Nothing to import.");
+    }
 
     current.inventoryItems = items;
     appendTransactions(current, "import", stockChanges, {
@@ -886,7 +886,7 @@ export async function importInventorySpreadsheet(input: {
       referenceType: "spreadsheet-import",
       referenceId: importId,
     });
-    return { ...latestPlan, dryRun: false, applied: true };
+    return { ...latestPlan, dryRun: false, applied: true, importId };
   });
 }
 

@@ -6,12 +6,18 @@ import {
   parseInventorySpreadsheet,
   planInventoryImport,
   formatImportErrors,
+  assertImportPlanReady,
 } from "@/lib/inventory/spreadsheet";
+import {
+  assertSpreadsheetSize,
+  spreadsheetTextFromForm,
+} from "@/lib/inventory/spreadsheet-source";
 import { setOnHandQuantity } from "@/backend/server/inventory-ops";
 import { nowIso } from "@/backend/server/helperUtils";
 import { makeItem, makeLocation } from "../helpers";
 import type { InventoryRow, Room } from "@/lib/inventory-schema";
 import { LIMITS } from "@/lib/validation/limits";
+import { ValidationError } from "@/lib/validation/errors";
 
 const room: Room = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -208,6 +214,77 @@ describe("inventory spreadsheet import and export", () => {
     });
     expect(plan.requiresConfirmation).to.equal(true);
     expect(plan.unitsDelta).to.equal(LIMITS.largeQuantity);
+  });
+
+  it("blocks apply when the plan has errors or only unchanged lines", () => {
+    const existing = makeItem({
+      sku: "FBR-LC-12-100",
+      locationId: location.id,
+      quantity: 8,
+    });
+    const unchanged = planInventoryImport({
+      rows: parseInventorySpreadsheet("SKU,Qty,Location\nFBR-LC-12-100,8,A-01-01\n"),
+      items: [existing],
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    expect(() => assertImportPlanReady(unchanged)).to.throw(
+      ValidationError,
+      /Nothing to import/,
+    );
+
+    const invalid = planInventoryImport({
+      rows: parseInventorySpreadsheet("SKU,Qty,Location\nFBR-LC-12-100,8,MISSING\n"),
+      items: [existing],
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    expect(() => assertImportPlanReady(invalid)).to.throw(
+      ValidationError,
+      /not found/i,
+    );
+
+    const ready = planInventoryImport({
+      rows: parseInventorySpreadsheet("SKU,Qty,Location\nFBR-LC-12-100,9,A-01-01\n"),
+      items: [existing],
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    expect(() => assertImportPlanReady(ready)).not.to.throw();
+  });
+
+  it("rejects oversized pasted or uploaded spreadsheets before parsing", async () => {
+    expect(() => assertSpreadsheetSize(LIMITS.spreadsheetMaxBytes)).not.to.throw();
+    expect(() => assertSpreadsheetSize(LIMITS.spreadsheetMaxBytes + 1)).to.throw(
+      ValidationError,
+      /MB or smaller/,
+    );
+
+    const oversized = new FormData();
+    oversized.set("text", "x".repeat(LIMITS.spreadsheetMaxBytes + 1));
+    try {
+      await spreadsheetTextFromForm(oversized);
+      expect.fail("pasted spreadsheet should have been rejected");
+    } catch (error) {
+      expect(error).to.be.instanceOf(ValidationError);
+      expect((error as Error).message).to.match(/MB or smaller/);
+    }
+
+    const workbook = new FormData();
+    workbook.set("file", new File(["not a csv"], "stock.xlsx"));
+    try {
+      await spreadsheetTextFromForm(workbook);
+      expect.fail("xlsx upload should have been rejected");
+    } catch (error) {
+      expect(error).to.be.instanceOf(ValidationError);
+      expect((error as Error).message).to.match(/CSV UTF-8/);
+    }
   });
 
   it("writes on-hand quantity through setOnHandQuantity", () => {
