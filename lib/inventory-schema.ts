@@ -298,6 +298,7 @@ export const InventoryTransactionTypeSchema = z.enum([
   "overage",
   "shortage",
   "damage",
+  "import",
 ]);
 export type InventoryTransactionType = z.infer<
   typeof InventoryTransactionTypeSchema
@@ -318,7 +319,7 @@ export const InventoryTransactionSchema = z.object({
   quantityAfter: z.coerce.number().int().min(0).optional(),
   reason: OptionalNotesSchema,
   referenceType: z
-    .enum(["receiving-order", "shipping-order", "adjustment"])
+    .enum(["receiving-order", "shipping-order", "adjustment", "spreadsheet-import"])
     .optional(),
   referenceId: UuidSchema.optional(),
   scannedCode: z.string().optional(),

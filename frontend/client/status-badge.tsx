@@ -62,6 +62,7 @@ const transactionVariant: Record<
   overage: "default",
   shortage: "destructive",
   damage: "destructive",
+  import: "secondary",
 };
 
 export function TransactionTypeBadge({

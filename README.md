@@ -8,7 +8,7 @@ Saltbox uses credential login with httpOnly session cookies. Roles:
 | --- | --- |
 | **User** | Dashboard, on-hand inventory, and the transaction log |
 | **Associate** | User access plus receiving and shipping |
-| **Manager** | Associate access plus adjustments, rooms/locations, and user admin |
+| **Manager** | Associate access plus adjustments, spreadsheet import, rooms/locations, and user admin |
 
 Demo accounts (password `saltbox123`) are seeded on first boot:
 
@@ -17,6 +17,15 @@ Demo accounts (password `saltbox123`) are seeded on first boot:
 - `user@saltbox.local`
 
 Set `SESSION_SECRET` in production. If it is missing, the app writes a generated secret to `data/.session-secret`.
+
+## Inventory spreadsheets
+
+On-hand inventory can be exported as a CSV spreadsheet from **Inventory**. Excel and Google Sheets open the file directly. Managers can import the same columns (`SKU`, `UPC`, `Description`, `Batch`, `Qty`, `Location`) to load existing stock:
+
+- **Set on-hand quantities** replaces the quantity for each SKU + batch + location in the file.
+- **Add to existing quantities** increases those lines.
+
+Location codes must already exist and be active. Save Excel workbooks as **CSV UTF-8** before importing, and format SKU/UPC/Location as text so leading zeros are kept.
 
 ## Install as an app
 
@@ -33,6 +42,7 @@ Input is checked with Zod plus inventory/auth safeguards:
 - HTML/control characters, oversized fields, and unsafe SKU/UPC values are rejected
 - Shipping, shortages, and damage cannot take more than on-hand stock or use inactive locations
 - Quantities at or above 500 units (200 for shipments, 20 pallets on a receiving header) require a confirmation checkbox and a matching re-entered amount
+- Spreadsheet import is atomic: invalid rows block the whole file, and unknown or inactive locations are rejected
 
 ```bash
 npm test

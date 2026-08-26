@@ -15,7 +15,8 @@ export default async function InventoryPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          On-hand quantities, barcode/QR labels, and location label printing
+          On-hand quantities, spreadsheet import/export, barcode/QR labels, and
+          location label printing
           {canAdjust ? ", plus overage / shortage / damage adjustments." : "."}
         </p>
       </div>

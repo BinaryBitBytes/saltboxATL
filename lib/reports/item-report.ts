@@ -7,6 +7,7 @@ import type {
 } from "@/lib/inventory-schema";
 import { uniqueSkuCount } from "@/lib/format";
 import { LIMITS } from "@/lib/validation/limits";
+import { csvCell } from "@/lib/spreadsheet/csv";
 
 export type ItemReportSource = "on-hand" | "inbound" | "outbound";
 
@@ -271,11 +272,4 @@ function normalizeFilter(value: string | undefined, max: number): string | undef
   const trimmed = value?.trim() ?? "";
   if (!trimmed) return undefined;
   return trimmed.slice(0, max);
-}
-
-function csvCell(value: string): string {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replaceAll('"', '""')}"`;
-  }
-  return value;
 }

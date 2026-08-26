@@ -18,16 +18,23 @@ import {
   removeCaseFromPallet,
   assignPutawayLocation,
   completePutawayOrder,
+  importInventorySpreadsheet,
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
 import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
+import {
+  replaySpreadsheetText,
+  spreadsheetTextFromForm,
+  type SpreadsheetFormText,
+} from "@/lib/inventory/spreadsheet-source";
 import { ValidationError } from "@/lib/validation/errors";
 
 export type ActionFailure = {
   ok: false;
   error: string;
   fieldErrors?: Record<string, string[]>;
+  sourceText?: string;
 };
 
 export type ActionResult<T> =
@@ -318,5 +325,68 @@ export async function createAdjustment(
     };
   } catch (error) {
     return fail(error);
+  }
+}
+
+export async function importInventoryForm(
+  _previous: ActionResult<{
+    dryRun: boolean;
+    applied: boolean;
+    created: number;
+    updated: number;
+    unchanged: number;
+    unitsDelta: number;
+    rowsRead: number;
+    requiresConfirmation: boolean;
+    errors: Array<{ row: number; message: string }>;
+    sourceText: string;
+    importId?: string;
+  }> | null,
+  formData: FormData,
+): Promise<
+  ActionResult<{
+    dryRun: boolean;
+    applied: boolean;
+    created: number;
+    updated: number;
+    unchanged: number;
+    unitsDelta: number;
+    rowsRead: number;
+    requiresConfirmation: boolean;
+    errors: Array<{ row: number; message: string }>;
+    sourceText: string;
+    importId?: string;
+  }>
+> {
+  let source: SpreadsheetFormText = {
+    text: String(formData.get("text") ?? ""),
+    source: "paste",
+  };
+  try {
+    const user = await requireApiPermission("adjustInventory");
+    source = await spreadsheetTextFromForm(formData);
+    const confirmationRaw = String(formData.get("confirmationQuantity") ?? "").trim();
+    const data = await importInventorySpreadsheet({
+      text: source.text,
+      mode: formData.get("mode") === "add" ? "add" : "set",
+      dryRun: formData.get("intent") !== "apply",
+      createdBy: user.name,
+      confirmLargeInput:
+        formData.get("confirmLargeInput") === "on" ||
+        formData.get("confirmLargeInput") === "1",
+      confirmationQuantity: confirmationRaw ? Number(confirmationRaw) : undefined,
+    });
+    if (data.applied) {
+      revalidateInventory();
+    }
+    return {
+      ok: true,
+      data: { ...data, sourceText: replaySpreadsheetText(source, false) },
+    };
+  } catch (error) {
+    return {
+      ...fail(error),
+      sourceText: replaySpreadsheetText(source, true),
+    };
   }
 }
