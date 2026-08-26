@@ -39,6 +39,7 @@ describe("progressive web app install", () => {
   it("lets browsers fetch the service worker and icons without signing in", () => {
     expect(isPublicPagePath("/login")).to.equal(true);
     expect(isPublicApiPath("/api/auth/login")).to.equal(true);
+    expect(isPublicApiPath("/api/health")).to.equal(true);
     expect(isPublicPwaPath("/sw.js")).to.equal(true);
     expect(isPublicPwaPath("/manifest.webmanifest")).to.equal(true);
     expect(isPublicPwaPath("/icons/icon-192.png")).to.equal(true);
