@@ -23,35 +23,55 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const emptySubscribe = () => () => undefined;
+const INSTALLED_KEY = "saltbox-pwa-installed";
 
 let promptEvent: BeforeInstallPromptEvent | null = null;
+let installedThisSession = false;
 let listening = false;
 const promptListeners = new Set<() => void>();
+const standaloneListeners = new Set<() => void>();
 
-function emitPrompt() {
+function emitAll() {
   for (const listener of promptListeners) listener();
+  for (const listener of standaloneListeners) listener();
+}
+
+function hasInstalledThisSession() {
+  if (installedThisSession) return true;
+  try {
+    return sessionStorage.getItem(INSTALLED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markInstalled() {
+  installedThisSession = true;
+  try {
+    sessionStorage.setItem(INSTALLED_KEY, "1");
+  } catch {
+    // Ignore private-mode storage failures; in-memory flag still hides the UI.
+  }
+  promptEvent = null;
+  emitAll();
 }
 
 function onBeforeInstallPrompt(event: Event) {
   event.preventDefault();
   promptEvent = event as BeforeInstallPromptEvent;
-  emitPrompt();
+  emitAll();
 }
 
-function onAppInstalled() {
-  promptEvent = null;
-  emitPrompt();
-}
-
-function ensurePromptListeners() {
+function ensureInstallListeners() {
   if (listening || typeof window === "undefined") return;
   listening = true;
+  installedThisSession = hasInstalledThisSession();
   window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-  window.addEventListener("appinstalled", onAppInstalled);
+  window.addEventListener("appinstalled", markInstalled);
 }
 
 function subscribePrompt(onStoreChange: () => void) {
-  ensurePromptListeners();
+  ensureInstallListeners();
   promptListeners.add(onStoreChange);
   return () => {
     promptListeners.delete(onStoreChange);
@@ -63,16 +83,33 @@ function getPromptSnapshot() {
 }
 
 function subscribeStandalone(onStoreChange: () => void) {
+  ensureInstallListeners();
   const standaloneQuery = window.matchMedia("(display-mode: standalone)");
   const overlayQuery = window.matchMedia("(display-mode: window-controls-overlay)");
   standaloneQuery.addEventListener("change", onStoreChange);
   overlayQuery.addEventListener("change", onStoreChange);
-  window.addEventListener("appinstalled", onStoreChange);
+  standaloneListeners.add(onStoreChange);
   return () => {
     standaloneQuery.removeEventListener("change", onStoreChange);
     overlayQuery.removeEventListener("change", onStoreChange);
-    window.removeEventListener("appinstalled", onStoreChange);
+    standaloneListeners.delete(onStoreChange);
   };
+}
+
+function subscribeInstalled(onStoreChange: () => void) {
+  ensureInstallListeners();
+  standaloneListeners.add(onStoreChange);
+  return () => {
+    standaloneListeners.delete(onStoreChange);
+  };
+}
+
+function getStandaloneSnapshot() {
+  return isStandaloneDisplay(window);
+}
+
+function getInstalledSnapshot() {
+  return hasInstalledThisSession();
 }
 
 function useClientReady() {
@@ -83,8 +120,13 @@ export function usePwaInstall() {
   const ready = useClientReady();
   const standalone = useSyncExternalStore(
     subscribeStandalone,
-    () => isStandaloneDisplay(window),
+    getStandaloneSnapshot,
     () => true,
+  );
+  const installedThisSession = useSyncExternalStore(
+    subscribeInstalled,
+    getInstalledSnapshot,
+    () => false,
   );
   const ios = useSyncExternalStore(
     emptySubscribe,
@@ -100,9 +142,13 @@ export function usePwaInstall() {
   async function install() {
     if (!deferredPrompt) return;
     await deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
+    const choice = await deferredPrompt.userChoice;
+    if (choice.outcome === "accepted") {
+      markInstalled();
+      return;
+    }
     promptEvent = null;
-    emitPrompt();
+    emitAll();
   }
 
   return {
@@ -110,7 +156,7 @@ export function usePwaInstall() {
     standalone,
     ios,
     canPrompt: Boolean(deferredPrompt),
-    showHelp: shouldShowInstallHelp(ready, standalone),
+    showHelp: shouldShowInstallHelp(ready, standalone, installedThisSession),
     install,
   };
 }
