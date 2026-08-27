@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pg"],
   transpilePackages: ["html5-qrcode"],
   experimental: {
     proxyClientMaxBodySize: "12mb",

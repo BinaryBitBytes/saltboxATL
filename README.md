@@ -18,6 +18,21 @@ Demo accounts (password `saltbox123`) are seeded on first boot:
 
 Set `SESSION_SECRET` in production. If it is missing, the app writes a generated secret to `data/.session-secret`.
 
+## PostgreSQL
+
+Warehouse data (rooms, locations, on-hand items, orders, stock log, users, and photo metadata) is stored in PostgreSQL when `DATABASE_URL` is set. Photo image files stay under `data/photos/`.
+
+```bash
+docker compose up -d postgres
+cp .env.example .env
+npm run db:migrate
+npm run dev
+```
+
+Without `DATABASE_URL`, the app keeps using `data/inventory.json`. The first PostgreSQL boot imports that JSON file if it exists, otherwise it seeds demo rooms, bins, and accounts.
+
+Check storage with `GET /api/health`.
+
 ## Inventory spreadsheets
 
 On-hand inventory can be exported as a CSV spreadsheet from **Inventory**. Excel and Google Sheets open the file directly. Managers can import the same columns (`SKU`, `UPC`, `Description`, `Batch`, `Qty`, `Location`) to load existing stock:
