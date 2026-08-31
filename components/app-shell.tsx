@@ -17,7 +17,6 @@ import {
   UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
-import { logoutAction } from "@/backend/server/auth-actions";
 import { hasPermission, roleLabel, type Permission } from "@/lib/auth/permissions";
 import type { PublicUser } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
@@ -67,7 +66,7 @@ export function AppShell({
             <div className="flex items-center gap-1 sm:hidden">
               <ThemeToggle />
               <Badge variant="outline">{roleLabel(user.role)}</Badge>
-              <form action={logoutAction}>
+              <form action="/api/auth/logout" method="post">
                 <Button type="submit" variant="ghost" size="sm">
                   Sign out
                 </Button>
@@ -106,7 +105,7 @@ export function AppShell({
               {user.name}
             </span>
             <Badge variant="outline">{roleLabel(user.role)}</Badge>
-            <form action={logoutAction}>
+            <form action="/api/auth/logout" method="post">
               <Button type="submit" variant="ghost" size="sm">
                 Sign out
               </Button>
