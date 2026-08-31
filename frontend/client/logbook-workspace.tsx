@@ -214,7 +214,14 @@ export function LogbookWorkspace({
                               >
                                 <td className="px-2 py-2 font-medium">{line.sku}</td>
                                 <td className="px-2 py-2 text-muted-foreground">
-                                  {line.description || line.batch || "—"}
+                                  {[
+                                    line.description,
+                                    line.manufacturer,
+                                    line.color,
+                                    line.batch,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ") || "—"}
                                 </td>
                                 <td className="px-2 py-2">{line.location || "—"}</td>
                                 <td className="px-2 py-2 text-right">

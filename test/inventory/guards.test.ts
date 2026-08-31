@@ -72,6 +72,8 @@ describe("inventory control safeguards", () => {
             batch: null,
             quantityInCase: 12,
             description: "Fiber",
+            manufacturer: "",
+            color: null,
             fiber: null,
             putawayRoomId: null,
             putawayLocationId: null,

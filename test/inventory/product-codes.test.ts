@@ -151,6 +151,8 @@ describe("receiving product codes", () => {
       expect(parsed.data.upc).to.equal("");
       expect(parsed.data.generateSku).to.equal(true);
       expect(parsed.data.generateUpc).to.equal(true);
+      expect(parsed.data.manufacturer).to.equal("");
+      expect(parsed.data.color).to.equal(null);
     }
   });
 });

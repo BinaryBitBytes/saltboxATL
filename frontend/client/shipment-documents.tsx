@@ -79,6 +79,10 @@ export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
             { label: "Shipped", value: formatDateTime(doc.shippedAt) },
             { label: "Pallets", value: String(doc.palletCount) },
             { label: "Units", value: String(doc.totalUnits) },
+            {
+              label: "Tracking",
+              value: [...new Set(doc.lines.map((line) => line.trackingNumber).filter(Boolean))].join(", "),
+            },
           ]}
         />
         <table className="w-full border-collapse text-xs">
@@ -87,6 +91,8 @@ export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
               <th className="py-1 font-semibold">SKU</th>
               <th className="py-1 font-semibold">UPC</th>
               <th className="py-1 font-semibold">Description</th>
+              <th className="py-1 font-semibold">Manufacturer</th>
+              <th className="py-1 font-semibold">Color</th>
               <th className="py-1 font-semibold">Batch</th>
               <th className="py-1 font-semibold">From</th>
               <th className="py-1 text-right font-semibold">Qty</th>
@@ -95,7 +101,7 @@ export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
           <tbody>
             {doc.lines.length === 0 ? (
               <tr>
-                <td className="py-3 text-neutral-600" colSpan={6}>
+                <td className="py-3 text-neutral-600" colSpan={8}>
                   No packed lines on this shipment.
                 </td>
               </tr>
@@ -105,6 +111,8 @@ export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
                   <td className="py-1.5 font-medium">{line.sku}</td>
                   <td className="py-1.5">{line.upc}</td>
                   <td className="py-1.5">{line.description}</td>
+                  <td className="py-1.5">{line.manufacturer || "—"}</td>
+                  <td className="py-1.5">{line.color || "—"}</td>
                   <td className="py-1.5">{line.batch || "—"}</td>
                   <td className="py-1.5">{line.fromLocation}</td>
                   <td className="py-1.5 text-right">{line.quantity}</td>
@@ -153,6 +161,7 @@ export function LoadManifestSheet({ doc }: { doc: LoadManifestDocument }) {
           <section key={pallet.palletNumber} className="break-inside-avoid">
             <h3 className="font-heading text-sm font-semibold">
               Pallet {pallet.palletNumber}
+              {pallet.trackingNumber ? ` · ${pallet.trackingNumber}` : ""}
               <span className="ml-2 font-sans text-xs font-normal text-neutral-600">
                 {pallet.caseCount} case{pallet.caseCount === 1 ? "" : "s"} ·{" "}
                 {pallet.unitCount} unit{pallet.unitCount === 1 ? "" : "s"}
@@ -163,6 +172,8 @@ export function LoadManifestSheet({ doc }: { doc: LoadManifestDocument }) {
                 <tr className="border-b border-black text-left">
                   <th className="py-1 font-semibold">SKU</th>
                   <th className="py-1 font-semibold">Description</th>
+                  <th className="py-1 font-semibold">Manufacturer</th>
+                  <th className="py-1 font-semibold">Color</th>
                   <th className="py-1 font-semibold">From</th>
                   <th className="py-1 text-right font-semibold">Qty</th>
                 </tr>
@@ -172,6 +183,8 @@ export function LoadManifestSheet({ doc }: { doc: LoadManifestDocument }) {
                   <tr key={line.caseId} className="border-b border-neutral-300">
                     <td className="py-1.5 font-medium">{line.sku}</td>
                     <td className="py-1.5">{line.description}</td>
+                    <td className="py-1.5">{line.manufacturer || "—"}</td>
+                    <td className="py-1.5">{line.color || "—"}</td>
                     <td className="py-1.5">{line.fromLocation}</td>
                     <td className="py-1.5 text-right">{line.quantity}</td>
                   </tr>

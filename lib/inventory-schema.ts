@@ -8,6 +8,7 @@ import {
   LoginPasswordSchema,
   NonNegativeCountSchema,
   OptionalNotesSchema,
+  OptionalSafeTextSchema,
   PasswordSchema,
   PersonNameSchema,
   QuantitySchema,
@@ -31,7 +32,8 @@ import {
  * - PO_# → PurchaseOrder
  * - Order → ReceivingOrder
  * - Shipment_Contents.Pallet_Receiving / Current_Pallet_Working → Pallet[]
- * - Case_Item → CaseItem (including Is_Fiber_Item, Putaway_Room, Putaway_Location)
+ * - Case_Item → CaseItem (including Manufacturer, Color_of_Item, Is_Fiber_Item, Putaway_Room, Putaway_Location)
+ * - Current_Pallet_Working.Tracking_Number → Pallet.trackingNumber
  * - Outbound_Shipped → ShippingOrder
  * - Rooms / Locations → Room / Location
  */
@@ -84,6 +86,8 @@ export const CaseItemSchema = z.object({
   batch: z.string().trim().nullable().default(null),
   quantityInCase: QuantitySchema,
   description: DescriptionSchema,
+  manufacturer: OptionalSafeTextSchema,
+  color: z.string().trim().nullable().default(null),
   fiber: FiberItemSchema.nullable().default(null),
   putawayRoomId: UuidSchema.nullable().default(null),
   putawayLocationId: UuidSchema.nullable().default(null),
@@ -109,6 +113,14 @@ export const CaseItemInputSchema = CaseItemSchema.omit({
     .nullable()
     .optional()
     .transform((value) => (value === "" || value === undefined ? null : value)),
+  manufacturer: OptionalSafeTextSchema,
+  color: z
+    .string()
+    .trim()
+    .max(LIMITS.code)
+    .nullable()
+    .optional()
+    .transform((value) => (value === "" || value === undefined ? null : value)),
   fiber: FiberItemSchema.nullable().optional().default(null),
   putawayRoomId: UuidSchema.nullable().optional().default(null),
   putawayLocationId: UuidSchema.nullable().optional().default(null),
@@ -120,6 +132,7 @@ export type CaseItemInput = z.infer<typeof CaseItemInputSchema>;
 export const PalletSchema = z.object({
   id: UuidSchema,
   palletNumber: NonEmptyStringSchema,
+  trackingNumber: OptionalSafeTextSchema,
   isPartial: z.boolean().default(false),
   partialedBy: z.string().trim().nullable().default(null),
   expectedSkuCount: PositiveIntegerSchema.default(0),
@@ -132,6 +145,7 @@ export type Pallet = z.infer<typeof PalletSchema>;
 
 export const PalletInputSchema = z.object({
   palletNumber: NonEmptyStringSchema,
+  trackingNumber: OptionalSafeTextSchema,
   isPartial: z.boolean().default(false),
   partialedBy: z
     .string()
@@ -268,6 +282,7 @@ export const CreateShippingOrderInputSchema = z.object({
   shipmentNumber: NonEmptyStringSchema,
   carrierOutbound: NonEmptyStringSchema,
   shipperName: PersonNameSchema,
+  trackingNumber: OptionalSafeTextSchema,
   notes: OptionalNotesSchema,
   createdBy: z.string().optional(),
   picks: z.array(ShippingPickSchema).min(1),

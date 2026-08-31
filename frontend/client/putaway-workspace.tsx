@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import { formatCaseItemLine, formatPalletHeading } from "@/lib/format";
 import { LIMITS } from "@/lib/validation/limits";
 
 function ErrorText({ error }: { error: string | null }) {
@@ -87,8 +88,7 @@ export function PutawayWorkspace({
                 className="rounded-lg border border-border px-3 py-3"
               >
                 <p className="text-sm font-medium">
-                  Pallet {pallet.palletNumber}
-                  {pallet.isPartial ? " · partial" : ""}
+                  {formatPalletHeading(pallet)}
                 </p>
                 <ul className="mt-2 grid gap-3">
                   {pallet.cases.map((item) => (
@@ -104,7 +104,7 @@ export function PutawayWorkspace({
                         />
                       ) : (
                         <p className="text-xs text-muted-foreground">
-                          {item.sku} · UPC {item.upc} · qty {item.quantityInCase}
+                          {formatCaseItemLine(item)}
                           {" · "}
                           {isCasePutawayPosted(item)
                             ? "on-hand"
@@ -185,9 +185,7 @@ function PutawayCaseRow({
 
   return (
     <div className="grid gap-2 rounded-md border border-border px-2 py-2">
-      <p className="text-xs">
-        {item.sku} · UPC {item.upc} · qty {item.quantityInCase}
-      </p>
+      <p className="text-xs">{formatCaseItemLine(item)}</p>
       <p className="text-xs text-muted-foreground">{item.description}</p>
       <div className="grid gap-2 sm:grid-cols-2">
         <Field label="Room">

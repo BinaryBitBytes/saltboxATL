@@ -27,3 +27,37 @@ export function uniqueSkuCount(items: { sku: string }[]): number {
 export function formatSignedInt(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
+
+export function formatPalletHeading(pallet: {
+  palletNumber: string;
+  isPartial?: boolean;
+  trackingNumber?: string;
+}): string {
+  const parts = [`Pallet ${pallet.palletNumber}`];
+  if (pallet.isPartial) parts.push("partial");
+  if (pallet.trackingNumber) parts.push(`tracking ${pallet.trackingNumber}`);
+  return parts.join(" · ");
+}
+
+export function formatCaseItemLine(item: {
+  sku: string;
+  upc: string;
+  quantityInCase: number;
+  manufacturer?: string;
+  color?: string | null;
+  fiber?: {
+    isFiber?: boolean;
+    connectionType?: string | null;
+    strandCount?: number | null;
+  } | null;
+}): string {
+  const parts = [item.sku, `UPC ${item.upc}`, `qty ${item.quantityInCase}`];
+  if (item.manufacturer) parts.push(item.manufacturer);
+  if (item.color) parts.push(item.color);
+  if (item.fiber?.isFiber) {
+    parts.push(
+      `fiber ${item.fiber.connectionType ?? ""} ${item.fiber.strandCount ?? ""}ct`.trim(),
+    );
+  }
+  return parts.join(" · ");
+}

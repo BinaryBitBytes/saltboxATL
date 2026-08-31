@@ -13,6 +13,8 @@ export type LogbookKind = "shipment" | "delivery" | "damage";
 export type LogbookLine = {
   sku: string;
   description?: string;
+  manufacturer?: string;
+  color?: string | null;
   quantity: number;
   location?: string;
   batch?: string | null;
@@ -55,8 +57,12 @@ export function buildLogbookEntries(input: {
       pallet.cases.map((item) => ({
         sku: item.sku,
         description: item.description,
+        manufacturer: item.manufacturer,
+        color: item.color,
         quantity: item.quantityInCase,
-        location: pallet.palletNumber,
+        location: pallet.trackingNumber
+          ? `${pallet.palletNumber} · ${pallet.trackingNumber}`
+          : pallet.palletNumber,
         batch: item.batch,
       })),
     );
@@ -99,8 +105,12 @@ export function buildLogbookEntries(input: {
       lines: packSlip.lines.map((line) => ({
         sku: line.sku,
         description: line.description,
+        manufacturer: line.manufacturer,
+        color: line.color,
         quantity: line.quantity,
-        location: line.fromLocation,
+        location: line.trackingNumber
+          ? `${line.fromLocation} · ${line.trackingNumber}`
+          : line.fromLocation,
         batch: line.batch,
       })),
       totals: {

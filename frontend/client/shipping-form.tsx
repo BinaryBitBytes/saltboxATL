@@ -28,6 +28,7 @@ const ShippingHeaderSchema = z.object({
   shipmentNumber: NonEmptyStringSchema,
   carrierOutbound: NonEmptyStringSchema,
   shipperName: NonEmptyStringSchema,
+  trackingNumber: z.string(),
   notes: z.string().optional(),
 });
 
@@ -55,6 +56,7 @@ export function ShippingForm({
       shipmentNumber: "",
       carrierOutbound: "",
       shipperName: defaultShipperName,
+      trackingNumber: "",
       notes: "",
     },
   });
@@ -139,6 +141,13 @@ export function ShippingForm({
           error={form.formState.errors.shipperName?.message}
         >
           <Input id="shipperName" {...form.register("shipperName")} />
+        </Field>
+        <Field
+          label="Tracking number"
+          htmlFor="trackingNumber"
+          error={form.formState.errors.trackingNumber?.message}
+        >
+          <Input id="trackingNumber" {...form.register("trackingNumber")} />
         </Field>
       </div>
       <Field label="Notes" htmlFor="notes">

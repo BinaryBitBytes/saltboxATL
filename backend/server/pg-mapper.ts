@@ -1,14 +1,15 @@
-import type {
-  InventoryItem,
-  InventorySystem,
-  InventoryTransaction,
-  Location,
-  PhotoAttachment,
-  PurchaseOrder,
-  ReceivingOrder,
-  Room,
-  ShippingOrder,
-  User,
+import {
+  PalletSchema,
+  type InventoryItem,
+  type InventorySystem,
+  type InventoryTransaction,
+  type Location,
+  type PhotoAttachment,
+  type PurchaseOrder,
+  type ReceivingOrder,
+  type Room,
+  type ShippingOrder,
+  type User,
 } from "@/lib/inventory-schema";
 
 export function iso(value: Date | string | null | undefined): string | undefined {
@@ -201,7 +202,7 @@ export function mapReceivingOrder(row: {
   reopened_at: Date | string | null;
   reopened_by: string | null;
   working_pallet_id: string | null;
-  pallets: ReceivingOrder["pallets"];
+  pallets: unknown;
   notes: string | null;
   created_at: Date | string | null;
   updated_at: Date | string | null;
@@ -223,7 +224,7 @@ export function mapReceivingOrder(row: {
     reopenedAt: iso(row.reopened_at),
     reopenedBy: row.reopened_by ?? undefined,
     workingPalletId: row.working_pallet_id,
-    pallets: row.pallets ?? [],
+    pallets: PalletSchema.array().parse(row.pallets ?? []),
     notes: row.notes ?? undefined,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -242,7 +243,7 @@ export function mapShippingOrder(row: {
   waiting_on_items: boolean;
   items_in_jeopardy: string[];
   status: ShippingOrder["status"];
-  pallets: ShippingOrder["pallets"];
+  pallets: unknown;
   notes: string | null;
   created_at: Date | string | null;
   updated_at: Date | string | null;
@@ -259,7 +260,7 @@ export function mapShippingOrder(row: {
     waitingOnItems: row.waiting_on_items,
     itemsInJeopardy: row.items_in_jeopardy ?? [],
     status: row.status,
-    pallets: row.pallets ?? [],
+    pallets: PalletSchema.array().parse(row.pallets ?? []),
     notes: row.notes ?? undefined,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),

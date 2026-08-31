@@ -6,10 +6,13 @@ export type ShipmentLine = {
   sku: string;
   upc: string;
   description: string;
+  manufacturer: string;
+  color: string | null;
   batch: string | null;
   quantity: number;
   fromLocation: string;
   palletNumber: string;
+  trackingNumber: string;
 };
 
 export type PackSlipDocument = {
@@ -30,6 +33,7 @@ export type PackSlipDocument = {
 
 export type ManifestPallet = {
   palletNumber: string;
+  trackingNumber: string;
   caseCount: number;
   skuCount: number;
   unitCount: number;
@@ -64,12 +68,15 @@ export function shipmentLines(
       sku: item.sku,
       upc: item.upc,
       description: item.description,
+      manufacturer: item.manufacturer ?? "",
+      color: item.color ?? null,
       batch: item.batch,
       quantity: item.quantityInCase,
       fromLocation: item.putawayLocationId
         ? (locationCodes.get(item.putawayLocationId) ?? item.putawayLocationId)
         : "—",
       palletNumber: pallet.palletNumber,
+      trackingNumber: pallet.trackingNumber ?? "",
     })),
   );
 }
@@ -106,15 +113,19 @@ export function buildLoadManifest(
       sku: item.sku,
       upc: item.upc,
       description: item.description,
+      manufacturer: item.manufacturer ?? "",
+      color: item.color ?? null,
       batch: item.batch,
       quantity: item.quantityInCase,
       fromLocation: item.putawayLocationId
         ? (locationCodes.get(item.putawayLocationId) ?? item.putawayLocationId)
         : "—",
       palletNumber: pallet.palletNumber,
+      trackingNumber: pallet.trackingNumber ?? "",
     }));
     return {
       palletNumber: pallet.palletNumber,
+      trackingNumber: pallet.trackingNumber ?? "",
       caseCount: lines.length,
       skuCount: uniqueSkuCount(lines),
       unitCount: lines.reduce((sum, line) => sum + line.quantity, 0),

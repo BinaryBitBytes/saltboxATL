@@ -37,6 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import { formatCaseItemLine, formatPalletHeading } from "@/lib/format";
 import { LIMITS } from "@/lib/validation/limits";
 import { useReceivingSession } from "@/frontend/client/receiving-session";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,7 @@ import { buildInboundLabels } from "@/lib/labels/build-labels";
 
 const PalletFormSchema = z.object({
   palletNumber: z.string().trim().min(1),
+  trackingNumber: z.string(),
   isPartial: z.boolean(),
   partialedBy: z.string().nullable(),
   expectedSkuCount: z.number().int().min(0),
@@ -65,6 +67,8 @@ const CaseFormSchema = z
     batch: z.string().nullable(),
     quantityInCase: z.number().int().min(1),
     description: z.string().trim().min(1, "Enter a case / item description."),
+    manufacturer: z.string(),
+    color: z.string().nullable(),
     isFiber: z.boolean(),
     connectionType: z.string().nullable(),
     strandCount: z.number().nullable(),
@@ -107,6 +111,8 @@ function emptyCaseValues(): CaseFormValues {
     batch: null,
     quantityInCase: 1,
     description: "",
+    manufacturer: "",
+    color: null,
     isFiber: false,
     connectionType: null,
     strandCount: null,
@@ -123,6 +129,8 @@ function valuesFromCase(item: CaseItem): CaseFormValues {
     batch: item.batch,
     quantityInCase: item.quantityInCase,
     description: item.description,
+    manufacturer: item.manufacturer ?? "",
+    color: item.color,
     isFiber: Boolean(item.fiber?.isFiber),
     connectionType: item.fiber?.connectionType ?? null,
     strandCount: item.fiber?.strandCount ?? null,
@@ -312,8 +320,7 @@ function PalletCard({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-medium">
-            Pallet {pallet.palletNumber}
-            {pallet.isPartial ? " · partial" : ""}
+            {formatPalletHeading(pallet)}
             {isWorking ? " · working" : ""}
           </p>
           <p className="text-xs text-muted-foreground">
@@ -333,12 +340,7 @@ function PalletCard({
               )}
             >
               <div className="min-w-0 text-muted-foreground">
-                <p>
-                  {item.sku} · UPC {item.upc} · qty {item.quantityInCase}
-                  {item.fiber?.isFiber
-                    ? ` · fiber ${item.fiber.connectionType ?? ""} ${item.fiber.strandCount ?? ""}ct`
-                    : ""}
-                </p>
+                <p>{formatCaseItemLine(item)}</p>
                 <p>{item.description}</p>
               </div>
               {editable && !isCasePutawayPosted(item) ? (
@@ -406,6 +408,7 @@ function AddPalletForm({ orderId }: { orderId: string }) {
     resolver: zodResolver(PalletFormSchema),
     defaultValues: {
       palletNumber: "",
+      trackingNumber: "",
       isPartial: false,
       partialedBy: null,
       expectedSkuCount: 0,
@@ -439,6 +442,7 @@ function AddPalletForm({ orderId }: { orderId: string }) {
               if (pallet) setWorking(orderId, pallet.id);
               form.reset({
                 palletNumber: "",
+                trackingNumber: "",
                 isPartial: false,
                 partialedBy: null,
                 expectedSkuCount: 0,
@@ -454,6 +458,13 @@ function AddPalletForm({ orderId }: { orderId: string }) {
             error={form.formState.errors.palletNumber?.message}
           >
             <Input id="palletNumber" {...form.register("palletNumber")} />
+          </Field>
+          <Field
+            label="Tracking number"
+            htmlFor="trackingNumber"
+            error={form.formState.errors.trackingNumber?.message}
+          >
+            <Input id="trackingNumber" {...form.register("trackingNumber")} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field
@@ -656,6 +667,8 @@ function WorkingCaseForm({
                 batch: values.batch,
                 quantityInCase: Number(values.quantityInCase),
                 description: values.description,
+                manufacturer: values.manufacturer,
+                color: values.color,
                 fiber: values.isFiber
                   ? {
                       isFiber: true,
@@ -760,6 +773,16 @@ function WorkingCaseForm({
             </Field>
             <Field label="Batch" htmlFor="batch">
               <Input id="batch" {...form.register("batch")} />
+            </Field>
+            <Field
+              label="Manufacturer"
+              htmlFor="manufacturer"
+              error={form.formState.errors.manufacturer?.message}
+            >
+              <Input id="manufacturer" {...form.register("manufacturer")} />
+            </Field>
+            <Field label="Color" htmlFor="color">
+              <Input id="color" {...form.register("color")} />
             </Field>
             <Field
               label="Quantity in case"
