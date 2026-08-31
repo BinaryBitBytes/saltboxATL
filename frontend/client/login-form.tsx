@@ -1,16 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import {
-  loginAction,
-  recoverUsernameAction,
-  registerAction,
-  resetPasswordAction,
-  type LoginState,
-  type RecoverUsernameState,
-  type RegisterState,
-  type ResetPasswordState,
-} from "@/backend/server/auth-actions";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,13 +11,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field } from "@/frontend/client/field";
+import { PasswordInput } from "@/frontend/client/password-input";
+import { postAuth } from "@/frontend/client/auth-api";
+import {
+  LoginInputSchema,
+  RecoverUsernameInputSchema,
+  RegisterInputSchema,
+  ResetPasswordInputSchema,
+} from "@/lib/inventory-schema";
+import { flattenError } from "zod";
+
+type FieldErrors = Record<string, string[] | undefined>;
 
 type AuthPanel = "signin" | "register" | "recover-username" | "reset-password";
-
-const initialLogin: LoginState = {};
-const initialRegister: RegisterState = {};
-const initialRecover: RecoverUsernameState = {};
-const initialReset: ResetPasswordState = {};
 
 const PANEL_COPY: Record<
   AuthPanel,
@@ -118,15 +114,44 @@ function SignInForm({
   from: string;
   onChangePanel: (panel: AuthPanel) => void;
 }) {
-  const [state, action, pending] = useActionState(loginAction, initialLogin);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setFieldErrors(undefined);
+    const form = new FormData(event.currentTarget);
+    const parsed = LoginInputSchema.safeParse({
+      identifier: form.get("identifier"),
+      password: form.get("password"),
+    });
+    if (!parsed.success) {
+      const { fieldErrors: next } = flattenError(parsed.error);
+      setFieldErrors({
+        identifier: next.identifier,
+        password: next.password,
+      });
+      setError("Enter a valid username or email and password.");
+      return;
+    }
+    setPending(true);
+    const result = await postAuth("/api/auth/login", parsed.data);
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    window.location.assign(from || "/");
+  }
 
   return (
-    <form action={action} className="grid gap-4">
-      <input type="hidden" name="from" value={from} />
+    <form method="post" onSubmit={onSubmit} className="grid gap-4">
       <Field
         label="Username or email"
         htmlFor="identifier"
-        error={state.fieldErrors?.identifier?.[0] ?? state.fieldErrors?.email?.[0]}
+        error={fieldErrors?.identifier?.[0] ?? fieldErrors?.email?.[0]}
       >
         <Input
           id="identifier"
@@ -140,19 +165,16 @@ function SignInForm({
       <Field
         label="Password"
         htmlFor="password"
-        error={state.fieldErrors?.password?.[0]}
+        error={fieldErrors?.password?.[0]}
       >
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
         />
       </Field>
-      {state.error ? (
-        <p className="text-xs text-destructive">{state.error}</p>
-      ) : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
@@ -180,12 +202,47 @@ function RegisterForm({
   from: string;
   onChangePanel: (panel: AuthPanel) => void;
 }) {
-  const [state, action, pending] = useActionState(registerAction, initialRegister);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setFieldErrors(undefined);
+    const form = new FormData(event.currentTarget);
+    const parsed = RegisterInputSchema.safeParse({
+      name: form.get("name"),
+      username: form.get("username"),
+      email: form.get("email"),
+      password: form.get("password"),
+      confirmPassword: form.get("confirmPassword"),
+    });
+    if (!parsed.success) {
+      const { fieldErrors: next } = flattenError(parsed.error);
+      setFieldErrors({
+        name: next.name,
+        username: next.username,
+        email: next.email,
+        password: next.password,
+        confirmPassword: next.confirmPassword,
+      });
+      setError("Check the highlighted fields and try again.");
+      return;
+    }
+    setPending(true);
+    const result = await postAuth("/api/auth/register", parsed.data);
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    window.location.assign(from || "/");
+  }
 
   return (
-    <form action={action} className="grid gap-4">
-      <input type="hidden" name="from" value={from} />
-      <Field label="Full name" htmlFor="register-name" error={state.fieldErrors?.name?.[0]}>
+    <form method="post" onSubmit={onSubmit} className="grid gap-4">
+      <Field label="Full name" htmlFor="register-name" error={fieldErrors?.name?.[0]}>
         <Input
           id="register-name"
           name="name"
@@ -197,7 +254,7 @@ function RegisterForm({
       <Field
         label="Username"
         htmlFor="register-username"
-        error={state.fieldErrors?.username?.[0]}
+        error={fieldErrors?.username?.[0]}
       >
         <Input
           id="register-username"
@@ -209,7 +266,7 @@ function RegisterForm({
           maxLength={32}
         />
       </Field>
-      <Field label="Email" htmlFor="register-email" error={state.fieldErrors?.email?.[0]}>
+      <Field label="Email" htmlFor="register-email" error={fieldErrors?.email?.[0]}>
         <Input
           id="register-email"
           name="email"
@@ -222,12 +279,11 @@ function RegisterForm({
       <Field
         label="Password"
         htmlFor="register-password"
-        error={state.fieldErrors?.password?.[0]}
+        error={fieldErrors?.password?.[0]}
       >
-        <Input
+        <PasswordInput
           id="register-password"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           minLength={8}
@@ -236,12 +292,11 @@ function RegisterForm({
       <Field
         label="Confirm password"
         htmlFor="register-confirm"
-        error={state.fieldErrors?.confirmPassword?.[0]}
+        error={fieldErrors?.confirmPassword?.[0]}
       >
-        <Input
+        <PasswordInput
           id="register-confirm"
           name="confirmPassword"
-          type="password"
           autoComplete="new-password"
           required
           minLength={8}
@@ -251,9 +306,7 @@ function RegisterForm({
         Username: 3–32 characters, start with a letter. Password: at least 8 characters,
         with a letter and a number.
       </p>
-      {state.error ? (
-        <p className="text-xs text-destructive">{state.error}</p>
-      ) : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Creating account…" : "Create account"}
       </Button>
@@ -270,17 +323,46 @@ function RecoverUsernameForm({
 }: {
   onChangePanel: (panel: AuthPanel) => void;
 }) {
-  const [state, action, pending] = useActionState(
-    recoverUsernameAction,
-    initialRecover,
-  );
+  const [error, setError] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | undefined>();
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setUsername(undefined);
+    setFieldErrors(undefined);
+    const form = new FormData(event.currentTarget);
+    const parsed = RecoverUsernameInputSchema.safeParse({
+      name: form.get("name"),
+      email: form.get("email"),
+    });
+    if (!parsed.success) {
+      const { fieldErrors: next } = flattenError(parsed.error);
+      setFieldErrors({ name: next.name, email: next.email });
+      setError("Enter the name and email on the account.");
+      return;
+    }
+    setPending(true);
+    const result = await postAuth<{ username: string }>(
+      "/api/auth/recover-username",
+      parsed.data,
+    );
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setUsername(result.data.username);
+  }
 
   return (
-    <form action={action} className="grid gap-4">
-      <Field label="Full name" htmlFor="recover-name" error={state.fieldErrors?.name?.[0]}>
+    <form method="post" onSubmit={onSubmit} className="grid gap-4">
+      <Field label="Full name" htmlFor="recover-name" error={fieldErrors?.name?.[0]}>
         <Input id="recover-name" name="name" autoComplete="name" required />
       </Field>
-      <Field label="Email" htmlFor="recover-email" error={state.fieldErrors?.email?.[0]}>
+      <Field label="Email" htmlFor="recover-email" error={fieldErrors?.email?.[0]}>
         <Input
           id="recover-email"
           name="email"
@@ -289,14 +371,12 @@ function RecoverUsernameForm({
           required
         />
       </Field>
-      {state.username ? (
+      {username ? (
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-          Your username is <span className="font-medium">{state.username}</span>.
+          Your username is <span className="font-medium">{username}</span>.
         </p>
       ) : null}
-      {state.error ? (
-        <p className="text-xs text-destructive">{state.error}</p>
-      ) : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Looking up…" : "Recover username"}
       </Button>
@@ -315,12 +395,46 @@ function ResetPasswordForm({
 }: {
   onChangePanel: (panel: AuthPanel) => void;
 }) {
-  const [state, action, pending] = useActionState(
-    resetPasswordAction,
-    initialReset,
-  );
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
+  const [pending, setPending] = useState(false);
 
-  if (state.success) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setFieldErrors(undefined);
+    const form = new FormData(event.currentTarget);
+    const parsed = ResetPasswordInputSchema.safeParse({
+      name: form.get("name"),
+      username: form.get("username"),
+      email: form.get("email"),
+      password: form.get("password"),
+      confirmPassword: form.get("confirmPassword"),
+    });
+    if (!parsed.success) {
+      const { fieldErrors: next } = flattenError(parsed.error);
+      setFieldErrors({
+        name: next.name,
+        username: next.username,
+        email: next.email,
+        password: next.password,
+        confirmPassword: next.confirmPassword,
+      });
+      setError("Check the highlighted fields and try again.");
+      return;
+    }
+    setPending(true);
+    const result = await postAuth("/api/auth/reset-password", parsed.data);
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setSuccess(true);
+  }
+
+  if (success) {
     return (
       <div className="grid gap-4">
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
@@ -334,14 +448,14 @@ function ResetPasswordForm({
   }
 
   return (
-    <form action={action} className="grid gap-4">
-      <Field label="Full name" htmlFor="reset-name" error={state.fieldErrors?.name?.[0]}>
+    <form method="post" onSubmit={onSubmit} className="grid gap-4">
+      <Field label="Full name" htmlFor="reset-name" error={fieldErrors?.name?.[0]}>
         <Input id="reset-name" name="name" autoComplete="name" required />
       </Field>
       <Field
         label="Username"
         htmlFor="reset-username"
-        error={state.fieldErrors?.username?.[0]}
+        error={fieldErrors?.username?.[0]}
       >
         <Input
           id="reset-username"
@@ -350,7 +464,7 @@ function ResetPasswordForm({
           required
         />
       </Field>
-      <Field label="Email" htmlFor="reset-email" error={state.fieldErrors?.email?.[0]}>
+      <Field label="Email" htmlFor="reset-email" error={fieldErrors?.email?.[0]}>
         <Input
           id="reset-email"
           name="email"
@@ -362,12 +476,11 @@ function ResetPasswordForm({
       <Field
         label="New password"
         htmlFor="reset-password"
-        error={state.fieldErrors?.password?.[0]}
+        error={fieldErrors?.password?.[0]}
       >
-        <Input
+        <PasswordInput
           id="reset-password"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           minLength={8}
@@ -376,20 +489,17 @@ function ResetPasswordForm({
       <Field
         label="Confirm new password"
         htmlFor="reset-confirm"
-        error={state.fieldErrors?.confirmPassword?.[0]}
+        error={fieldErrors?.confirmPassword?.[0]}
       >
-        <Input
+        <PasswordInput
           id="reset-confirm"
           name="confirmPassword"
-          type="password"
           autoComplete="new-password"
           required
           minLength={8}
         />
       </Field>
-      {state.error ? (
-        <p className="text-xs text-destructive">{state.error}</p>
-      ) : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Updating password…" : "Reset password"}
       </Button>

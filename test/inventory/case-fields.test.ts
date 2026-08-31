@@ -37,6 +37,27 @@ describe("case and working pallet schema fields", () => {
     expect(pallet.trackingNumber).to.equal("");
   });
 
+  it("coerces null manufacturer, color, and tracking number from stored JSON", () => {
+    const item = CaseItemSchema.parse({
+      id: caseId,
+      upc: "010000000001",
+      sku: "FBR-LC-12-100",
+      quantityInCase: 12,
+      description: "LC 12ct fiber",
+      manufacturer: null,
+      color: null,
+    });
+    expect(item.manufacturer).to.equal("");
+    expect(item.color).to.equal(null);
+
+    const pallet = PalletSchema.parse({
+      id: palletId,
+      palletNumber: "P1",
+      trackingNumber: null,
+    });
+    expect(pallet.trackingNumber).to.equal("");
+  });
+
   it("accepts manufacturer, nullable color, and tracking number on inputs", () => {
     const caseInput = CaseItemInputSchema.parse({
       description: "LC 12ct fiber",

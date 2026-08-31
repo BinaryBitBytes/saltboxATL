@@ -67,7 +67,14 @@ export async function authenticateUser(
   }
 
   const loginId = parsed.data.identifier;
-  const system = await readSystem();
+  let system;
+  try {
+    system = await readSystem();
+  } catch {
+    throw new ServiceError(
+      "Unable to load accounts right now. Try signing in again.",
+    );
+  }
   const user = findUserByLoginIdentifier(system.users, loginId);
   const lockKeys = user ? accountLoginLockKeys(user, loginId) : [loginId];
   for (const key of lockKeys) {

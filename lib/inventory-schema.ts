@@ -87,7 +87,10 @@ export const CaseItemSchema = z.object({
   quantityInCase: QuantitySchema,
   description: DescriptionSchema,
   manufacturer: OptionalSafeTextSchema,
-  color: z.string().trim().nullable().default(null),
+  color: z.preprocess(
+    (value) => (value === "" || value === undefined ? null : value),
+    z.string().trim().max(LIMITS.code).nullable(),
+  ),
   fiber: FiberItemSchema.nullable().default(null),
   putawayRoomId: UuidSchema.nullable().default(null),
   putawayLocationId: UuidSchema.nullable().default(null),

@@ -4,6 +4,7 @@ import {
   type InventorySystem,
   type InventoryTransaction,
   type Location,
+  type Pallet,
   type PhotoAttachment,
   type PurchaseOrder,
   type ReceivingOrder,
@@ -11,6 +12,33 @@ import {
   type ShippingOrder,
   type User,
 } from "@/lib/inventory-schema";
+
+export function parseStoredPallets(raw: unknown): Pallet[] {
+  const parsed = PalletSchema.array().safeParse(raw ?? []);
+  if (parsed.success) return parsed.data;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as Record<string, unknown>;
+    const cases = Array.isArray(row.cases)
+      ? row.cases.map((item) => {
+          if (!item || typeof item !== "object") return item;
+          const caseRow = item as Record<string, unknown>;
+          return {
+            ...caseRow,
+            manufacturer: caseRow.manufacturer ?? "",
+            color: caseRow.color === undefined ? null : caseRow.color,
+          };
+        })
+      : [];
+    const one = PalletSchema.safeParse({
+      ...row,
+      trackingNumber: row.trackingNumber ?? "",
+      cases,
+    });
+    return one.success ? [one.data] : [];
+  });
+}
 
 export function iso(value: Date | string | null | undefined): string | undefined {
   if (value == null) return undefined;
@@ -224,7 +252,7 @@ export function mapReceivingOrder(row: {
     reopenedAt: iso(row.reopened_at),
     reopenedBy: row.reopened_by ?? undefined,
     workingPalletId: row.working_pallet_id,
-    pallets: PalletSchema.array().parse(row.pallets ?? []),
+    pallets: parseStoredPallets(row.pallets),
     notes: row.notes ?? undefined,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -260,7 +288,7 @@ export function mapShippingOrder(row: {
     waitingOnItems: row.waiting_on_items,
     itemsInJeopardy: row.items_in_jeopardy ?? [],
     status: row.status,
-    pallets: PalletSchema.array().parse(row.pallets ?? []),
+    pallets: parseStoredPallets(row.pallets),
     notes: row.notes ?? undefined,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
