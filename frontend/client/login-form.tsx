@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { inputClassName } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -20,6 +20,48 @@ import {
   ResetPasswordInputSchema,
 } from "@/lib/inventory-schema";
 import { flattenError } from "zod";
+import { cn } from "@/lib/utils";
+
+function AuthTextInput({
+  id,
+  name,
+  type = "text",
+  autoComplete,
+  required,
+  minLength,
+  maxLength,
+  placeholder,
+  value,
+  onChange,
+}: {
+  id: string;
+  name: string;
+  type?: string;
+  autoComplete?: string;
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      id={id}
+      name={name}
+      type={type}
+      autoComplete={autoComplete}
+      required={required}
+      minLength={minLength}
+      maxLength={maxLength}
+      placeholder={placeholder}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onInput={(event) => onChange(event.currentTarget.value)}
+      className={cn(inputClassName)}
+    />
+  );
+}
 
 type FieldErrors = Record<string, string[] | undefined>;
 
@@ -117,15 +159,16 @@ function SignInForm({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setFieldErrors(undefined);
-    const form = new FormData(event.currentTarget);
     const parsed = LoginInputSchema.safeParse({
-      identifier: form.get("identifier"),
-      password: form.get("password"),
+      identifier,
+      password,
     });
     if (!parsed.success) {
       const { fieldErrors: next } = flattenError(parsed.error);
@@ -147,19 +190,20 @@ function SignInForm({
   }
 
   return (
-    <form method="post" onSubmit={onSubmit} className="grid gap-4">
+    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
       <Field
         label="Username or email"
         htmlFor="identifier"
         error={fieldErrors?.identifier?.[0] ?? fieldErrors?.email?.[0]}
       >
-        <Input
+        <AuthTextInput
           id="identifier"
           name="identifier"
-          type="text"
           autoComplete="username"
           placeholder="manager or manager@saltbox.local"
           required
+          value={identifier}
+          onChange={setIdentifier}
         />
       </Field>
       <Field
@@ -172,6 +216,8 @@ function SignInForm({
           name="password"
           autoComplete="current-password"
           required
+          value={password}
+          onChange={setPassword}
         />
       </Field>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
@@ -205,18 +251,22 @@ function RegisterForm({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setFieldErrors(undefined);
-    const form = new FormData(event.currentTarget);
     const parsed = RegisterInputSchema.safeParse({
-      name: form.get("name"),
-      username: form.get("username"),
-      email: form.get("email"),
-      password: form.get("password"),
-      confirmPassword: form.get("confirmPassword"),
+      name,
+      username,
+      email,
+      password,
+      confirmPassword,
     });
     if (!parsed.success) {
       const { fieldErrors: next } = flattenError(parsed.error);
@@ -241,14 +291,16 @@ function RegisterForm({
   }
 
   return (
-    <form method="post" onSubmit={onSubmit} className="grid gap-4">
+    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
       <Field label="Full name" htmlFor="register-name" error={fieldErrors?.name?.[0]}>
-        <Input
+        <AuthTextInput
           id="register-name"
           name="name"
           autoComplete="name"
           placeholder="Casey New"
           required
+          value={name}
+          onChange={setName}
         />
       </Field>
       <Field
@@ -256,7 +308,7 @@ function RegisterForm({
         htmlFor="register-username"
         error={fieldErrors?.username?.[0]}
       >
-        <Input
+        <AuthTextInput
           id="register-username"
           name="username"
           autoComplete="username"
@@ -264,16 +316,20 @@ function RegisterForm({
           required
           minLength={3}
           maxLength={32}
+          value={username}
+          onChange={setUsername}
         />
       </Field>
       <Field label="Email" htmlFor="register-email" error={fieldErrors?.email?.[0]}>
-        <Input
+        <AuthTextInput
           id="register-email"
           name="email"
           type="email"
           autoComplete="email"
           placeholder="casey@saltbox.local"
           required
+          value={email}
+          onChange={setEmail}
         />
       </Field>
       <Field
@@ -287,6 +343,8 @@ function RegisterForm({
           autoComplete="new-password"
           required
           minLength={8}
+          value={password}
+          onChange={setPassword}
         />
       </Field>
       <Field
@@ -300,6 +358,8 @@ function RegisterForm({
           autoComplete="new-password"
           required
           minLength={8}
+          value={confirmPassword}
+          onChange={setConfirmPassword}
         />
       </Field>
       <p className="text-[0.625rem] text-muted-foreground">
@@ -327,16 +387,17 @@ function RecoverUsernameForm({
   const [username, setUsername] = useState<string | undefined>();
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setUsername(undefined);
     setFieldErrors(undefined);
-    const form = new FormData(event.currentTarget);
     const parsed = RecoverUsernameInputSchema.safeParse({
-      name: form.get("name"),
-      email: form.get("email"),
+      name,
+      email,
     });
     if (!parsed.success) {
       const { fieldErrors: next } = flattenError(parsed.error);
@@ -358,17 +419,26 @@ function RecoverUsernameForm({
   }
 
   return (
-    <form method="post" onSubmit={onSubmit} className="grid gap-4">
+    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
       <Field label="Full name" htmlFor="recover-name" error={fieldErrors?.name?.[0]}>
-        <Input id="recover-name" name="name" autoComplete="name" required />
+        <AuthTextInput
+          id="recover-name"
+          name="name"
+          autoComplete="name"
+          required
+          value={name}
+          onChange={setName}
+        />
       </Field>
       <Field label="Email" htmlFor="recover-email" error={fieldErrors?.email?.[0]}>
-        <Input
+        <AuthTextInput
           id="recover-email"
           name="email"
           type="email"
           autoComplete="email"
           required
+          value={email}
+          onChange={setEmail}
         />
       </Field>
       {username ? (
@@ -399,18 +469,22 @@ function ResetPasswordForm({
   const [success, setSuccess] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setFieldErrors(undefined);
-    const form = new FormData(event.currentTarget);
     const parsed = ResetPasswordInputSchema.safeParse({
-      name: form.get("name"),
-      username: form.get("username"),
-      email: form.get("email"),
-      password: form.get("password"),
-      confirmPassword: form.get("confirmPassword"),
+      name,
+      username,
+      email,
+      password,
+      confirmPassword,
     });
     if (!parsed.success) {
       const { fieldErrors: next } = flattenError(parsed.error);
@@ -448,29 +522,40 @@ function ResetPasswordForm({
   }
 
   return (
-    <form method="post" onSubmit={onSubmit} className="grid gap-4">
+    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
       <Field label="Full name" htmlFor="reset-name" error={fieldErrors?.name?.[0]}>
-        <Input id="reset-name" name="name" autoComplete="name" required />
+        <AuthTextInput
+          id="reset-name"
+          name="name"
+          autoComplete="name"
+          required
+          value={name}
+          onChange={setName}
+        />
       </Field>
       <Field
         label="Username"
         htmlFor="reset-username"
         error={fieldErrors?.username?.[0]}
       >
-        <Input
+        <AuthTextInput
           id="reset-username"
           name="username"
           autoComplete="username"
           required
+          value={username}
+          onChange={setUsername}
         />
       </Field>
       <Field label="Email" htmlFor="reset-email" error={fieldErrors?.email?.[0]}>
-        <Input
+        <AuthTextInput
           id="reset-email"
           name="email"
           type="email"
           autoComplete="email"
           required
+          value={email}
+          onChange={setEmail}
         />
       </Field>
       <Field
@@ -484,6 +569,8 @@ function ResetPasswordForm({
           autoComplete="new-password"
           required
           minLength={8}
+          value={password}
+          onChange={setPassword}
         />
       </Field>
       <Field
@@ -497,6 +584,8 @@ function ResetPasswordForm({
           autoComplete="new-password"
           required
           minLength={8}
+          value={confirmPassword}
+          onChange={setConfirmPassword}
         />
       </Field>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}

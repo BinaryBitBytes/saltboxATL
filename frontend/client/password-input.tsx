@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
-import { Input } from "@/components/ui/input";
+import { inputClassName } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export function PasswordInput({
@@ -13,6 +13,8 @@ export function PasswordInput({
   required,
   minLength,
   className,
+  value,
+  onChange,
 }: {
   id: string;
   name: string;
@@ -20,19 +22,24 @@ export function PasswordInput({
   required?: boolean;
   minLength?: number;
   className?: string;
+  value?: string;
+  onChange?: (value: string) => void;
 }) {
   const [visible, setVisible] = useState(false);
 
   return (
     <div className="relative">
-      <Input
+      <input
         id={id}
         name={name}
         type={visible ? "text" : "password"}
         autoComplete={autoComplete}
         required={required}
         minLength={minLength}
-        className={cn("pr-8", className)}
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        onInput={(event) => onChange?.(event.currentTarget.value)}
+        className={cn(inputClassName, "pr-8", className)}
       />
       <button
         type="button"
