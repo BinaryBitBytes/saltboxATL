@@ -43,9 +43,10 @@ export function PasswordInput({
       />
       <button
         type="button"
-        className="absolute top-1/2 right-1 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="absolute top-1/2 right-0.5 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
         aria-label={visible ? "Hide password" : "Show password"}
         aria-pressed={visible}
+        aria-controls={id}
         onClick={() => setVisible((current) => !current)}
       >
         <HugeiconsIcon

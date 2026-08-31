@@ -11,7 +11,9 @@ import { LIMITS } from "@/lib/validation/limits";
 import { ValidationError } from "@/lib/validation/errors";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { signSession, verifySessionToken } from "@/lib/auth/token";
+import { authPageHref, parseAuthPanel } from "@/lib/auth/login-page";
 import { canAccessPath, hasPermission, safeRedirectPath } from "@/lib/auth/permissions";
+import { LoginInputSchema } from "@/lib/inventory-schema";
 import {
   accountLoginLockKeys,
   passwordResetLockKey,
@@ -99,6 +101,41 @@ describe("user authentication safeguards", () => {
     expect(safeRedirectPath("/api/users")).to.equal("/");
     expect(safeRedirectPath("/receiving")).to.equal("/receiving");
     expect(safeRedirectPath("/putaway")).to.equal("/putaway");
+  });
+
+  it("accepts username or email from a native login form payload", () => {
+    const byUsername = LoginInputSchema.safeParse({
+      identifier: "manager",
+      password: "saltbox123",
+      from: "/receiving",
+    });
+    expect(byUsername.success).to.equal(true);
+    if (byUsername.success) {
+      expect(byUsername.data.identifier).to.equal("manager");
+      expect(byUsername.data.from).to.equal("/receiving");
+    }
+
+    const byEmail = LoginInputSchema.safeParse({
+      email: "manager@saltbox.local",
+      password: "saltbox123",
+    });
+    expect(byEmail.success).to.equal(true);
+    if (byEmail.success) {
+      expect(byEmail.data.identifier).to.equal("manager@saltbox.local");
+    }
+  });
+
+  it("builds login page links for register and recovery without JavaScript", () => {
+    expect(parseAuthPanel("register")).to.equal("register");
+    expect(parseAuthPanel("not-a-panel")).to.equal("signin");
+    expect(authPageHref("signin")).to.equal("/login");
+    expect(authPageHref("register", "/receiving")).to.equal(
+      "/login?mode=register&from=%2Freceiving",
+    );
+    expect(authPageHref("signin", "/", { error: "Invalid username or password." })).to.equal(
+      "/login?error=Invalid+username+or+password.",
+    );
+    expect(authPageHref("signin", "//evil.example")).to.equal("/login");
   });
 
   it("locks username recovery and password reset separately from sign-in", () => {

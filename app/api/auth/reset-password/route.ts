@@ -1,12 +1,26 @@
 import { resetPasswordWithIdentity } from "@/backend/server/auth-service";
-import { jsonError, jsonOk } from "@/backend/server/http";
+import {
+  authFailure,
+  authFormRedirect,
+  readRequestObject,
+  requestWantsJson,
+} from "@/backend/server/auth-http";
+import { jsonOk } from "@/backend/server/http";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as unknown;
+    const body = await readRequestObject(request);
     await resetPasswordWithIdentity(body);
-    return jsonOk({ reset: true });
+    if (requestWantsJson(request)) {
+      return jsonOk({ reset: true });
+    }
+    return authFormRedirect(request, "signin", { reset: true });
   } catch (error) {
-    return jsonError(error);
+    return authFailure(
+      request,
+      error,
+      "reset-password",
+      "Unable to reset that password.",
+    );
   }
 }

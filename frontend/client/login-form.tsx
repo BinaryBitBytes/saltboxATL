@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { inputClassName } from "@/components/ui/input";
 import {
   Card,
@@ -13,6 +13,10 @@ import {
 import { Field } from "@/frontend/client/field";
 import { PasswordInput } from "@/frontend/client/password-input";
 import { postAuth } from "@/frontend/client/auth-api";
+import {
+  authPageHref,
+  type AuthPanel,
+} from "@/lib/auth/login-page";
 import {
   LoginInputSchema,
   RecoverUsernameInputSchema,
@@ -65,12 +69,7 @@ function AuthTextInput({
 
 type FieldErrors = Record<string, string[] | undefined>;
 
-type AuthPanel = "signin" | "register" | "recover-username" | "reset-password";
-
-const PANEL_COPY: Record<
-  AuthPanel,
-  { title: string; description: string }
-> = {
+const PANEL_COPY: Record<AuthPanel, { title: string; description: string }> = {
   signin: {
     title: "Sign in",
     description: "Use your username or email. Demo password is saltbox123.",
@@ -91,58 +90,93 @@ const PANEL_COPY: Record<
   },
 };
 
-function ModeLink({
-  children,
-  onClick,
-}: {
-  children: string;
-  onClick: () => void;
-}) {
+function ModeLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Button type="button" variant="link" size="xs" className="h-auto px-0" onClick={onClick}>
+    <a
+      href={href}
+      className={cn(
+        buttonVariants({ variant: "link", size: "xs" }),
+        "h-auto px-0",
+      )}
+    >
       {children}
-    </Button>
+    </a>
   );
 }
 
-export function LoginForm({ from }: { from: string }) {
-  const [panel, setPanel] = useState<AuthPanel>("signin");
-  const copy = PANEL_COPY[panel];
+function PanelTab({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: string;
+}) {
+  return (
+    <a
+      href={href}
+      className={cn(
+        buttonVariants({ variant: active ? "secondary" : "ghost", size: "sm" }),
+      )}
+    >
+      {children}
+    </a>
+  );
+}
+
+export function LoginForm({
+  from,
+  initialPanel,
+  initialError,
+  recoveredUsername,
+  passwordReset,
+}: {
+  from: string;
+  initialPanel: AuthPanel;
+  initialError?: string;
+  recoveredUsername?: string;
+  passwordReset?: boolean;
+}) {
+  const copy = PANEL_COPY[initialPanel];
 
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap gap-1">
-          <Button
-            type="button"
-            size="sm"
-            variant={panel === "signin" ? "secondary" : "ghost"}
-            onClick={() => setPanel("signin")}
-          >
+          <PanelTab href={authPageHref("signin", from)} active={initialPanel === "signin"}>
             Sign in
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={panel === "register" ? "secondary" : "ghost"}
-            onClick={() => setPanel("register")}
+          </PanelTab>
+          <PanelTab
+            href={authPageHref("register", from)}
+            active={initialPanel === "register"}
           >
             Register
-          </Button>
+          </PanelTab>
         </div>
         <CardTitle>{copy.title}</CardTitle>
         <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
       <CardContent>
-        {panel === "signin" ? <SignInForm from={from} onChangePanel={setPanel} /> : null}
-        {panel === "register" ? (
-          <RegisterForm from={from} onChangePanel={setPanel} />
+        {initialPanel === "signin" ? (
+          <SignInForm
+            from={from}
+            initialError={initialError}
+            passwordReset={passwordReset}
+          />
         ) : null}
-        {panel === "recover-username" ? (
-          <RecoverUsernameForm onChangePanel={setPanel} />
+        {initialPanel === "register" ? (
+          <RegisterForm from={from} initialError={initialError} />
         ) : null}
-        {panel === "reset-password" ? (
-          <ResetPasswordForm onChangePanel={setPanel} />
+        {initialPanel === "recover-username" ? (
+          <RecoverUsernameForm
+            from={from}
+            initialError={initialError}
+            recoveredUsername={recoveredUsername}
+          />
+        ) : null}
+        {initialPanel === "reset-password" ? (
+          <ResetPasswordForm from={from} initialError={initialError} />
         ) : null}
       </CardContent>
     </Card>
@@ -151,12 +185,14 @@ export function LoginForm({ from }: { from: string }) {
 
 function SignInForm({
   from,
-  onChangePanel,
+  initialError,
+  passwordReset,
 }: {
   from: string;
-  onChangePanel: (panel: AuthPanel) => void;
+  initialError?: string;
+  passwordReset?: boolean;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
   const [identifier, setIdentifier] = useState("");
@@ -190,7 +226,19 @@ function SignInForm({
   }
 
   return (
-    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
+    <form
+      method="post"
+      action="/api/auth/login"
+      noValidate
+      onSubmit={onSubmit}
+      className="grid gap-4"
+    >
+      <input type="hidden" name="from" value={from} />
+      {passwordReset ? (
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+          Your password was updated. Sign in with the new password.
+        </p>
+      ) : null}
       <Field
         label="Username or email"
         htmlFor="identifier"
@@ -225,10 +273,10 @@ function SignInForm({
         {pending ? "Signing in…" : "Sign in"}
       </Button>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem]">
-        <ModeLink onClick={() => onChangePanel("recover-username")}>
+        <ModeLink href={authPageHref("recover-username", from)}>
           Forgot username?
         </ModeLink>
-        <ModeLink onClick={() => onChangePanel("reset-password")}>
+        <ModeLink href={authPageHref("reset-password", from)}>
           Forgot password?
         </ModeLink>
       </div>
@@ -243,12 +291,12 @@ function SignInForm({
 
 function RegisterForm({
   from,
-  onChangePanel,
+  initialError,
 }: {
   from: string;
-  onChangePanel: (panel: AuthPanel) => void;
+  initialError?: string;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
   const [name, setName] = useState("");
@@ -291,7 +339,14 @@ function RegisterForm({
   }
 
   return (
-    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
+    <form
+      method="post"
+      action="/api/auth/register"
+      noValidate
+      onSubmit={onSubmit}
+      className="grid gap-4"
+    >
+      <input type="hidden" name="from" value={from} />
       <Field label="Full name" htmlFor="register-name" error={fieldErrors?.name?.[0]}>
         <AuthTextInput
           id="register-name"
@@ -372,19 +427,23 @@ function RegisterForm({
       </Button>
       <p className="text-[0.625rem] text-muted-foreground">
         Already have an account?{" "}
-        <ModeLink onClick={() => onChangePanel("signin")}>Sign in</ModeLink>
+        <ModeLink href={authPageHref("signin", from)}>Sign in</ModeLink>
       </p>
     </form>
   );
 }
 
 function RecoverUsernameForm({
-  onChangePanel,
+  from,
+  initialError,
+  recoveredUsername,
 }: {
-  onChangePanel: (panel: AuthPanel) => void;
+  from: string;
+  initialError?: string;
+  recoveredUsername?: string;
 }) {
-  const [error, setError] = useState<string | null>(null);
-  const [username, setUsername] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(initialError ?? null);
+  const [username, setUsername] = useState<string | undefined>(recoveredUsername);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
   const [name, setName] = useState("");
@@ -419,7 +478,13 @@ function RecoverUsernameForm({
   }
 
   return (
-    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
+    <form
+      method="post"
+      action="/api/auth/recover-username"
+      noValidate
+      onSubmit={onSubmit}
+      className="grid gap-4"
+    >
       <Field label="Full name" htmlFor="recover-name" error={fieldErrors?.name?.[0]}>
         <AuthTextInput
           id="recover-name"
@@ -451,21 +516,21 @@ function RecoverUsernameForm({
         {pending ? "Looking up…" : "Recover username"}
       </Button>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem]">
-        <ModeLink onClick={() => onChangePanel("signin")}>Back to sign in</ModeLink>
-        <ModeLink onClick={() => onChangePanel("reset-password")}>
-          Reset password
-        </ModeLink>
+        <ModeLink href={authPageHref("signin", from)}>Back to sign in</ModeLink>
+        <ModeLink href={authPageHref("reset-password", from)}>Reset password</ModeLink>
       </div>
     </form>
   );
 }
 
 function ResetPasswordForm({
-  onChangePanel,
+  from,
+  initialError,
 }: {
-  onChangePanel: (panel: AuthPanel) => void;
+  from: string;
+  initialError?: string;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [success, setSuccess] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
   const [pending, setPending] = useState(false);
@@ -514,15 +579,24 @@ function ResetPasswordForm({
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
           Your password was updated. Sign in with the new password.
         </p>
-        <Button type="button" onClick={() => onChangePanel("signin")}>
+        <a
+          href={authPageHref("signin", from)}
+          className={cn(buttonVariants({ variant: "default" }))}
+        >
           Return to sign in
-        </Button>
+        </a>
       </div>
     );
   }
 
   return (
-    <form method="post" noValidate onSubmit={onSubmit} className="grid gap-4">
+    <form
+      method="post"
+      action="/api/auth/reset-password"
+      noValidate
+      onSubmit={onSubmit}
+      className="grid gap-4"
+    >
       <Field label="Full name" htmlFor="reset-name" error={fieldErrors?.name?.[0]}>
         <AuthTextInput
           id="reset-name"
@@ -593,8 +667,8 @@ function ResetPasswordForm({
         {pending ? "Updating password…" : "Reset password"}
       </Button>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem]">
-        <ModeLink onClick={() => onChangePanel("signin")}>Back to sign in</ModeLink>
-        <ModeLink onClick={() => onChangePanel("recover-username")}>
+        <ModeLink href={authPageHref("signin", from)}>Back to sign in</ModeLink>
+        <ModeLink href={authPageHref("recover-username", from)}>
           Forgot username?
         </ModeLink>
       </div>
