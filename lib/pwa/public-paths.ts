@@ -2,6 +2,9 @@ const PUBLIC_PAGE_PATHS = new Set(["/login"]);
 const PUBLIC_API_PATHS = new Set([
   "/api/auth/login",
   "/api/auth/logout",
+  "/api/auth/register",
+  "/api/auth/recover-username",
+  "/api/auth/reset-password",
   "/api/health",
 ]);
 const PUBLIC_PWA_PATHS = new Set([

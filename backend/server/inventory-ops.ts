@@ -3,6 +3,7 @@ import type {
   CaseItem,
   InventoryItem,
   Pallet,
+  ReceivingOrder,
   ShippingPick,
 } from "@/lib/inventory-schema";
 import { inventoryKey } from "@/lib/inventory/keys";
@@ -28,6 +29,27 @@ export type StockChange = {
   quantityAfter: number;
   description?: string;
 };
+
+export function caseItemAttributesFromInbound(
+  orders: ReceivingOrder[],
+  sku: string,
+  batch: string | null,
+): { manufacturer: string; color: string | null } {
+  let manufacturer = "";
+  let color: string | null = null;
+  for (const order of orders) {
+    if (order.status === "cancelled") continue;
+    for (const pallet of order.pallets) {
+      for (const item of pallet.cases) {
+        if (item.sku !== sku) continue;
+        if ((item.batch ?? null) !== (batch ?? null)) continue;
+        manufacturer = item.manufacturer ?? "";
+        color = item.color ?? null;
+      }
+    }
+  }
+  return { manufacturer, color };
+}
 
 export function recountPallet(pallet: Pallet): Pallet {
   const skus = new Set(pallet.cases.map((item) => item.sku));
@@ -273,6 +295,8 @@ export function pickFromInventory(
       batch: item.batch,
       quantityInCase: pick.quantity,
       description: item.description ?? item.sku,
+      manufacturer: "",
+      color: null,
       fiber: null,
       putawayRoomId: null,
       putawayLocationId: item.locationId,

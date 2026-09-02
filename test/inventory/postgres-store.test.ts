@@ -13,6 +13,7 @@ import {
   mapShippingOrder,
   mapTransaction,
   mapUser,
+  parseStoredPallets,
 } from "@/backend/server/pg-mapper";
 import { usesPostgres } from "@/backend/server/db";
 import { readFromPostgres, updatePostgres } from "@/backend/server/pg-store";
@@ -101,6 +102,39 @@ describe("postgresql inventory mapping", () => {
       created_by: "Avery Manager",
     });
     expect(receiving.pallets[0]?.palletNumber).to.equal("P1");
+    expect(receiving.pallets[0]?.trackingNumber).to.equal("");
+
+    const recovered = parseStoredPallets([
+      {
+        id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        palletNumber: "P-OLD",
+        isPartial: false,
+        partialedBy: null,
+        expectedSkuCount: 1,
+        actualSkuCount: 1,
+        expectedCaseCount: 1,
+        actualCaseCount: 1,
+        trackingNumber: null,
+        cases: [
+          {
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            upc: "010000000001",
+            sku: "FBR-LC-12-100",
+            batch: null,
+            quantityInCase: 12,
+            description: "Legacy case",
+            manufacturer: null,
+            color: null,
+            fiber: null,
+            putawayRoomId: null,
+            putawayLocationId: null,
+          },
+        ],
+      },
+    ]);
+    expect(recovered[0]?.trackingNumber).to.equal("");
+    expect(recovered[0]?.cases[0]?.manufacturer).to.equal("");
+    expect(recovered[0]?.cases[0]?.color).to.equal(null);
 
     const user = mapUser({
       id: "bbbb1111-1111-4111-8111-111111111111",

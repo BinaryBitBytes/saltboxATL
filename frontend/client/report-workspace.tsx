@@ -225,6 +225,8 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                     <th className="py-1 font-semibold">SKU</th>
                     <th className="py-1 font-semibold">UPC</th>
                     <th className="py-1 font-semibold">Description</th>
+                    <th className="py-1 font-semibold">Manufacturer</th>
+                    <th className="py-1 font-semibold">Color</th>
                     <th className="py-1 font-semibold">Location</th>
                     <th className="py-1 font-semibold">Source</th>
                     <th className="py-1 text-right font-semibold">Qty</th>
@@ -233,7 +235,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                 <tbody>
                   {report.rows.length === 0 ? (
                     <tr>
-                      <td className="py-3 text-neutral-600" colSpan={6}>
+                      <td className="py-3 text-neutral-600" colSpan={8}>
                         No items matched that query.
                       </td>
                     </tr>
@@ -243,6 +245,8 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                         <td className="py-1.5 font-medium">{row.sku}</td>
                         <td className="py-1.5">{row.upc || "—"}</td>
                         <td className="py-1.5">{row.description}</td>
+                        <td className="py-1.5">{row.manufacturer || "—"}</td>
+                        <td className="py-1.5">{row.color || "—"}</td>
                         <td className="py-1.5">
                           {row.roomName} / {row.locationCode}
                         </td>
@@ -263,6 +267,8 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                   <TableHead>SKU</TableHead>
                   <TableHead>UPC</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead>Manufacturer</TableHead>
+                  <TableHead>Color</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
@@ -271,7 +277,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
               <TableBody>
                 {report.rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-muted-foreground">
+                    <TableCell colSpan={8} className="text-muted-foreground">
                       No items matched that query.
                     </TableCell>
                   </TableRow>
@@ -288,6 +294,8 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                       </TableCell>
                       <TableCell>{row.upc || "—"}</TableCell>
                       <TableCell>{row.description}</TableCell>
+                      <TableCell>{row.manufacturer || "—"}</TableCell>
+                      <TableCell>{row.color || "—"}</TableCell>
                       <TableCell>
                         {row.roomName} / {row.locationCode}
                       </TableCell>

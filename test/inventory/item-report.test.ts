@@ -153,7 +153,7 @@ describe("item report queries", () => {
       true,
     );
     const csv = itemReportToCsv(report);
-    expect(csv).to.match(/^SKU,UPC,Description/);
+    expect(csv).to.match(/^SKU,UPC,Description,Manufacturer,Color,Batch/);
     expect(csv).to.include("FBR-LC-12-100");
     expect(csv).to.include("On hand");
   });

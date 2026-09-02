@@ -1,4 +1,4 @@
-import { authenticateUser } from "@/backend/server/auth-service";
+import { registerSelfServeUser } from "@/backend/server/auth-service";
 import {
   authFailure,
   readRequestObject,
@@ -15,12 +15,9 @@ import {
 export async function POST(request: Request) {
   try {
     const body = await readRequestObject(request);
-    const identifier = String(
-      body.identifier ?? body.email ?? body.username ?? "",
-    );
-    const user = await authenticateUser(identifier, String(body.password ?? ""));
+    const user = await registerSelfServeUser(body);
     if (requestWantsJson(request)) {
-      const response = jsonOk(user);
+      const response = jsonOk(user, 201);
       response.cookies.set(
         SESSION_COOKIE,
         signSession(user),
@@ -30,6 +27,11 @@ export async function POST(request: Request) {
     }
     return sessionRedirect(request, user, body.from);
   } catch (error) {
-    return authFailure(request, error, "signin", "Unable to sign in.");
+    return authFailure(
+      request,
+      error,
+      "register",
+      "Unable to create your account.",
+    );
   }
 }

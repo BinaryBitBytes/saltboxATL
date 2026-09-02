@@ -21,6 +21,8 @@ function makeCase(overrides: Partial<CaseItem> = {}): CaseItem {
     batch: null,
     quantityInCase: 12,
     description: "Fiber case",
+    manufacturer: "",
+    color: null,
     fiber: null,
     putawayRoomId: null,
     putawayLocationId: null,
@@ -33,6 +35,7 @@ function makePallet(overrides: Partial<Pallet> = {}): Pallet {
   return {
     id: createId(),
     palletNumber: "1",
+    trackingNumber: "",
     isPartial: false,
     partialedBy: null,
     expectedSkuCount: 1,

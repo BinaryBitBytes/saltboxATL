@@ -3,14 +3,21 @@ import { getSessionUser } from "@/backend/server/dal";
 import { LoginForm } from "@/frontend/client/login-form";
 import { InstallAppCard } from "@/frontend/client/pwa-install";
 import { ThemeToggle } from "@/frontend/client/theme-toggle";
+import { parseAuthPanel } from "@/lib/auth/login-page";
 import { safeRedirectPath } from "@/lib/auth/permissions";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    mode?: string;
+    error?: string;
+    username?: string;
+    reset?: string;
+  }>;
 }) {
-  const { from } = await searchParams;
+  const { from, mode, error, username, reset } = await searchParams;
   const nextPath = safeRedirectPath(from);
   const user = await getSessionUser();
   if (user) {
@@ -30,7 +37,13 @@ export default async function LoginPage({
             Sign in, create a username and password, or recover forgotten credentials.
           </p>
         </div>
-        <LoginForm from={nextPath} />
+        <LoginForm
+          from={nextPath}
+          initialPanel={parseAuthPanel(mode)}
+          initialError={typeof error === "string" ? error : undefined}
+          recoveredUsername={typeof username === "string" ? username : undefined}
+          passwordReset={reset === "1"}
+        />
         <InstallAppCard />
       </div>
     </div>

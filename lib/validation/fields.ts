@@ -20,6 +20,17 @@ export const SafeTextSchema = z
   .refine(noControl, { error: "Control characters are not allowed." })
   .refine(noMarkup, { error: "HTML markup is not allowed." });
 
+export const OptionalSafeTextSchema = z.preprocess(
+  (value) => (value == null ? undefined : value),
+  z
+    .string()
+    .trim()
+    .max(LIMITS.text, { error: `Must be ${LIMITS.text} characters or fewer.` })
+    .refine(noControl, { error: "Control characters are not allowed." })
+    .refine(noMarkup, { error: "HTML markup is not allowed." })
+    .default(""),
+);
+
 export const OptionalNotesSchema = z
   .string()
   .trim()

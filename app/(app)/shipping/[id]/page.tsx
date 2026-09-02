@@ -11,7 +11,7 @@ import {
 import { buildOutboundLabels } from "@/lib/labels/build-labels";
 import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
 import { photosForOwner } from "@/lib/photos/query";
-import { formatDateTime } from "@/lib/format";
+import { formatCaseItemLine, formatDateTime, formatPalletHeading } from "@/lib/format";
 import {
   Card,
   CardContent,
@@ -66,11 +66,11 @@ export default async function ShippingOrderPage({
         <CardContent className="grid gap-3 text-sm">
           {order.pallets.map((pallet) => (
             <div key={pallet.id} className="rounded-md border border-border p-3">
-              <p className="font-medium">Pallet {pallet.palletNumber}</p>
+              <p className="font-medium">{formatPalletHeading(pallet)}</p>
               <ul className="mt-2 grid gap-1 text-muted-foreground">
                 {pallet.cases.map((item) => (
                   <li key={item.id}>
-                    {item.sku} · qty {item.quantityInCase}
+                    {formatCaseItemLine(item)}
                     {item.putawayLocationId
                       ? ` · from ${locations.get(item.putawayLocationId) ?? item.putawayLocationId}`
                       : ""}

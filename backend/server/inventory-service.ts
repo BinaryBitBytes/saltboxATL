@@ -26,6 +26,7 @@ import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
   addQuantity,
   applyAdjustment,
+  caseItemAttributesFromInbound,
   pickFromInventory,
   putAwayCases,
   recountPallet,
@@ -234,6 +235,8 @@ function caseFromInput(
     batch: raw.batch ?? null,
     quantityInCase: raw.quantityInCase,
     description: raw.description,
+    manufacturer: raw.manufacturer ?? "",
+    color: raw.color ?? null,
     fiber,
     putawayRoomId: putaway.putawayRoomId,
     putawayLocationId: putaway.putawayLocationId,
@@ -364,6 +367,7 @@ export async function addPalletToOrder(
     const pallet: Pallet = recountPallet({
       id: createId(),
       palletNumber: parsed.data.palletNumber,
+      trackingNumber: parsed.data.trackingNumber ?? "",
       isPartial: parsed.data.isPartial,
       partialedBy: parsed.data.partialedBy ?? null,
       expectedSkuCount: parsed.data.expectedSkuCount,
@@ -690,10 +694,20 @@ export async function createShippingOrderRecord(
       parsed.data.picks,
       now,
     );
+    for (const shipped of shippedCases) {
+      const attributes = caseItemAttributesFromInbound(
+        system.receivingOrders,
+        shipped.sku,
+        shipped.batch,
+      );
+      shipped.manufacturer = attributes.manufacturer;
+      shipped.color = attributes.color;
+    }
 
     const pallet: Pallet = recountPallet({
       id: createId(),
       palletNumber: "OUT-1",
+      trackingNumber: parsed.data.trackingNumber ?? "",
       isPartial: false,
       partialedBy: null,
       expectedSkuCount: shippedCases.length,

@@ -22,12 +22,15 @@
                     "Expected_Case_Count":"Number",
                     "Is_Partialed":"Boolean",
                     "Partialed_By_Receiver": "Null",
+                    "Tracking_Number": "String",
                     "Case_Item":{
                         "UPC_#": "Number",
                         "SKU_#":"Number",
                         "Batch_#":"Null",
                         "Quantity_In_Case":"Number",
                         "Description":"String",
+                        "Manufacturer":"String",
+                        "Color_of_Item":"Null",
                         "Is_Fiber_Item": {
                             "Fiber":"Boolean",
                             "Connection_Type":["Connections"],

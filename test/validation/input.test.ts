@@ -6,6 +6,7 @@ import {
   LoginInputSchema,
 } from "@/lib/inventory-schema";
 import {
+  OptionalSafeTextSchema,
   PersonNameSchema,
   QuantitySchema,
   SafeTextSchema,
@@ -18,6 +19,9 @@ describe("user and inventory input validation", () => {
   it("rejects HTML and control characters in free-text fields", () => {
     expect(SafeTextSchema.safeParse("<script>alert(1)</script>").success).to.equal(false);
     expect(SafeTextSchema.safeParse("ok\u0000value").success).to.equal(false);
+    expect(OptionalSafeTextSchema.parse(undefined)).to.equal("");
+    expect(OptionalSafeTextSchema.parse(null)).to.equal("");
+    expect(OptionalSafeTextSchema.parse("Corning")).to.equal("Corning");
     expect(PersonNameSchema.safeParse("Riley User").success).to.equal(true);
     expect(PersonNameSchema.safeParse("Riley <b>User</b>").success).to.equal(false);
   });

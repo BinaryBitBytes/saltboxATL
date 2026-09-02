@@ -24,6 +24,8 @@ export type ItemReportRow = {
   sku: string;
   upc: string;
   description: string;
+  manufacturer: string;
+  color: string | null;
   batch: string | null;
   quantity: number;
   locationCode: string;
@@ -112,6 +114,8 @@ export function buildItemCatalog(input: {
       sku: item.sku,
       upc: item.upc ?? "",
       description: item.description ?? item.sku,
+      manufacturer: "",
+      color: null,
       batch: item.batch,
       quantity: item.quantity,
       locationCode: slot.locationCode,
@@ -132,6 +136,8 @@ export function buildItemCatalog(input: {
           sku: item.sku,
           upc: item.upc,
           description: item.description,
+          manufacturer: item.manufacturer ?? "",
+          color: item.color ?? null,
           batch: item.batch,
           quantity: item.quantityInCase,
           locationCode: slot.locationCode,
@@ -154,6 +160,8 @@ export function buildItemCatalog(input: {
           sku: item.sku,
           upc: item.upc,
           description: item.description,
+          manufacturer: item.manufacturer ?? "",
+          color: item.color ?? null,
           batch: item.batch,
           quantity: item.quantityInCase,
           locationCode: slot.locationCode,
@@ -214,6 +222,8 @@ export function itemReportToCsv(report: ItemReport): string {
     "SKU",
     "UPC",
     "Description",
+    "Manufacturer",
+    "Color",
     "Batch",
     "Qty",
     "Location",
@@ -228,6 +238,8 @@ export function itemReportToCsv(report: ItemReport): string {
         row.sku,
         row.upc,
         row.description,
+        row.manufacturer,
+        row.color ?? "",
         row.batch ?? "",
         String(row.quantity),
         row.locationCode,

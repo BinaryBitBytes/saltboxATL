@@ -9,6 +9,9 @@ import {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (pathname.startsWith("/_next/") || pathname === "/favicon.ico") {
+    return NextResponse.next();
+  }
   const session = verifySessionToken(
     request.cookies.get(SESSION_COOKIE)?.value,
   );
