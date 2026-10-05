@@ -700,8 +700,8 @@ export async function createShippingOrderRecord(
         shipped.sku,
         shipped.batch,
       );
-      shipped.manufacturer = attributes.manufacturer;
-      shipped.color = attributes.color;
+      if (!shipped.manufacturer) shipped.manufacturer = attributes.manufacturer;
+      if (shipped.color == null) shipped.color = attributes.color;
     }
 
     const pallet: Pallet = recountPallet({
@@ -880,6 +880,13 @@ export async function importInventorySpreadsheet(input: {
         locationId: change.locationId,
         quantity: change.quantityAfter,
         description: change.description,
+        details: {
+          ...(change.manufacturer !== undefined
+            ? { manufacturer: change.manufacturer }
+            : {}),
+          ...(change.color !== undefined ? { color: change.color } : {}),
+          ...(change.fiber !== undefined ? { fiber: change.fiber } : {}),
+        },
         now,
       });
       items = result.items;

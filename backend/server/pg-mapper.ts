@@ -116,9 +116,28 @@ export function mapItem(row: {
   location_id: string;
   quantity: number;
   description: string | null;
+  manufacturer?: string | null;
+  color?: string | null;
+  is_fiber?: boolean | null;
+  connection_type?: string | null;
+  strand_count?: number | string | null;
+  length_meters?: number | string | null;
   last_moved_at: Date | string | null;
   updated_at: Date | string | null;
 }): InventoryItem {
+  const strandCount =
+    row.strand_count == null || row.strand_count === ""
+      ? null
+      : Number(row.strand_count);
+  const lengthMeters =
+    row.length_meters == null || row.length_meters === ""
+      ? null
+      : Number(row.length_meters);
+  const hasFiber =
+    Boolean(row.is_fiber) ||
+    Boolean(row.connection_type) ||
+    strandCount != null ||
+    lengthMeters != null;
   return {
     id: row.id,
     sku: row.sku,
@@ -127,6 +146,25 @@ export function mapItem(row: {
     locationId: row.location_id,
     quantity: row.quantity,
     description: row.description ?? undefined,
+    manufacturer: row.manufacturer ?? "",
+    color: row.color ?? null,
+    fiber: hasFiber
+      ? {
+          isFiber: Boolean(row.is_fiber),
+          connectionType:
+            row.connection_type === "LC" ||
+            row.connection_type === "SC" ||
+            row.connection_type === "ST" ||
+            row.connection_type === "FC" ||
+            row.connection_type === "MPO" ||
+            row.connection_type === "MTP" ||
+            row.connection_type === "Other"
+              ? row.connection_type
+              : null,
+          strandCount: Number.isFinite(strandCount) ? strandCount : null,
+          lengthMeters: Number.isFinite(lengthMeters) ? lengthMeters : null,
+        }
+      : null,
     lastMovedAt: iso(row.last_moved_at),
     updatedAt: iso(row.updated_at),
   };

@@ -6,6 +6,11 @@ import type {
   ReceivingOrder,
   ShippingPick,
 } from "@/lib/inventory-schema";
+import {
+  applyInventoryDetails,
+  inventoryDetailsDiffer,
+  type InventoryLineDetails,
+} from "@/lib/inventory/details";
 import { inventoryKey } from "@/lib/inventory/keys";
 import {
   assertEnoughOnHand,
@@ -78,6 +83,7 @@ export function addQuantity(
     locationId: string;
     quantity: number;
     description?: string;
+    details?: InventoryLineDetails;
     now: string;
   },
 ): { items: InventoryItem[]; change: StockChange } {
@@ -89,14 +95,17 @@ export function addQuantity(
   if (existing) {
     const quantityBefore = existing.quantity;
     const quantityAfter = quantityBefore + input.quantity;
-    const next: InventoryItem = {
-      ...existing,
-      quantity: quantityAfter,
-      upc: existing.upc ?? input.upc,
-      description: existing.description ?? input.description,
-      lastMovedAt: input.now,
-      updatedAt: input.now,
-    };
+    const next: InventoryItem = applyInventoryDetails(
+      {
+        ...existing,
+        quantity: quantityAfter,
+        upc: existing.upc ?? input.upc,
+        description: existing.description ?? input.description,
+        lastMovedAt: input.now,
+        updatedAt: input.now,
+      },
+      input.details,
+    );
     map.set(key, next);
     return {
       items: [...map.values()],
@@ -114,17 +123,23 @@ export function addQuantity(
     };
   }
 
-  const created: InventoryItem = {
-    id: createId(),
-    sku: input.sku,
-    upc: input.upc,
-    batch: input.batch,
-    locationId: input.locationId,
-    quantity: input.quantity,
-    description: input.description,
-    lastMovedAt: input.now,
-    updatedAt: input.now,
-  };
+  const created: InventoryItem = applyInventoryDetails(
+    {
+      id: createId(),
+      sku: input.sku,
+      upc: input.upc,
+      batch: input.batch,
+      locationId: input.locationId,
+      quantity: input.quantity,
+      description: input.description,
+      manufacturer: "",
+      color: null,
+      fiber: null,
+      lastMovedAt: input.now,
+      updatedAt: input.now,
+    },
+    input.details,
+  );
   map.set(key, created);
   return {
     items: [...map.values()],
@@ -164,6 +179,11 @@ export function putAwayCases(
       locationId: caseItem.putawayLocationId,
       quantity: caseItem.quantityInCase,
       description: caseItem.description,
+      details: {
+        ...(caseItem.manufacturer ? { manufacturer: caseItem.manufacturer } : {}),
+        ...(caseItem.color ? { color: caseItem.color } : {}),
+        ...(caseItem.fiber ? { fiber: caseItem.fiber } : {}),
+      },
       now,
     });
     next = result.items;
@@ -182,6 +202,7 @@ export function setOnHandQuantity(
     locationId: string;
     quantity: number;
     description?: string;
+    details?: InventoryLineDetails;
     now: string;
   },
 ): { items: InventoryItem[]; change: StockChange | null } {
@@ -194,17 +215,23 @@ export function setOnHandQuantity(
     if (input.quantity === 0) {
       return { items, change: null };
     }
-    const created: InventoryItem = {
-      id: createId(),
-      sku: input.sku,
-      upc: input.upc,
-      batch: input.batch,
-      locationId: input.locationId,
-      quantity: input.quantity,
-      description: input.description,
-      lastMovedAt: input.now,
-      updatedAt: input.now,
-    };
+    const created: InventoryItem = applyInventoryDetails(
+      {
+        id: createId(),
+        sku: input.sku,
+        upc: input.upc,
+        batch: input.batch,
+        locationId: input.locationId,
+        quantity: input.quantity,
+        description: input.description,
+        manufacturer: "",
+        color: null,
+        fiber: null,
+        lastMovedAt: input.now,
+        updatedAt: input.now,
+      },
+      input.details,
+    );
     map.set(key, created);
     return {
       items: [...map.values()],
@@ -222,19 +249,24 @@ export function setOnHandQuantity(
     };
   }
 
-  if (existing.quantity === input.quantity) {
+  const detailsChanged = inventoryDetailsDiffer(existing, input.details);
+  if (existing.quantity === input.quantity && !detailsChanged) {
     return { items, change: null };
   }
 
   const quantityBefore = existing.quantity;
-  const next: InventoryItem = {
-    ...existing,
-    quantity: input.quantity,
-    upc: existing.upc ?? input.upc,
-    description: existing.description ?? input.description,
-    lastMovedAt: input.now,
-    updatedAt: input.now,
-  };
+  const quantityChanged = existing.quantity !== input.quantity;
+  const next: InventoryItem = applyInventoryDetails(
+    {
+      ...existing,
+      quantity: input.quantity,
+      upc: existing.upc ?? input.upc,
+      description: existing.description ?? input.description,
+      lastMovedAt: quantityChanged ? input.now : existing.lastMovedAt,
+      updatedAt: input.now,
+    },
+    input.details,
+  );
   map.set(key, next);
   return {
     items: [...map.values()],
@@ -295,9 +327,9 @@ export function pickFromInventory(
       batch: item.batch,
       quantityInCase: pick.quantity,
       description: item.description ?? item.sku,
-      manufacturer: "",
-      color: null,
-      fiber: null,
+      manufacturer: item.manufacturer ?? "",
+      color: item.color ?? null,
+      fiber: item.fiber ?? null,
       putawayRoomId: null,
       putawayLocationId: item.locationId,
       putawayPostedAt: null,
@@ -370,6 +402,11 @@ export function applyAdjustment(input: {
       locationId: damagedLocationId,
       quantity,
       description: current.description,
+      details: {
+        manufacturer: current.manufacturer ?? "",
+        color: current.color ?? null,
+        fiber: current.fiber ?? null,
+      },
       now,
     });
     items = moved.items;

@@ -230,6 +230,14 @@ describe("postgresql inventory mapping", () => {
         locationId: location.id,
         quantity: 3,
         description: "postgres roundtrip",
+        manufacturer: "Corning",
+        color: "Blue",
+        fiber: {
+          isFiber: true,
+          connectionType: "LC",
+          strandCount: 12,
+          lengthMeters: 100,
+        },
         lastMovedAt: nowIso(),
         updatedAt: nowIso(),
       });
@@ -237,6 +245,11 @@ describe("postgresql inventory mapping", () => {
     const loaded = await readFromPostgres();
     const row = loaded.inventoryItems.find((item) => item.sku === marker);
     expect(row?.quantity).to.equal(3);
+    expect(row?.manufacturer).to.equal("Corning");
+    expect(row?.color).to.equal("Blue");
+    expect(row?.fiber?.connectionType).to.equal("LC");
+    expect(row?.fiber?.strandCount).to.equal(12);
+    expect(row?.fiber?.lengthMeters).to.equal(100);
     await updatePostgres((system) => {
       system.inventoryItems = system.inventoryItems.filter((item) => item.sku !== marker);
     });

@@ -194,4 +194,59 @@ describe("transaction proof photos", () => {
       0,
     );
   });
+
+  it("keeps each receiving and shipping document photo on its own card", () => {
+    const receivingId = createId();
+    const shippingId = createId();
+    const kinds = ["freight-proof", "manifest", "load-sheet", "pack-slip"] as const;
+    const photos: Array<{
+      id: string;
+      ownerType: "receiving-order" | "shipping-order";
+      ownerId: string;
+      documentKind: (typeof kinds)[number];
+      originalName: string;
+      mimeType: "image/jpeg";
+      size: number;
+      createdAt: string;
+    }> = kinds.map((documentKind) => ({
+      id: createId(),
+      ownerType: "receiving-order" as const,
+      ownerId: receivingId,
+      documentKind,
+      originalName: `${documentKind}.jpg`,
+      mimeType: "image/jpeg" as const,
+      size: jpegBytes().byteLength,
+      createdAt: new Date().toISOString(),
+    }));
+    photos.push({
+      id: createId(),
+      ownerType: "shipping-order",
+      ownerId: shippingId,
+      documentKind: "freight-proof",
+      originalName: "outbound.jpg",
+      mimeType: "image/jpeg",
+      size: jpegBytes().byteLength,
+      createdAt: new Date().toISOString(),
+    });
+
+    for (const kind of kinds) {
+      expect(
+        photosForOwnerKind(photos, "receiving-order", receivingId, kind).map(
+          (photo) => photo.documentKind,
+        ),
+      ).to.deep.equal([kind]);
+    }
+    expect(
+      photosForOwnerKind(photos, "shipping-order", shippingId, "freight-proof"),
+    ).to.have.length(1);
+    expect(
+      photosForOwnerKind(photos, "shipping-order", shippingId, "pack-slip"),
+    ).to.have.length(0);
+    for (const photo of photos) {
+      expect(PhotoAttachmentSchema.parse(photo).documentKind).to.equal(
+        photo.documentKind,
+      );
+      expect(assertPhotoBytes(jpegBytes())).to.equal("image/jpeg");
+    }
+  });
 });

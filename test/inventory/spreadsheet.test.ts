@@ -2,21 +2,23 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import { parseCsv, serializeCsv, detectDelimiter, stripBom } from "@/lib/spreadsheet/csv";
 import {
+  INVENTORY_SPREADSHEET_HEADERS,
   inventoryRowsToSpreadsheet,
+  inventorySpreadsheetTemplate,
   parseInventorySpreadsheet,
   planInventoryImport,
   formatImportErrors,
   assertImportPlanReady,
 } from "@/lib/inventory/spreadsheet";
+import { putAwayCases, setOnHandQuantity } from "@/backend/server/inventory-ops";
+import type { CaseItem, InventoryRow, Room } from "@/lib/inventory-schema";
 import {
   assertSpreadsheetSize,
   replaySpreadsheetText,
   spreadsheetTextFromForm,
 } from "@/lib/inventory/spreadsheet-source";
-import { setOnHandQuantity } from "@/backend/server/inventory-ops";
 import { nowIso } from "@/backend/server/helperUtils";
 import { makeItem, makeLocation } from "../helpers";
-import type { InventoryRow, Room } from "@/lib/inventory-schema";
 import { LIMITS } from "@/lib/validation/limits";
 import { ValidationError } from "@/lib/validation/errors";
 
@@ -49,6 +51,222 @@ describe("inventory spreadsheet import and export", () => {
     expect(parsed.headers).to.deep.equal(["SKU", "Description"]);
     expect(parsed.rows[0]).to.deep.equal(["FBR-1", '12-strand, "LC" fiber']);
     expect(detectDelimiter("SKU\tQty\tLocation")).to.equal("\t");
+  });
+
+  it("puts every inventory field in the export and the blank template", () => {
+    const template = parseCsv(inventorySpreadsheetTemplate());
+    expect(template.headers).to.deep.equal([...INVENTORY_SPREADSHEET_HEADERS]);
+    expect(template.rows).to.deep.equal([]);
+
+    const rows: InventoryRow[] = [
+      {
+        ...makeItem({
+          sku: "FBR-LC-12-100",
+          upc: "010000000001",
+          batch: "B1",
+          locationId: location.id,
+          quantity: 24,
+          description: "12-strand LC fiber, 100m",
+          manufacturer: "Corning",
+          color: "Blue",
+          fiber: {
+            isFiber: true,
+            connectionType: "LC",
+            strandCount: 12,
+            lengthMeters: 100,
+          },
+          lastMovedAt: "2026-10-05T12:00:00.000Z",
+        }),
+        locationCode: location.code,
+        roomName: room.name,
+      },
+    ];
+    const csv = inventoryRowsToSpreadsheet(rows);
+    expect(parseCsv(csv).headers).to.deep.equal([...INVENTORY_SPREADSHEET_HEADERS]);
+    const parsed = parseInventorySpreadsheet(csv);
+    expect(parsed[0]).to.include({
+      sku: "FBR-LC-12-100",
+      upc: "010000000001",
+      description: "12-strand LC fiber, 100m",
+      manufacturer: "Corning",
+      color: "Blue",
+      batch: "B1",
+      quantityText: "24",
+      locationCode: "A-01-01",
+      roomName: room.name,
+      fiber: "Yes",
+      connection: "LC",
+      strandCount: "12",
+      lengthMeters: "100",
+    });
+
+    const plan = planInventoryImport({
+      rows: parsed,
+      items: rows,
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    expect(plan.errors).to.deep.equal([]);
+    expect(plan.unchanged).to.equal(1);
+    expect(plan.updated).to.equal(0);
+    expect(plan.created).to.equal(0);
+  });
+
+  it("imports manufacturer, color, and fiber without dropping them on a later export", () => {
+    const csv = [
+      "SKU,UPC,Description,Manufacturer,Color,Batch,Qty,Location,Room,Fiber,Connection,Strand count,Length (m)",
+      "FBR-LC-12-100,010000000001,12-strand LC fiber,Corning,Blue,B1,24,A-01-01,Fiber Room,Yes,LC,12,100",
+    ].join("\n");
+    const plan = planInventoryImport({
+      rows: parseInventorySpreadsheet(csv),
+      items: [],
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    expect(plan.errors).to.deep.equal([]);
+    expect(plan.created).to.equal(1);
+    const change = plan.changes[0];
+    expect(change?.manufacturer).to.equal("Corning");
+    expect(change?.color).to.equal("Blue");
+    expect(change?.fiber).to.deep.equal({
+      isFiber: true,
+      connectionType: "LC",
+      strandCount: 12,
+      lengthMeters: 100,
+    });
+
+    const applied = setOnHandQuantity([], {
+      sku: change!.sku,
+      upc: change!.upc,
+      batch: change!.batch,
+      locationId: change!.locationId,
+      quantity: change!.quantityAfter,
+      description: change!.description,
+      details: {
+        manufacturer: change!.manufacturer,
+        color: change!.color,
+        fiber: change!.fiber,
+      },
+      now: nowIso(),
+    });
+    const stored = applied.items[0];
+    expect(stored?.manufacturer).to.equal("Corning");
+    expect(stored?.fiber?.connectionType).to.equal("LC");
+    const exported = parseInventorySpreadsheet(
+      inventoryRowsToSpreadsheet([
+        {
+          ...stored!,
+          locationCode: location.code,
+          roomName: room.name,
+        },
+      ]),
+    );
+    expect(exported[0]?.manufacturer).to.equal("Corning");
+    expect(exported[0]?.color).to.equal("Blue");
+    expect(exported[0]?.strandCount).to.equal("12");
+    expect(exported[0]?.lengthMeters).to.equal("100");
+  });
+
+  it("keeps older spreadsheets working and rejects bad fiber values", () => {
+    const existing = makeItem({
+      sku: "FBR-LC-12-100",
+      upc: "010000000001",
+      locationId: location.id,
+      quantity: 10,
+      manufacturer: "Corning",
+      color: "Blue",
+    });
+    const legacy = planInventoryImport({
+      rows: parseInventorySpreadsheet("SKU,Qty,Location\nFBR-LC-12-100,12,A-01-01\n"),
+      items: [existing],
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    expect(legacy.errors).to.deep.equal([]);
+    expect(legacy.changes[0]?.manufacturer).to.equal(undefined);
+    expect(legacy.changes[0]?.fiber).to.equal(undefined);
+
+    const attributeOnly = planInventoryImport({
+      rows: parseInventorySpreadsheet(
+        "SKU,Qty,Location,Manufacturer,Color\nFBR-LC-12-100,10,A-01-01,CommScope,Orange\n",
+      ),
+      items: [existing],
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    expect(attributeOnly.errors).to.deep.equal([]);
+    expect(attributeOnly.updated).to.equal(1);
+    expect(attributeOnly.unitsDelta).to.equal(0);
+
+    const invalid = planInventoryImport({
+      rows: parseInventorySpreadsheet(
+        [
+          "SKU,Qty,Location,Fiber,Connection,Strand count,Length (m)",
+          "FBR-LC-12-100,1,A-01-01,Maybe,LC,12,100",
+          "FBR-LC-12-100,1,A-01-01,Yes,USB,12,100",
+          "CAT6-BLU-1000,1,A-01-01,Yes,LC,13,100",
+          "FBR-MPO-24-50,1,A-01-01,No,MPO,24,50",
+          "PATCH-1,1,A-01-01,Yes,LC,12,-2",
+        ].join("\n"),
+      ),
+      items: [],
+      locations: [location],
+      rooms: [room],
+      products: [],
+      mode: "set",
+    });
+    const messages = invalid.errors.map((error) => error.message).join(" ");
+    expect(messages).to.match(/Fiber must be Yes or No/);
+    expect(messages).to.match(/Connection must be one of/);
+    expect(messages).to.match(/Strand count must be one of/);
+    expect(messages).to.match(/Fiber is No/);
+    expect(messages).to.match(/Length \(m\)/);
+    expect(invalid.created).to.equal(0);
+  });
+
+  it("copies manufacturer, color, and fiber from putaway onto the on-hand export", () => {
+    const caseItem: CaseItem = {
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      sku: "FBR-LC-12-100",
+      upc: "010000000001",
+      batch: "B1",
+      quantityInCase: 6,
+      description: "12-strand LC fiber, 100m",
+      manufacturer: "Corning",
+      color: "Blue",
+      fiber: {
+        isFiber: true,
+        connectionType: "LC",
+        strandCount: 12,
+        lengthMeters: 100,
+      },
+      putawayRoomId: room.id,
+      putawayLocationId: location.id,
+      putawayPostedAt: null,
+    };
+    const posted = putAwayCases([], [caseItem], nowIso());
+    expect(posted.items[0]?.manufacturer).to.equal("Corning");
+    expect(posted.items[0]?.color).to.equal("Blue");
+    expect(posted.items[0]?.fiber?.strandCount).to.equal(12);
+    const parsed = parseInventorySpreadsheet(
+      inventoryRowsToSpreadsheet([
+        {
+          ...posted.items[0]!,
+          locationCode: location.code,
+          roomName: room.name,
+        },
+      ]),
+    );
+    expect(parsed[0]?.manufacturer).to.equal("Corning");
+    expect(parsed[0]?.connection).to.equal("LC");
   });
 
   it("exports on-hand inventory and parses that spreadsheet back", () => {

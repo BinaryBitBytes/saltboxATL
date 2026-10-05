@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { Pool, type PoolClient } from "pg";
 
-const MIGRATION_ID = "001_init";
+const MIGRATIONS = [
+  { id: "001_init", file: "schema.sql" },
+  { id: "002_inventory_attributes", file: "002_inventory_attributes.sql" },
+] as const;
 
 let pool: Pool | undefined;
 let migrated = false;
@@ -30,8 +33,8 @@ export function getPool(): Pool {
   return pool;
 }
 
-function schemaSql(): string {
-  return fs.readFileSync(path.join(process.cwd(), "backend/db/schema.sql"), "utf8");
+function migrationSql(file: string): string {
+  return fs.readFileSync(path.join(process.cwd(), "backend/db", file), "utf8");
 }
 
 export async function ensureDatabase(): Promise<void> {
@@ -45,13 +48,16 @@ export async function ensureDatabase(): Promise<void> {
         applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    const applied = await client.query<{ id: string }>(
-      "SELECT id FROM schema_migrations WHERE id = $1",
-      [MIGRATION_ID],
-    );
-    if (applied.rowCount === 0) {
-      await client.query(schemaSql());
-      await client.query("INSERT INTO schema_migrations (id) VALUES ($1)", [MIGRATION_ID]);
+    for (const migration of MIGRATIONS) {
+      const applied = await client.query<{ id: string }>(
+        "SELECT id FROM schema_migrations WHERE id = $1",
+        [migration.id],
+      );
+      if ((applied.rowCount ?? 0) > 0) continue;
+      await client.query(migrationSql(migration.file));
+      await client.query("INSERT INTO schema_migrations (id) VALUES ($1)", [
+        migration.id,
+      ]);
     }
     await client.query("COMMIT");
     migrated = true;

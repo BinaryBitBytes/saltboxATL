@@ -39,6 +39,25 @@ export function formatPalletHeading(pallet: {
   return parts.join(" · ");
 }
 
+export function formatFiberSummary(
+  fiber:
+    | {
+        isFiber?: boolean;
+        connectionType?: string | null;
+        strandCount?: number | null;
+        lengthMeters?: number | null;
+      }
+    | null
+    | undefined,
+): string {
+  if (!fiber?.isFiber) return "—";
+  const parts = ["Fiber"];
+  if (fiber.connectionType) parts.push(fiber.connectionType);
+  if (fiber.strandCount) parts.push(`${fiber.strandCount}ct`);
+  if (fiber.lengthMeters != null) parts.push(`${fiber.lengthMeters}m`);
+  return parts.join(" ");
+}
+
 export function formatCaseItemLine(item: {
   sku: string;
   upc: string;

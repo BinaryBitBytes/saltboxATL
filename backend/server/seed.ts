@@ -71,6 +71,9 @@ function sampleItem(
     locationId,
     quantity,
     description,
+    manufacturer: "",
+    color: null,
+    fiber: null,
     lastMovedAt: now,
     updatedAt: now,
   };

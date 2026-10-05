@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatFiberSummary } from "@/lib/format";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { ProductCodes } from "@/frontend/client/product-codes";
 import { matchesScan } from "@/lib/scan-code";
@@ -31,6 +31,18 @@ const columns = columnHelper.columns([
   columnHelper.accessor("sku", { header: "SKU" }),
   columnHelper.accessor("upc", { header: "UPC" }),
   columnHelper.accessor("description", { header: "Description" }),
+  columnHelper.accessor("manufacturer", {
+    header: "Manufacturer",
+    cell: ({ getValue }) => getValue() || "—",
+  }),
+  columnHelper.accessor("color", {
+    header: "Color",
+    cell: ({ getValue }) => getValue() || "—",
+  }),
+  columnHelper.accessor("fiber", {
+    header: "Fiber",
+    cell: ({ getValue }) => formatFiberSummary(getValue()),
+  }),
   columnHelper.accessor("batch", {
     header: "Batch",
     cell: ({ getValue }) => getValue() || "—",
@@ -85,7 +97,7 @@ export function InventoryTable({
     if (!needle) return rows;
     return rows.filter((row) =>
       matchesScan(row, { raw: needle, sku: needle, upc: needle }) ||
-      [row.description, row.locationCode, row.roomName]
+      [row.description, row.manufacturer, row.color, row.locationCode, row.roomName]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
