@@ -135,6 +135,19 @@
     min-height: 100dvh;
     min-height: 100svh;
   }
+
+  select option,
+  select optgroup {
+    background-color: #ffffff;
+    color: #171717;
+  }
+
+  .dark select option,
+  .dark select optgroup {
+    color-scheme: dark;
+    background-color: #3f3f46;
+    color: #f4f4f5;
+  }
 }
 
 @layer components {
