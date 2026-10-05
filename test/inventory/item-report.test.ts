@@ -123,6 +123,10 @@ describe("item report queries", () => {
     expect(bySku.rows.some((row) => row.source === "inbound")).to.equal(true);
     expect(bySku.rows.some((row) => row.source === "outbound")).to.equal(true);
     expect(bySku.totals.skus).to.equal(1);
+    expect(bySku.totals.onHandUnits).to.equal(24);
+    expect(bySku.totals.units).to.equal(24);
+    expect(bySku.totals.awaitingPutawayUnits).to.equal(12);
+    expect(bySku.totals.shippedUnits).to.be.greaterThan(0);
     expect(
       bySku.rows.find((row) => row.source === "on-hand")?.manufacturer,
     ).to.equal("Corning");

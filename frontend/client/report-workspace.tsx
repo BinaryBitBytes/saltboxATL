@@ -31,6 +31,7 @@ import {
   type ItemReportFilters,
   type ItemReportRow,
 } from "@/lib/reports/item-report";
+import type { InventoryCountReport } from "@/lib/inventory/count-math";
 import { formatDateTime } from "@/lib/format";
 import { LIMITS } from "@/lib/validation/limits";
 import type { ScanPayload } from "@/lib/scan-code";
@@ -49,7 +50,13 @@ function SourceBadge({ source }: { source: ItemReportRow["source"] }) {
   return <Badge variant="outline">outbound</Badge>;
 }
 
-export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
+export function ReportWorkspace({
+  catalog,
+  count,
+}: {
+  catalog: ItemReportRow[];
+  count: InventoryCountReport;
+}) {
   const [filters, setFilters] = useState<ItemReportFilters>(EMPTY_FILTERS);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const report = useMemo(
@@ -92,6 +99,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
 
   return (
     <div className="grid gap-6">
+      <InventoryCountCard count={count} />
       <Card>
         <CardHeader>
           <CardTitle>Query items</CardTitle>
@@ -175,9 +183,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
             <p className="text-sm text-muted-foreground">
-              {report.totals.lines} line{report.totals.lines === 1 ? "" : "s"} ·{" "}
-              {report.totals.skus} SKU{report.totals.skus === 1 ? "" : "s"} ·{" "}
-              {report.totals.units} unit{report.totals.units === 1 ? "" : "s"}
+              {countSummary(report.totals)}
             </p>
             <Button
               type="button"
@@ -214,9 +220,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                   {filterSummary(report.filters)}
                 </p>
                 <p className="mt-1 text-xs">
-                  {report.totals.lines} line{report.totals.lines === 1 ? "" : "s"} ·{" "}
-                  {report.totals.skus} SKU{report.totals.skus === 1 ? "" : "s"} ·{" "}
-                  {report.totals.units} unit{report.totals.units === 1 ? "" : "s"}
+                  {countSummary(report.totals)}
                 </p>
               </header>
               <table className="w-full border-collapse text-xs">
@@ -318,6 +322,78 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
       )}
     </div>
   );
+}
+
+function countSummary(totals: {
+  lines: number;
+  skus: number;
+  onHandUnits: number;
+  awaitingPutawayUnits: number;
+  shippedUnits: number;
+}): string {
+  return [
+    `${totals.lines} line${totals.lines === 1 ? "" : "s"}`,
+    `${totals.skus} SKU${totals.skus === 1 ? "" : "s"}`,
+    `On hand ${totals.onHandUnits}`,
+    `Awaiting putaway ${totals.awaitingPutawayUnits}`,
+    `Shipped ${totals.shippedUnits}`,
+  ].join(" · ");
+}
+
+function InventoryCountCard({ count }: { count: InventoryCountReport }) {
+  const figures = [
+    ["On hand", count.onHand],
+    ["Overage", count.movements.overage],
+    ["Shortage", count.movements.shortage],
+    ["Damage write-off", -count.movements.damageWriteOff],
+    ["Damage moved", count.movements.damageMoved],
+    ["Import", count.movements.import],
+  ] as const;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Inventory count</CardTitle>
+        <CardDescription>
+          On-hand quantity checked against overage, shortage, damage, and
+          import transactions. Each movement must end at its starting quantity
+          plus its delta, and the last movement must match the quantity still
+          on hand.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {figures.map(([label, value]) => (
+            <div key={label} className="rounded-md border border-border px-3 py-2">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {label === "On hand" || label === "Damage moved" ? value : formatSigned(value)}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="text-sm">
+          {count.balanced
+            ? "Transaction math matches on-hand inventory."
+            : `${count.discrepancies.length} count ${count.discrepancies.length === 1 ? "discrepancy" : "discrepancies"}.`}
+        </p>
+        {count.discrepancies.length > 0 ? (
+          <ul className="grid gap-1 text-sm text-destructive">
+            {count.discrepancies.slice(0, 8).map((entry) => (
+              <li key={`${entry.transactionId ?? entry.inventoryItemId}-${entry.message}`}>
+                {entry.message}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatSigned(value: number): string {
+  if (value > 0) return `+${value}`;
+  return String(value);
 }
 
 function filterSummary(filters: ItemReportFilters): string {
