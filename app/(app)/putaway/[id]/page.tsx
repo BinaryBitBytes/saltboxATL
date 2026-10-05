@@ -5,6 +5,7 @@ import { requirePermission } from "@/backend/server/dal";
 import { PutawayWorkspace } from "@/frontend/client/putaway-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { formatDateTime } from "@/lib/format";
+import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,6 +25,7 @@ export default async function PutawayOrderPage({
   const system = await getSystem();
   const order = system.receivingOrders.find((entry) => entry.id === id);
   if (!order) notFound();
+  const jobIdNumber = jobIdForPurchaseOrder(system.purchaseOrders, order.poNumber);
 
   const cases = order.pallets.flatMap((pallet) => pallet.cases);
   const units = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
@@ -58,9 +60,13 @@ export default async function PutawayOrderPage({
       <Card>
         <CardHeader>
           <CardTitle>Staged receipt</CardTitle>
-          <CardDescription>PO {order.poNumber}</CardDescription>
+          <CardDescription>
+            PO {order.poNumber}
+            {jobIdNumber ? ` · Job ${jobIdNumber}` : ""}
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <Detail label="Job ID" value={formatJobId(jobIdNumber)} />
           <Detail label="Receiver" value={order.receiverName} />
           <Detail label="Cases" value={String(cases.length)} />
           <Detail label="Units" value={String(units)} />

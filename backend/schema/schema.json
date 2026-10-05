@@ -1,7 +1,8 @@
 {
     "PO_#":{
         "Purchase_Order_Number": "String",
-        "Date_PO_Generated": "String"
+        "Date_PO_Generated": "String",
+        "JobIDNumber": "String"
     },
     "Order":{
         "ID": "Number",

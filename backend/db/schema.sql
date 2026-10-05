@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   id UUID PRIMARY KEY,
   purchase_order_number TEXT NOT NULL,
   generated_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ
+  created_at TIMESTAMPTZ,
+  job_id_number TEXT
 );
 
 CREATE TABLE IF NOT EXISTS receiving_orders (

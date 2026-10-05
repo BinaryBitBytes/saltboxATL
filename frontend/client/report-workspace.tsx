@@ -39,6 +39,7 @@ const EMPTY_FILTERS: ItemReportFilters = {
   sku: "",
   upc: "",
   poNumber: "",
+  jobIdNumber: "",
   location: "",
   description: "",
 };
@@ -96,8 +97,8 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
         <CardHeader>
           <CardTitle>Query items</CardTitle>
           <CardDescription>
-            Search SKU, UPC, PO, location, or description. Combined filters
-            narrow the report.
+            Search SKU, UPC, PO, job ID, location, or description. Combined
+            filters narrow the report.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
@@ -131,6 +132,15 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                 maxLength={LIMITS.text}
                 placeholder="PO-88"
                 onChange={(event) => setField("poNumber", event.target.value)}
+              />
+            </Field>
+            <Field label="Job ID" htmlFor="report-job-id">
+              <Input
+                id="report-job-id"
+                value={filters.jobIdNumber ?? ""}
+                maxLength={LIMITS.code}
+                placeholder="JOB-1042"
+                onChange={(event) => setField("jobIdNumber", event.target.value)}
               />
             </Field>
             <Field label="Location" htmlFor="report-location">
@@ -229,13 +239,14 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                     <th className="py-1 font-semibold">Color</th>
                     <th className="py-1 font-semibold">Location</th>
                     <th className="py-1 font-semibold">Source</th>
+                    <th className="py-1 font-semibold">Job ID</th>
                     <th className="py-1 text-right font-semibold">Qty</th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.rows.length === 0 ? (
                     <tr>
-                      <td className="py-3 text-neutral-600" colSpan={8}>
+                      <td className="py-3 text-neutral-600" colSpan={9}>
                         No items matched that query.
                       </td>
                     </tr>
@@ -251,6 +262,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                           {row.roomName} / {row.locationCode}
                         </td>
                         <td className="py-1.5">{row.sourceLabel}</td>
+                        <td className="py-1.5">{row.jobIdNumber || "—"}</td>
                         <td className="py-1.5 text-right">{row.quantity}</td>
                       </tr>
                     ))
@@ -271,13 +283,14 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                   <TableHead>Color</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Source</TableHead>
+                  <TableHead>Job ID</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {report.rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-muted-foreground">
+                    <TableCell colSpan={9} className="text-muted-foreground">
                       No items matched that query.
                     </TableCell>
                   </TableRow>
@@ -307,6 +320,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                           </span>
                         </div>
                       </TableCell>
+                      <TableCell>{row.jobIdNumber || "—"}</TableCell>
                       <TableCell className="text-right">{row.quantity}</TableCell>
                     </TableRow>
                   ))
@@ -325,6 +339,7 @@ function filterSummary(filters: ItemReportFilters): string {
     filters.sku ? `SKU ${filters.sku}` : null,
     filters.upc ? `UPC ${filters.upc}` : null,
     filters.poNumber ? `PO ${filters.poNumber}` : null,
+    filters.jobIdNumber ? `Job ${filters.jobIdNumber}` : null,
     filters.location ? `Location ${filters.location}` : null,
     filters.description ? `Description “${filters.description}”` : null,
   ].filter(Boolean);

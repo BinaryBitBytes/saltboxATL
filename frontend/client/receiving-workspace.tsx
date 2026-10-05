@@ -141,10 +141,12 @@ function valuesFromCase(item: CaseItem): CaseFormValues {
 export function ReceivingWorkspace({
   order,
   knownProducts,
+  jobIdNumber = null,
   canReopen = false,
 }: {
   order: ReceivingOrder;
   knownProducts: KnownProduct[];
+  jobIdNumber?: string | null;
   canReopen?: boolean;
 }) {
   const router = useRouter();
@@ -243,7 +245,7 @@ export function ReceivingWorkspace({
               printId="inbound-labels"
               title="Print inbound labels"
               description="Print case labels after receiving so putaway and inventory can scan the freight."
-              labels={buildInboundLabels(order)}
+              labels={buildInboundLabels(order, jobIdNumber)}
             />
           </CardContent>
         </Card>

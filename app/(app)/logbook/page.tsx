@@ -16,6 +16,7 @@ export default async function LogbookPage() {
     transactions: system.transactions,
     photos: system.photos ?? [],
     locationCodes,
+    purchaseOrders: system.purchaseOrders,
   });
 
   return (

@@ -8,6 +8,8 @@ import { collectKnownProducts } from "@/lib/codes/product-codes";
 import { photosForOwnerKind } from "@/lib/photos/query";
 import { hasPermission } from "@/lib/auth/permissions";
 import { formatDateTime } from "@/lib/format";
+import { jobIdForPurchaseOrder } from "@/lib/purchase-orders";
+import { JobIdEditor } from "@/frontend/client/job-id-editor";
 import { remainingExpectedPallets } from "@/lib/receiving/reopen";
 import {
   Card,
@@ -31,6 +33,7 @@ export default async function ReceivingOrderPage({
   const canEditPhotos = order.status !== "cancelled";
   const remaining = remainingExpectedPallets(order);
   const canReopen = hasPermission(user.role, "reopenReceiving");
+  const jobIdNumber = jobIdForPurchaseOrder(system.purchaseOrders, order.poNumber);
 
   return (
     <div className="grid gap-6">
@@ -63,6 +66,10 @@ export default async function ReceivingOrderPage({
           <CardDescription>PO {order.poNumber}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <JobIdEditor
+            purchaseOrderNumber={order.poNumber}
+            jobIdNumber={jobIdNumber}
+          />
           <Detail label="Receiver" value={order.receiverName} />
           <Detail
             label="Expected pallets"
@@ -100,7 +107,7 @@ export default async function ReceivingOrderPage({
         photos={photosForOwnerKind(photos, "receiving-order", order.id, "freight-proof")}
         canEdit={canEditPhotos}
         title="Proof of inbound freight"
-        description={`Freight photos for PO ${order.poNumber} — pallets, seals, and condition. Keep manifests and pack slips in the document fields below.`}
+        description={`Freight photos for PO ${order.poNumber}${jobIdNumber ? ` · Job ${jobIdNumber}` : ""} — pallets, seals, and condition. Keep manifests and pack slips in the document fields below.`}
       />
 
       <div className="grid gap-6 min-[56rem]:grid-cols-3">
@@ -138,6 +145,7 @@ export default async function ReceivingOrderPage({
 
       <ReceivingWorkspace
         order={order}
+        jobIdNumber={jobIdNumber}
         knownProducts={collectKnownProducts(system)}
         canReopen={canReopen}
       />

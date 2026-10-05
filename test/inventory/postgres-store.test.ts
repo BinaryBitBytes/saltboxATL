@@ -161,12 +161,15 @@ describe("postgresql inventory mapping", () => {
       created_at: now,
       created_by: "Avery Manager",
     }).ownerType).to.equal("receiving-order");
-    expect(mapPurchaseOrder({
+    const purchaseOrder = mapPurchaseOrder({
       id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
       purchase_order_number: "PO-1",
       generated_at: now,
       created_at: now,
-    }).purchaseOrderNumber).to.equal("PO-1");
+      job_id_number: "JOB-1",
+    });
+    expect(purchaseOrder.purchaseOrderNumber).to.equal("PO-1");
+    expect(purchaseOrder.jobIdNumber).to.equal("JOB-1");
     expect(mapShippingOrder({
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
       shipped_at: now,

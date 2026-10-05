@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { z } from "zod";
 import { NonEmptyStringSchema } from "@/lib/inventory-schema";
+import { LIMITS } from "@/lib/validation/limits";
 import { createReceivingOrder } from "@/backend/server/serverAction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,10 +14,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/frontend/client/field";
 import { localDateTimeValue, toIsoDateTime } from "@/lib/format";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
-import { LIMITS } from "@/lib/validation/limits";
 
 const ReceivingFormSchema = z.object({
   poNumber: NonEmptyStringSchema,
+  jobIdNumber: z
+    .string()
+    .trim()
+    .max(LIMITS.code, { error: `Must be ${LIMITS.code} characters or fewer.` }),
   poGeneratedAtLocal: z.string().min(1),
   vendor: NonEmptyStringSchema,
   orderNumber: NonEmptyStringSchema,
@@ -44,6 +48,7 @@ export default function ReceivingForm({
     resolver: zodResolver(ReceivingFormSchema),
     defaultValues: {
       poNumber: "",
+      jobIdNumber: "",
       vendor: "",
       orderNumber: "",
       carrierInbound: "",
@@ -60,6 +65,7 @@ export default function ReceivingForm({
     startTransition(async () => {
       const result = await createReceivingOrder({
         poNumber: values.poNumber,
+        jobIdNumber: values.jobIdNumber,
         vendor: values.vendor,
         orderNumber: values.orderNumber,
         carrierInbound: values.carrierInbound,
@@ -97,6 +103,18 @@ export default function ReceivingForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="PO number" htmlFor="poNumber" error={errors.poNumber?.message}>
           <Input id="poNumber" {...form.register("poNumber")} />
+        </Field>
+        <Field
+          label="Job ID (optional)"
+          htmlFor="jobIdNumber"
+          error={errors.jobIdNumber?.message}
+        >
+          <Input
+            id="jobIdNumber"
+            maxLength={LIMITS.code}
+            placeholder="Internal tracking number"
+            {...form.register("jobIdNumber")}
+          />
         </Field>
         <Field
           label="PO generated"

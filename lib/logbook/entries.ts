@@ -1,9 +1,11 @@
 import type {
   InventoryTransaction,
   PhotoAttachment,
+  PurchaseOrder,
   ReceivingOrder,
   ShippingOrder,
 } from "@/lib/inventory-schema";
+import { jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import type { PackSlipDocument, LoadManifestDocument } from "@/lib/shipping/documents";
 import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
 import { photosForOwner, photosForOwnerKind } from "@/lib/photos/query";
@@ -50,6 +52,7 @@ export function buildLogbookEntries(input: {
   transactions: InventoryTransaction[];
   photos: PhotoAttachment[];
   locationCodes: Map<string, string>;
+  purchaseOrders?: PurchaseOrder[];
 }): LogbookEntry[] {
   const photos = input.photos ?? [];
   const deliveries: LogbookEntry[] = input.receivingOrders.map((order) => {
@@ -66,12 +69,18 @@ export function buildLogbookEntries(input: {
         batch: item.batch,
       })),
     );
+    const jobId = jobIdForPurchaseOrder(
+      input.purchaseOrders ?? [],
+      order.poNumber,
+    );
     return {
       id: `delivery:${order.id}`,
       kind: "delivery" as const,
       occurredAt: order.receivedAt,
       title: `Delivery ${order.orderNumber}`,
-      subtitle: `PO ${order.poNumber} · ${order.vendor}`,
+      subtitle: jobId
+        ? `PO ${order.poNumber} · Job ${jobId} · ${order.vendor}`
+        : `PO ${order.poNumber} · ${order.vendor}`,
       status: order.status,
       isPartialed: order.isPartialed,
       actor: order.receiverName,
