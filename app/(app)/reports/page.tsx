@@ -1,6 +1,7 @@
 import { getSystem } from "@/backend/server/store";
 import { requireUser } from "@/backend/server/dal";
 import { buildItemCatalog } from "@/lib/reports/item-report";
+import { buildInventoryCountReport } from "@/lib/inventory/count-math";
 import { ReportWorkspace } from "@/frontend/client/report-workspace";
 
 export default async function ReportsPage() {
@@ -13,6 +14,10 @@ export default async function ReportsPage() {
     receivingOrders: system.receivingOrders,
     shippingOrders: system.shippingOrders,
   });
+  const count = buildInventoryCountReport({
+    items: system.inventoryItems,
+    transactions: system.transactions,
+  });
 
   return (
     <div className="grid gap-6">
@@ -23,7 +28,7 @@ export default async function ReportsPage() {
           then print or export a report of the matches.
         </p>
       </div>
-      <ReportWorkspace catalog={catalog} />
+      <ReportWorkspace catalog={catalog} count={count} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   type InventoryLineDetails,
 } from "@/lib/inventory/details";
 import { inventoryKey } from "@/lib/inventory/keys";
+import { ValidationError } from "@/lib/validation/errors";
 import {
   assertEnoughOnHand,
   assertFiniteQuantity,
@@ -395,6 +396,11 @@ export function applyAdjustment(input: {
   };
 
   if (type === "damage" && damagedLocationId) {
+    if (damagedLocationId === current.locationId) {
+      throw new ValidationError(
+        "Damaged hold location must be a different bin from the source location.",
+      );
+    }
     const moved = addQuantity(items, {
       sku: current.sku,
       upc: current.upc,

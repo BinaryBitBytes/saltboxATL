@@ -32,6 +32,7 @@ export type ItemReportRow = {
   roomName: string;
   source: ItemReportSource;
   sourceLabel: string;
+  inboundState?: "awaiting" | "received" | "cancelled";
   poNumber?: string;
   status?: string;
 };
@@ -42,6 +43,9 @@ export type ItemReport = {
   totals: {
     lines: number;
     units: number;
+    onHandUnits: number;
+    awaitingPutawayUnits: number;
+    shippedUnits: number;
     skus: number;
   };
 };
@@ -144,6 +148,12 @@ export function buildItemCatalog(input: {
           roomName: slot.roomName,
           source: "inbound" as const,
           sourceLabel: `PO ${order.poNumber} · ${order.orderNumber}`,
+          inboundState:
+            order.status === "cancelled"
+              ? "cancelled"
+              : item.putawayPostedAt
+                ? "received"
+                : "awaiting",
           poNumber: order.poNumber,
           status: order.status,
         };
@@ -182,7 +192,18 @@ export function queryItemReport(
 ): ItemReport {
   const filters = normalizeReportFilters(rawFilters);
   if (!hasReportFilters(filters)) {
-    return { filters, rows: [], totals: { lines: 0, units: 0, skus: 0 } };
+    return {
+      filters,
+      rows: [],
+      totals: {
+        lines: 0,
+        units: 0,
+        onHandUnits: 0,
+        awaitingPutawayUnits: 0,
+        shippedUnits: 0,
+        skus: 0,
+      },
+    };
   }
 
   const poSkus = new Set(
@@ -209,11 +230,7 @@ export function queryItemReport(
   return {
     filters,
     rows,
-    totals: {
-      lines: rows.length,
-      units: rows.reduce((sum, row) => sum + row.quantity, 0),
-      skus: uniqueSkuCount(rows),
-    },
+    totals: countReportRows(rows),
   };
 }
 
@@ -252,6 +269,26 @@ export function itemReportToCsv(report: ItemReport): string {
     ),
   ];
   return `${lines.join("\n")}\n`;
+}
+
+function countReportRows(rows: ItemReportRow[]): ItemReport["totals"] {
+  const onHandUnits = sumQuantity(rows.filter((row) => row.source === "on-hand"));
+  const awaitingPutawayUnits = sumQuantity(
+    rows.filter((row) => row.source === "inbound" && row.inboundState === "awaiting"),
+  );
+  const shippedUnits = sumQuantity(rows.filter((row) => row.source === "outbound"));
+  return {
+    lines: rows.length,
+    units: onHandUnits,
+    onHandUnits,
+    awaitingPutawayUnits,
+    shippedUnits,
+    skus: uniqueSkuCount(rows),
+  };
+}
+
+function sumQuantity(rows: ItemReportRow[]): number {
+  return rows.reduce((sum, row) => sum + row.quantity, 0);
 }
 
 function rowMatchesFilters(
