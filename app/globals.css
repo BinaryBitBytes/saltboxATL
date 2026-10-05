@@ -135,6 +135,18 @@
     min-height: 100dvh;
     min-height: 100svh;
   }
+
+  /*
+   * Native option menus keep a white background in dark mode. The page
+   * foreground is white there too, so the labels vanish. Pin the option
+   * text to a dark color that stays readable on that white list.
+   */
+  select option,
+  select optgroup {
+    color-scheme: light;
+    background-color: #ffffff;
+    color: #171717;
+  }
 }
 
 @layer components {
