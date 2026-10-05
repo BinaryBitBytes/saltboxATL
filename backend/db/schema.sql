@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   location_id UUID NOT NULL REFERENCES locations (id),
   quantity INTEGER NOT NULL CHECK (quantity >= 0),
   description TEXT,
+  manufacturer TEXT NOT NULL DEFAULT '',
+  color TEXT,
+  is_fiber BOOLEAN NOT NULL DEFAULT FALSE,
+  connection_type TEXT,
+  strand_count INTEGER,
+  length_meters DOUBLE PRECISION,
   last_moved_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ
 );

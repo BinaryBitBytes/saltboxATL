@@ -111,8 +111,9 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO inventory_items (
          id, sku, upc, batch, location_id, quantity, description,
+         manufacturer, color, is_fiber, connection_type, strand_count, length_meters,
          last_moved_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         item.id,
         item.sku,
@@ -121,6 +122,12 @@ export async function saveSystem(
         item.locationId,
         item.quantity,
         item.description ?? null,
+        item.manufacturer ?? "",
+        item.color ?? null,
+        item.fiber?.isFiber ?? false,
+        item.fiber?.connectionType ?? null,
+        item.fiber?.strandCount ?? null,
+        item.fiber?.lengthMeters ?? null,
         item.lastMovedAt ?? null,
         item.updatedAt ?? null,
       ],

@@ -296,6 +296,18 @@ export type CreateShippingOrderInput = z.infer<
   typeof CreateShippingOrderInputSchema
 >;
 
+const OptionalColorSchema = z.preprocess(
+  (value) => (value === "" || value === undefined ? null : value),
+  z
+    .string()
+    .trim()
+    .max(LIMITS.code)
+    .nullable()
+    .refine((value) => value == null || (!hasControlChars(value) && !hasHtmlMarkup(value)), {
+      error: "Color contains invalid characters.",
+    }),
+);
+
 export const InventoryItemSchema = z.object({
   id: UuidSchema,
   sku: SkuSchema,
@@ -304,6 +316,9 @@ export const InventoryItemSchema = z.object({
   locationId: UuidSchema,
   quantity: NonNegativeCountSchema,
   description: z.string().optional(),
+  manufacturer: OptionalSafeTextSchema,
+  color: OptionalColorSchema.default(null),
+  fiber: FiberItemSchema.nullable().default(null),
   lastMovedAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
 });

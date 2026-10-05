@@ -63,6 +63,11 @@ import {
   type SpreadsheetImportMode,
   type SpreadsheetImportPlan,
 } from "@/lib/inventory/spreadsheet";
+import {
+  applyInventoryDetails,
+  attributesFromReceiving,
+  backfillOnHandAttributes,
+} from "@/lib/inventory/details";
 
 export class ServiceError extends Error {
   constructor(
@@ -85,8 +90,12 @@ export function enrichInventory(
   return system.inventoryItems.map((item) => {
     const location = locations.get(item.locationId);
     const room = location ? rooms.get(location.roomId) : undefined;
+    const filled = applyInventoryDetails(
+      item,
+      attributesFromReceiving(item, system.receivingOrders),
+    );
     return {
-      ...item,
+      ...filled,
       locationCode: location?.code ?? "UNKNOWN",
       roomName: room?.name ?? "Unknown room",
     };
@@ -700,8 +709,8 @@ export async function createShippingOrderRecord(
         shipped.sku,
         shipped.batch,
       );
-      shipped.manufacturer = attributes.manufacturer;
-      shipped.color = attributes.color;
+      if (!shipped.manufacturer) shipped.manufacturer = attributes.manufacturer;
+      if (shipped.color == null) shipped.color = attributes.color;
     }
 
     const pallet: Pallet = recountPallet({
@@ -806,6 +815,11 @@ export async function createLocationRecord(
 
 export async function getInventoryRows(): Promise<InventoryRow[]> {
   const system = await readSystem();
+  if (backfillOnHandAttributes(system)) {
+    await updateSystem((current) => {
+      backfillOnHandAttributes(current);
+    });
+  }
   return enrichInventory(system);
 }
 
@@ -880,6 +894,13 @@ export async function importInventorySpreadsheet(input: {
         locationId: change.locationId,
         quantity: change.quantityAfter,
         description: change.description,
+        details: {
+          ...(change.manufacturer !== undefined
+            ? { manufacturer: change.manufacturer }
+            : {}),
+          ...(change.color !== undefined ? { color: change.color } : {}),
+          ...(change.fiber !== undefined ? { fiber: change.fiber } : {}),
+        },
         now,
       });
       items = result.items;
