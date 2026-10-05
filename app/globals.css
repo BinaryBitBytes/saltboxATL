@@ -135,18 +135,6 @@
     min-height: 100dvh;
     min-height: 100svh;
   }
-
-  /*
-   * Native select popups paint option rows with the control's own colors.
-   * A transparent option background stays on the light system menu, so dark
-   * mode leaves light text on a light list. Pin each option to the same
-   * popover contrast the rest of the page uses.
-   */
-  select option,
-  select optgroup {
-    background-color: var(--popover);
-    color: var(--popover-foreground);
-  }
 }
 
 @layer components {
