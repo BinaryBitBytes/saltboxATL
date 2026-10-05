@@ -63,6 +63,11 @@ import {
   type SpreadsheetImportMode,
   type SpreadsheetImportPlan,
 } from "@/lib/inventory/spreadsheet";
+import {
+  applyInventoryDetails,
+  attributesFromReceiving,
+  backfillOnHandAttributes,
+} from "@/lib/inventory/details";
 
 export class ServiceError extends Error {
   constructor(
@@ -85,8 +90,12 @@ export function enrichInventory(
   return system.inventoryItems.map((item) => {
     const location = locations.get(item.locationId);
     const room = location ? rooms.get(location.roomId) : undefined;
+    const filled = applyInventoryDetails(
+      item,
+      attributesFromReceiving(item, system.receivingOrders),
+    );
     return {
-      ...item,
+      ...filled,
       locationCode: location?.code ?? "UNKNOWN",
       roomName: room?.name ?? "Unknown room",
     };
@@ -806,6 +815,11 @@ export async function createLocationRecord(
 
 export async function getInventoryRows(): Promise<InventoryRow[]> {
   const system = await readSystem();
+  if (backfillOnHandAttributes(system)) {
+    await updateSystem((current) => {
+      backfillOnHandAttributes(current);
+    });
+  }
   return enrichInventory(system);
 }
 

@@ -11,7 +11,13 @@ import {
   assertImportPlanReady,
 } from "@/lib/inventory/spreadsheet";
 import { putAwayCases, setOnHandQuantity } from "@/backend/server/inventory-ops";
-import type { CaseItem, InventoryRow, Room } from "@/lib/inventory-schema";
+import { enrichInventory } from "@/backend/server/inventory-service";
+import {
+  applyInventoryDetails,
+  attributesFromReceiving,
+  backfillOnHandAttributes,
+} from "@/lib/inventory/details";
+import type { CaseItem, InventoryRow, ReceivingOrder, Room } from "@/lib/inventory-schema";
 import {
   assertSpreadsheetSize,
   replaySpreadsheetText,
@@ -267,6 +273,79 @@ describe("inventory spreadsheet import and export", () => {
     );
     expect(parsed[0]?.manufacturer).to.equal("Corning");
     expect(parsed[0]?.connection).to.equal("LC");
+  });
+
+  it("exports color, manufacturer, and fiber stored on the received case when the on-hand line is blank", () => {
+    const item = makeItem({
+      sku: "CBL-ORG-100",
+      upc: "010000000088",
+      description: "orange cable",
+      locationId: location.id,
+      quantity: 15,
+      manufacturer: "",
+      color: null,
+      fiber: null,
+      batch: null,
+    });
+    const order = {
+      status: "completed",
+      pallets: [
+        {
+          cases: [
+            {
+              sku: "CBL-ORG-100",
+              batch: null,
+              manufacturer: "Belden",
+              color: "Orange",
+              fiber: {
+                isFiber: true,
+                connectionType: "LC",
+                strandCount: 1,
+                lengthMeters: 100,
+              },
+              putawayLocationId: location.id,
+              putawayPostedAt: "2026-10-05T12:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    } as ReceivingOrder;
+    const filled = applyInventoryDetails(item, attributesFromReceiving(item, [order]));
+    expect(filled.color).to.equal("Orange");
+    expect(filled.manufacturer).to.equal("Belden");
+    expect(filled.fiber?.connectionType).to.equal("LC");
+
+    const rows = enrichInventory({
+      inventoryItems: [item],
+      locations: [location],
+      rooms: [room],
+      receivingOrders: [order],
+      shippingOrders: [],
+      purchaseOrders: [],
+      transactions: [],
+      photos: [],
+      users: [],
+    });
+    const parsed = parseInventorySpreadsheet(inventoryRowsToSpreadsheet(rows));
+    expect(parsed[0]?.color).to.equal("Orange");
+    expect(parsed[0]?.manufacturer).to.equal("Belden");
+    expect(parsed[0]?.fiber).to.equal("Yes");
+    expect(parsed[0]?.connection).to.equal("LC");
+    expect(parsed[0]?.strandCount).to.equal("1");
+    expect(parsed[0]?.lengthMeters).to.equal("100");
+
+    expect(backfillOnHandAttributes({
+      inventoryItems: [item],
+      receivingOrders: [order],
+    })).to.equal(true);
+    expect(item.color).to.equal("Orange");
+
+    const painted = makeItem({
+      sku: "CBL-ORG-100",
+      locationId: location.id,
+      color: "Blue",
+    });
+    expect(attributesFromReceiving(painted, [order]).color).to.equal(undefined);
   });
 
   it("exports on-hand inventory and parses that spreadsheet back", () => {
