@@ -13,7 +13,11 @@ export type WarehouseLabel = {
   fields: Array<{ label: string; value: string }>;
 };
 
-export function buildInboundLabels(order: ReceivingOrder): WarehouseLabel[] {
+export function buildInboundLabels(
+  order: ReceivingOrder,
+  jobIdNumber?: string | null,
+): WarehouseLabel[] {
+  const jobId = jobIdNumber?.trim();
   return order.pallets.flatMap((pallet) =>
     pallet.cases.map((item) => ({
       id: item.id,
@@ -29,6 +33,7 @@ export function buildInboundLabels(order: ReceivingOrder): WarehouseLabel[] {
       fields: [
         { label: "Order", value: order.orderNumber },
         { label: "PO", value: order.poNumber },
+        ...(jobId ? [{ label: "Job ID", value: jobId }] : []),
         { label: "Vendor", value: order.vendor },
         { label: "Pallet", value: pallet.palletNumber },
         { label: "Tracking", value: pallet.trackingNumber || "—" },

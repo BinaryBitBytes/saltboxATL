@@ -8,6 +8,7 @@ import {
   reopenReceivingOrder,
   createLocationRecord,
   createReceivingOrderRecord,
+  setPurchaseOrderJobIdRecord,
   createRoomRecord,
   createShippingOrderRecord,
   createAdjustmentRecord,
@@ -22,7 +23,7 @@ import {
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
-import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
+import type { PurchaseOrder, ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
 import {
   replaySpreadsheetText,
   spreadsheetTextFromForm,
@@ -69,6 +70,19 @@ export async function createReceivingOrder(
     const data = await createReceivingOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     revalidatePath(`/receiving/${data.id}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function setPurchaseOrderJobId(
+  rawData: unknown,
+): Promise<ActionResult<PurchaseOrder>> {
+  try {
+    await requireApiPermission("receive");
+    const data = await setPurchaseOrderJobIdRecord(rawData);
+    revalidateInventory();
     return { ok: true, data };
   } catch (error) {
     return fail(error);

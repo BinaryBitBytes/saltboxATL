@@ -30,6 +30,7 @@ import {
  *
  * Field mapping from `backend/schema/schema.json`:
  * - PO_# → PurchaseOrder
+ * - PO_#.JobIDNumber → PurchaseOrder.jobIdNumber (optional internal project tracking number)
  * - Order → ReceivingOrder
  * - Shipment_Contents.Pallet_Receiving / Current_Pallet_Working → Pallet[]
  * - Case_Item → CaseItem (including Manufacturer, Color_of_Item, Is_Fiber_Item, Putaway_Room, Putaway_Location)
@@ -189,11 +190,34 @@ export function isClosedReceiving(status: ReceivingOrderStatus): boolean {
   return status === "received" || status === "completed";
 }
 
+/** Optional internal tracking number stored under PO #. Blank values are stored as null. */
+export const JobIdNumberSchema = z.preprocess(
+  (value) => {
+    if (value == null) return null;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed === "" ? null : trimmed;
+    }
+    return value;
+  },
+  z
+    .string()
+    .max(LIMITS.code, { error: `Must be ${LIMITS.code} characters or fewer.` })
+    .refine((value) => !hasControlChars(value), {
+      error: "Control characters are not allowed.",
+    })
+    .refine((value) => !hasHtmlMarkup(value), {
+      error: "HTML markup is not allowed.",
+    })
+    .nullable(),
+);
+
 export const PurchaseOrderSchema = z.object({
   id: UuidSchema,
   purchaseOrderNumber: NonEmptyStringSchema,
   generatedAt: DateTimeSchema,
   createdAt: DateTimeSchema.optional(),
+  jobIdNumber: JobIdNumberSchema.optional().default(null),
 });
 export type PurchaseOrder = z.infer<typeof PurchaseOrderSchema>;
 
@@ -223,6 +247,7 @@ export type ReceivingOrder = z.infer<typeof ReceivingOrderSchema>;
 
 export const CreateReceivingOrderInputSchema = z.object({
   poNumber: NonEmptyStringSchema,
+  jobIdNumber: JobIdNumberSchema.optional().default(null),
   poGeneratedAt: DateTimeSchema.optional(),
   receivedAt: DateTimeSchema.optional(),
   vendor: NonEmptyStringSchema,
@@ -237,6 +262,14 @@ export const CreateReceivingOrderInputSchema = z.object({
 });
 export type CreateReceivingOrderInput = z.infer<
   typeof CreateReceivingOrderInputSchema
+>;
+
+export const SetPurchaseOrderJobIdInputSchema = z.object({
+  purchaseOrderNumber: NonEmptyStringSchema,
+  jobIdNumber: JobIdNumberSchema.optional().default(null),
+});
+export type SetPurchaseOrderJobIdInput = z.infer<
+  typeof SetPurchaseOrderJobIdInputSchema
 >;
 
 export const ReopenReceivingInputSchema = z

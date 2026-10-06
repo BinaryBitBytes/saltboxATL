@@ -243,12 +243,15 @@ export function mapPurchaseOrder(row: {
   purchase_order_number: string;
   generated_at: Date | string;
   created_at: Date | string | null;
+  job_id_number?: string | null;
 }): PurchaseOrder {
+  const jobId = row.job_id_number?.trim();
   return {
     id: row.id,
     purchaseOrderNumber: row.purchase_order_number,
     generatedAt: isoRequired(row.generated_at),
     createdAt: iso(row.created_at),
+    jobIdNumber: jobId ? jobId : null,
   };
 }
 

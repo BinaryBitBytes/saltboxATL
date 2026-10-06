@@ -5,6 +5,7 @@ import {
   CreateReceivingOrderInputSchema,
   CreateRoomInputSchema,
   CreateShippingOrderInputSchema,
+  SetPurchaseOrderJobIdInputSchema,
   PalletInputSchema,
   PutawayLocationInputSchema,
   ReopenReceivingInputSchema,
@@ -17,10 +18,12 @@ import {
   type InventoryTransactionRow,
   type Location,
   type Pallet,
+  type PurchaseOrder,
   type ReceivingOrder,
   type Room,
   type ShippingOrder,
 } from "@/lib/inventory-schema";
+import { upsertPurchaseOrder } from "@/lib/purchase-orders";
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
@@ -287,24 +290,6 @@ function requireAwaitingPutaway(order: ReceivingOrder): void {
   }
 }
 
-function upsertPurchaseOrder(
-  system: InventorySystem,
-  poNumber: string,
-  generatedAt: string,
-): void {
-  const existing = system.purchaseOrders.find(
-    (po) => po.purchaseOrderNumber === poNumber,
-  );
-  if (!existing) {
-    system.purchaseOrders.unshift({
-      id: createId(),
-      purchaseOrderNumber: poNumber,
-      generatedAt,
-      createdAt: generatedAt,
-    });
-  }
-}
-
 export async function listSystem(): Promise<InventorySystem> {
   return readSystem();
 }
@@ -350,14 +335,39 @@ export async function createReceivingOrderRecord(
   };
 
   return updateSystem((system) => {
-    upsertPurchaseOrder(
-      system,
-      parsed.data.poNumber,
-      parsed.data.poGeneratedAt ?? now,
-    );
+    upsertPurchaseOrder(system.purchaseOrders, {
+      id: createId(),
+      purchaseOrderNumber: parsed.data.poNumber,
+      generatedAt: parsed.data.poGeneratedAt ?? now,
+      jobIdNumber: parsed.data.jobIdNumber,
+    });
     system.receivingOrders.unshift(order);
     return order;
   });
+}
+
+export async function setPurchaseOrderJobIdRecord(
+  rawData: unknown,
+): Promise<PurchaseOrder> {
+  const parsed = parseWithSchema(SetPurchaseOrderJobIdInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  const now = nowIso();
+  return updateSystem((system) =>
+    upsertPurchaseOrder(
+      system.purchaseOrders,
+      {
+        id: createId(),
+        purchaseOrderNumber: parsed.data.purchaseOrderNumber,
+        generatedAt: now,
+        createdAt: now,
+        jobIdNumber: parsed.data.jobIdNumber,
+      },
+      { replaceJobId: true },
+    ),
+  );
 }
 
 export async function addPalletToOrder(

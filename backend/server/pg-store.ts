@@ -186,9 +186,16 @@ export async function saveSystem(
   }
   for (const order of system.purchaseOrders) {
     await client.query(
-      `INSERT INTO purchase_orders (id, purchase_order_number, generated_at, created_at)
-       VALUES ($1, $2, $3, $4)`,
-      [order.id, order.purchaseOrderNumber, order.generatedAt, order.createdAt ?? null],
+      `INSERT INTO purchase_orders (
+         id, purchase_order_number, generated_at, created_at, job_id_number
+       ) VALUES ($1, $2, $3, $4, $5)`,
+      [
+        order.id,
+        order.purchaseOrderNumber,
+        order.generatedAt,
+        order.createdAt ?? null,
+        order.jobIdNumber ?? null,
+      ],
     );
   }
   for (const order of system.receivingOrders) {
