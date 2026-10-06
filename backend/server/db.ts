@@ -7,6 +7,7 @@ const MIGRATIONS = [
   { id: "002_inventory_attributes", file: "002_inventory_attributes.sql" },
   { id: "003_job_id_number", file: "003_job_id_number.sql" },
   { id: "004_cubing", file: "004_cubing.sql" },
+  { id: "005_customer_orders", file: "005_customer_orders.sql" },
 ] as const;
 
 let pool: Pool | undefined;

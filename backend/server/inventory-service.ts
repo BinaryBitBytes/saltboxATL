@@ -4,6 +4,7 @@ import {
   CreateLocationInputSchema,
   CreateReceivingOrderInputSchema,
   CreateRoomInputSchema,
+  CreateCustomerOrderInputSchema,
   CreateShippingOrderInputSchema,
   CubeItemInputSchema,
   SetPurchaseOrderJobIdInputSchema,
@@ -24,6 +25,7 @@ import {
   type PurchaseOrder,
   type ReceivingOrder,
   type Room,
+  type CustomerOrder,
   type ShippingOrder,
 } from "@/lib/inventory-schema";
 import { upsertPurchaseOrder } from "@/lib/purchase-orders";
@@ -86,6 +88,14 @@ import {
   attributesFromReceiving,
   backfillOnHandAttributes,
 } from "@/lib/inventory/details";
+import { assertAvailableQuantity, reservedQuantity } from "@/lib/orders/availability";
+import { warehouseLabelPrinterName } from "@/lib/orders/documents";
+import { applyOrderFulfillment } from "@/lib/orders/fulfill";
+import {
+  acknowledgeWarehousePrint,
+  cancelRemoteOrder,
+  placeRemoteOrder,
+} from "@/lib/orders/release";
 
 export class ServiceError extends Error {
   constructor(
@@ -866,6 +876,13 @@ export async function createShippingOrderRecord(
         system.locations.find((entry) => entry.id === item.locationId),
         "shipping",
       );
+      assertAvailableQuantity(
+        item.quantity,
+        reservedQuantity(system.customerOrders ?? [], item.id),
+        pick.quantity,
+        item.sku,
+        "ship",
+      );
     }
 
     const now = nowIso();
@@ -926,6 +943,113 @@ export async function createShippingOrderRecord(
     });
     system.shippingOrders.unshift(order);
     return order;
+  });
+}
+
+export async function createCustomerOrderRecord(
+  rawData: unknown,
+): Promise<CustomerOrder> {
+  const parsed = parseWithSchema(CreateCustomerOrderInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  const placedBy = parsed.data.placedBy ?? parsed.data.createdBy;
+  if (!placedBy) {
+    throw new ServiceError("A name is required to place an order.");
+  }
+  assertLargeInputConfirmed(
+    sumQuantities(parsed.data.lines),
+    parsed.data,
+    LIMITS.largePickTotal,
+    "order quantity",
+  );
+
+  return updateSystem((system) => {
+    if (!system.customerOrders) system.customerOrders = [];
+    const order = placeRemoteOrder({
+      customer: parsed.data.customer,
+      notes: parsed.data.notes,
+      placedBy,
+      createdBy: parsed.data.createdBy,
+      now: nowIso(),
+      printerName: warehouseLabelPrinterName(),
+      existingOrders: system.customerOrders ?? [],
+      inventory: system.inventoryItems,
+      locations: system.locations,
+      lines: parsed.data.lines,
+    });
+    system.customerOrders.unshift(order);
+    return order;
+  });
+}
+
+function requireCustomerOrder(
+  system: InventorySystem,
+  orderId: string,
+): CustomerOrder {
+  const order = system.customerOrders.find((entry) => entry.id === orderId);
+  if (!order) {
+    throw new ServiceError("Order not found.", 404);
+  }
+  return order;
+}
+
+export async function cancelCustomerOrderRecord(
+  orderId: string,
+): Promise<CustomerOrder> {
+  return updateSystem((system) => {
+    const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
+    if (index < 0) {
+      throw new ServiceError("Order not found.", 404);
+    }
+    const next = cancelRemoteOrder(system.customerOrders[index], nowIso());
+    system.customerOrders[index] = next;
+    return next;
+  });
+}
+
+export async function completeCustomerOrderPickRecord(
+  orderId: string,
+  completedBy: string,
+): Promise<CustomerOrder> {
+  return updateSystem((system) => {
+    const order = requireCustomerOrder(system, orderId);
+    const now = nowIso();
+    const result = applyOrderFulfillment({
+      order,
+      items: system.inventoryItems,
+      now,
+      completedBy,
+    });
+    system.inventoryItems = result.items;
+    const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
+    system.customerOrders[index] = result.order;
+    appendTransactions(system, "pick", result.changes, {
+      occurredAt: now,
+      referenceType: "customer-order",
+      referenceId: order.id,
+      createdBy: completedBy,
+      reason: `Pick ${order.pickRequest.requestNumber} for ${order.orderNumber}`,
+    });
+    return result.order;
+  });
+}
+
+export async function acknowledgeWarehousePrintsRecord(
+  orderIds: string[],
+): Promise<number> {
+  return updateSystem((system) => {
+    const now = nowIso();
+    let count = 0;
+    for (const orderId of orderIds) {
+      const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
+      if (index < 0) continue;
+      const current = system.customerOrders[index];
+      if (current.printBatch.status === "printed") continue;
+      system.customerOrders[index] = acknowledgeWarehousePrint(current, now);
+      count += 1;
+    }
+    return count;
   });
 }
 

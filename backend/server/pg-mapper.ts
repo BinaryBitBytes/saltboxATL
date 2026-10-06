@@ -1,5 +1,7 @@
 import {
   PalletSchema,
+  CustomerOrderSchema,
+  type CustomerOrder,
   type InventoryItem,
   type InventorySystem,
   type InventoryTransaction,
@@ -391,6 +393,47 @@ export function mapShippingOrder(row: {
   };
 }
 
+function parseStoredJson(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+}
+
+export function mapCustomerOrder(row: {
+  id: string;
+  order_number: string;
+  customer: string;
+  placed_by: string;
+  notes: string | null;
+  status: CustomerOrder["status"];
+  submitted_at: Date | string;
+  lines: unknown;
+  print_batch: unknown;
+  pick_request: unknown;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+  created_by: string | null;
+}): CustomerOrder {
+  return CustomerOrderSchema.parse({
+    id: row.id,
+    orderNumber: row.order_number,
+    customer: row.customer,
+    placedBy: row.placed_by,
+    notes: row.notes ?? undefined,
+    status: row.status,
+    submittedAt: isoRequired(row.submitted_at),
+    lines: parseStoredJson(row.lines) ?? [],
+    printBatch: parseStoredJson(row.print_batch),
+    pickRequest: parseStoredJson(row.pick_request),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+    createdBy: row.created_by ?? undefined,
+  });
+}
+
 export function assembleSystem(parts: {
   rooms: Room[];
   locations: Location[];
@@ -401,6 +444,7 @@ export function assembleSystem(parts: {
   purchaseOrders: PurchaseOrder[];
   receivingOrders: ReceivingOrder[];
   shippingOrders: ShippingOrder[];
+  customerOrders?: CustomerOrder[];
   itemCubes?: ItemCube[];
 }): InventorySystem {
   return {
@@ -413,6 +457,7 @@ export function assembleSystem(parts: {
     purchaseOrders: parts.purchaseOrders,
     receivingOrders: parts.receivingOrders,
     shippingOrders: parts.shippingOrders,
+    customerOrders: parts.customerOrders ?? [],
     itemCubes: parts.itemCubes ?? [],
   };
 }

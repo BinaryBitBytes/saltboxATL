@@ -37,6 +37,7 @@ import { DEFAULT_RACK_CUBE_CUBIC_INCHES } from "@/lib/cubing/measure";
  * - Case_Item → CaseItem (including Manufacturer, Color_of_Item, Is_Fiber_Item, Putaway_Room, Putaway_Location)
  * - Current_Pallet_Working.Tracking_Number → Pallet.trackingNumber
  * - Outbound_Shipped → ShippingOrder
+ * - Remote customer order → CustomerOrder (print batch + pick request)
  * - Rooms / Locations → Room / Location
  */
 
@@ -363,6 +364,7 @@ export const InventoryTransactionTypeSchema = z.enum([
   "receiving",
   "putaway",
   "shipping",
+  "pick",
   "overage",
   "shortage",
   "damage",
@@ -387,7 +389,13 @@ export const InventoryTransactionSchema = z.object({
   quantityAfter: z.coerce.number().int().min(0).optional(),
   reason: OptionalNotesSchema,
   referenceType: z
-    .enum(["receiving-order", "shipping-order", "adjustment", "spreadsheet-import"])
+    .enum([
+      "receiving-order",
+      "shipping-order",
+      "customer-order",
+      "adjustment",
+      "spreadsheet-import",
+    ])
     .optional(),
   referenceId: UuidSchema.optional(),
   scannedCode: z.string().optional(),
@@ -658,10 +666,117 @@ export type UpdateLocationCapacityInput = z.infer<
   typeof UpdateLocationCapacityInputSchema
 >;
 
+export const CustomerOrderStatusSchema = z.enum([
+  "picking",
+  "fulfilled",
+  "cancelled",
+]);
+export type CustomerOrderStatus = z.infer<typeof CustomerOrderStatusSchema>;
+
+export const CustomerOrderLineSchema = z.object({
+  id: UuidSchema,
+  inventoryItemId: UuidSchema,
+  sku: SkuSchema,
+  upc: UpcSchema,
+  description: DescriptionSchema,
+  manufacturer: z.string().trim().max(LIMITS.text).default(""),
+  color: OptionalColorSchema,
+  batch: z.string().trim().max(LIMITS.code).nullable().default(null),
+  locationId: UuidSchema,
+  quantity: QuantitySchema,
+});
+export type CustomerOrderLine = z.infer<typeof CustomerOrderLineSchema>;
+
+export const OrderPrintDocumentSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("item-label"),
+    itemId: UuidSchema,
+    sku: SkuSchema,
+    copies: z.literal(1),
+  }),
+  z.object({
+    kind: z.literal("pack-slip"),
+    copies: z.literal(1),
+  }),
+  z.object({
+    kind: z.literal("loading-sheet"),
+    copies: z.literal(1),
+  }),
+]);
+export type OrderPrintDocument = z.infer<typeof OrderPrintDocumentSchema>;
+
+export const WarehousePrintBatchSchema = z.object({
+  id: UuidSchema,
+  printerName: NonEmptyStringSchema,
+  status: z.enum(["dispatched", "printed"]),
+  dispatchedAt: DateTimeSchema,
+  printedAt: DateTimeSchema.nullable().default(null),
+  documents: z.array(OrderPrintDocumentSchema).min(3),
+  itemLabelCount: z.number().int().min(1),
+  includesPackSlip: z.literal(true),
+  includesLoadingSheet: z.literal(true),
+});
+export type WarehousePrintBatch = z.infer<typeof WarehousePrintBatchSchema>;
+
+export const PickRequestStatusSchema = z.enum([
+  "open",
+  "completed",
+  "cancelled",
+]);
+export type PickRequestStatus = z.infer<typeof PickRequestStatusSchema>;
+
+export const PickRequestSchema = z.object({
+  id: UuidSchema,
+  requestNumber: NonEmptyStringSchema,
+  status: PickRequestStatusSchema,
+  triggeredByPrintBatchId: UuidSchema,
+  printerName: NonEmptyStringSchema,
+  requestedAt: DateTimeSchema,
+  completedAt: DateTimeSchema.nullable().default(null),
+  completedBy: z.string().trim().max(LIMITS.name).optional(),
+});
+export type PickRequest = z.infer<typeof PickRequestSchema>;
+
+export const CustomerOrderSchema = z.object({
+  id: UuidSchema,
+  orderNumber: NonEmptyStringSchema,
+  customer: NonEmptyStringSchema,
+  placedBy: PersonNameSchema,
+  notes: OptionalNotesSchema,
+  status: CustomerOrderStatusSchema,
+  submittedAt: DateTimeSchema,
+  lines: z.array(CustomerOrderLineSchema).min(1),
+  printBatch: WarehousePrintBatchSchema,
+  pickRequest: PickRequestSchema,
+  createdAt: DateTimeSchema.optional(),
+  updatedAt: DateTimeSchema.optional(),
+  createdBy: z.string().optional(),
+});
+export type CustomerOrder = z.infer<typeof CustomerOrderSchema>;
+
+export const CreateCustomerOrderLineSchema = z.object({
+  inventoryItemId: UuidSchema,
+  quantity: QuantitySchema,
+});
+
+export const CreateCustomerOrderInputSchema = z.object({
+  customer: NonEmptyStringSchema,
+  notes: OptionalNotesSchema,
+  createdBy: z.string().optional(),
+  placedBy: PersonNameSchema.optional(),
+  lines: z.array(CreateCustomerOrderLineSchema).min(1),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
+});
+export type CreateCustomerOrderInput = z.infer<
+  typeof CreateCustomerOrderInputSchema
+>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
   receivingOrders: z.array(ReceivingOrderSchema).default([]),
   shippingOrders: z.array(ShippingOrderSchema).default([]),
+  customerOrders: z.array(CustomerOrderSchema).default([]),
   inventoryItems: z.array(InventoryItemSchema).default([]),
   locations: z.array(LocationSchema).default([]),
   rooms: z.array(RoomSchema).default([]),

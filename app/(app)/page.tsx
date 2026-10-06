@@ -40,6 +40,9 @@ export default async function Home() {
     system.rooms,
     system.inventoryItems,
   );
+  const openPicks = (system.customerOrders ?? []).filter(
+    (order) => order.pickRequest.status === "open",
+  ).length;
   const adjustments = transactions.filter((entry) =>
     entry.type === "overage" ||
     entry.type === "shortage" ||
@@ -52,7 +55,7 @@ export default async function Home() {
         <div className="min-w-0">
           <h1 className="font-heading text-lg font-semibold sm:text-xl">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Receive inbound pallets, put away staged cases, and ship from on-hand stock.
+            Receive inbound pallets, put away staged cases, place remote orders, and ship from on-hand stock.
           </p>
         </div>
           <div className="flex flex-wrap gap-2">
@@ -70,6 +73,13 @@ export default async function Home() {
                 Putaway
               </Button>
             ) : null}
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/orders" />}
+            >
+              Place order
+            </Button>
             {canShip ? (
               <Button
                 variant="outline"
@@ -89,9 +99,10 @@ export default async function Home() {
           </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 min-[30rem]:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 min-[30rem]:grid-cols-3 md:grid-cols-4 xl:grid-cols-8">
         <StatCard label="Units on hand" value={unitsOnHand} />
         <StatCard label="Unique SKUs" value={uniqueSkuCount(inventory)} />
+        <StatCard label="Open picks" value={openPicks} />
         <StatCard label="Open receiving" value={openReceiving.length} />
         <StatCard label="Awaiting putaway" value={awaitingPutaway.length} />
         <StatCard label="Active locations" value={activeLocations.length} />

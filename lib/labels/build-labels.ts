@@ -1,7 +1,7 @@
 import type { Location, ReceivingOrder, Room, ShippingOrder } from "@/lib/inventory-schema";
 import { encodeLocationPayload, encodeScanPayload } from "@/lib/scan-code";
 
-export type WarehouseLabelKind = "inbound" | "outbound" | "location";
+export type WarehouseLabelKind = "inbound" | "outbound" | "location" | "order";
 
 export type WarehouseLabel = {
   id: string;
