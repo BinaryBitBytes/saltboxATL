@@ -321,6 +321,7 @@ describe("inventory spreadsheet import and export", () => {
       rooms: [room],
       receivingOrders: [order],
       shippingOrders: [],
+      customerOrders: [],
       purchaseOrders: [],
       transactions: [],
       photos: [],

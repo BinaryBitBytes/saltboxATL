@@ -10,6 +10,10 @@ import {
   createReceivingOrderRecord,
   setPurchaseOrderJobIdRecord,
   createRoomRecord,
+  acknowledgeWarehousePrintsRecord,
+  cancelCustomerOrderRecord,
+  completeCustomerOrderPickRecord,
+  createCustomerOrderRecord,
   createShippingOrderRecord,
   createAdjustmentRecord,
   addCaseToPallet,
@@ -30,6 +34,7 @@ import type {
   ItemCube,
   Location,
   PurchaseOrder,
+  CustomerOrder,
   ReceivingOrder,
   ShippingOrder,
 } from "@/lib/inventory-schema";
@@ -68,6 +73,7 @@ function revalidateInventory() {
   revalidatePath("/inventory");
   revalidatePath("/cubing");
   revalidatePath("/shipping");
+  revalidatePath("/orders");
   revalidatePath("/locations");
   revalidatePath("/transactions");
 }
@@ -287,6 +293,70 @@ export async function completePutaway(
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
     return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function createCustomerOrder(
+  rawData: unknown,
+): Promise<ActionResult<CustomerOrder>> {
+  try {
+    const user = await requireApiPermission("placeOrder");
+    const data = await createCustomerOrderRecord({
+      ...withCreatedBy(rawData, user),
+      placedBy: user.name,
+    });
+    revalidateInventory();
+    revalidatePath(`/orders/${data.id}`);
+    revalidatePath("/orders/printer");
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function cancelCustomerOrder(
+  orderId: string,
+): Promise<ActionResult<CustomerOrder>> {
+  try {
+    await requireApiPermission("placeOrder");
+    const data = await cancelCustomerOrderRecord(orderId);
+    revalidateInventory();
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders/printer");
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function completeCustomerOrderPick(
+  orderId: string,
+): Promise<ActionResult<CustomerOrder>> {
+  try {
+    const user = await requireApiPermission("fulfillOrder");
+    const data = await completeCustomerOrderPickRecord(orderId, user.name);
+    revalidateInventory();
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function acknowledgeWarehousePrints(
+  orderIds: string[],
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    await requireApiPermission("fulfillOrder");
+    const count = await acknowledgeWarehousePrintsRecord(orderIds);
+    revalidatePath("/orders");
+    revalidatePath("/orders/printer");
+    for (const orderId of orderIds) {
+      revalidatePath(`/orders/${orderId}`);
+    }
+    return { ok: true, data: { count } };
   } catch (error) {
     return fail(error);
   }

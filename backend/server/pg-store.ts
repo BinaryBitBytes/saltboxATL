@@ -16,6 +16,7 @@ import {
   mapPurchaseOrder,
   mapReceivingOrder,
   mapRoom,
+  mapCustomerOrder,
   mapShippingOrder,
   mapTransaction,
   mapUser,
@@ -39,6 +40,9 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
   const shippingOrders = await client.query(
     "SELECT * FROM shipping_orders ORDER BY shipped_at, id",
   );
+  const customerOrders = await client.query(
+    "SELECT * FROM customer_orders ORDER BY submitted_at, id",
+  );
   const itemCubes = await client.query("SELECT * FROM item_cubes ORDER BY sku");
 
   return InventorySystemSchema.parse(
@@ -52,6 +56,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       purchaseOrders: purchaseOrders.rows.map(mapPurchaseOrder),
       receivingOrders: receivingOrders.rows.map(mapReceivingOrder),
       shippingOrders: shippingOrders.rows.map(mapShippingOrder),
+      customerOrders: customerOrders.rows.map(mapCustomerOrder),
       itemCubes: itemCubes.rows.map(mapItemCube),
     }),
   );
@@ -65,6 +70,7 @@ export async function saveSystem(
   await client.query("DELETE FROM photos");
   await client.query("DELETE FROM inventory_items");
   await client.query("DELETE FROM receiving_orders");
+  await client.query("DELETE FROM customer_orders");
   await client.query("DELETE FROM shipping_orders");
   await client.query("DELETE FROM purchase_orders");
   await client.query("DELETE FROM item_cubes");
@@ -262,6 +268,31 @@ export async function saveSystem(
         order.status,
         JSON.stringify(order.pallets ?? []),
         order.notes ?? null,
+        order.createdAt ?? null,
+        order.updatedAt ?? null,
+        order.createdBy ?? null,
+      ],
+    );
+  }
+  for (const order of system.customerOrders ?? []) {
+    await client.query(
+      `INSERT INTO customer_orders (
+         id, order_number, customer, placed_by, notes, status, submitted_at,
+         lines, print_batch, pick_request, created_at, updated_at, created_by
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+       )`,
+      [
+        order.id,
+        order.orderNumber,
+        order.customer,
+        order.placedBy,
+        order.notes ?? null,
+        order.status,
+        order.submittedAt,
+        JSON.stringify(order.lines),
+        JSON.stringify(order.printBatch),
+        JSON.stringify(order.pickRequest),
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,

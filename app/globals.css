@@ -215,6 +215,23 @@
     padding: 0.35in;
   }
 
+  [data-print-active][data-print-layout="batch"] {
+    display: block;
+    background: white !important;
+  }
+
+  [data-print-active][data-print-layout="batch"] .order-batch-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2in;
+  }
+
+  [data-print-active][data-print-layout="batch"] .order-batch-sheet {
+    break-before: page;
+    page-break-before: always;
+    padding-top: 0.35in;
+  }
+
   [data-print-active][data-print-layout="labels"] article {
     break-inside: avoid;
     page-break-inside: avoid;

@@ -135,6 +135,7 @@ export function createSeedSystem(): InventorySystem {
     purchaseOrders: [],
     receivingOrders: [],
     shippingOrders: [],
+    customerOrders: [],
     rooms: [
       {
         id: ROOM_RECEIVING,
@@ -254,6 +255,7 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
   if (!system.transactions) system.transactions = [];
   if (!system.photos) system.photos = [];
   if (!system.itemCubes) system.itemCubes = [];
+  if (!system.customerOrders) system.customerOrders = [];
 
   for (const location of system.locations) {
     if (
