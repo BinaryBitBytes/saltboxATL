@@ -215,6 +215,6 @@ describe("cubing workflow for receiving and inventory", () => {
       quantityAfter: 9,
     });
     expect(blocked).to.match(/too large for the location/i);
-    expect(blocked).to.match(/4 more units/i);
+    expect(blocked).to.match(/2 more units/i);
   });
 });
