@@ -7,10 +7,12 @@ import { useRouter } from "next/navigation";
 import {
   CreateLocationInputSchema,
   CreateRoomInputSchema,
+  STORAGE_CLASSES,
   type CreateLocationInput,
   type CreateRoomInput,
   type Room,
 } from "@/lib/inventory-schema";
+import { storageClassLabel } from "@/lib/cubing/measure";
 import { createLocation, createRoom } from "@/backend/server/serverAction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,7 +80,13 @@ function LocationForm({ rooms }: { rooms: Room[] }) {
   const [error, setError] = useState<string | null>(null);
   const form = useForm<CreateLocationInput>({
     resolver: zodResolver(CreateLocationInputSchema),
-    defaultValues: { code: "", roomId: rooms[0]?.id ?? "", description: "" },
+    defaultValues: {
+      code: "",
+      roomId: rooms[0]?.id ?? "",
+      description: "",
+      storageClass: "rack",
+      cubeCapacityCubicInches: undefined,
+    },
   });
 
   return (
@@ -101,6 +109,8 @@ function LocationForm({ rooms }: { rooms: Room[] }) {
                 code: "",
                 roomId: values.roomId,
                 description: "",
+                storageClass: values.storageClass,
+                cubeCapacityCubicInches: undefined,
               });
               router.refresh();
             });
@@ -117,6 +127,28 @@ function LocationForm({ rooms }: { rooms: Room[] }) {
           </Field>
           <Field label="Location code" htmlFor="code" error={form.formState.errors.code?.message}>
             <Input id="code" placeholder="A-01-01" {...form.register("code")} />
+          </Field>
+          <Field label="Storage class">
+            <NativeSelect {...form.register("storageClass")}>
+              {STORAGE_CLASSES.map((value) => (
+                <option key={value} value={value}>
+                  {storageClassLabel(value)}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <Field label="Cube capacity (cu in)" htmlFor="cube-capacity">
+            <Input
+              id="cube-capacity"
+              type="number"
+              min={1}
+              step="0.01"
+              placeholder="Blank uses the class default"
+              {...form.register("cubeCapacityCubicInches", {
+                setValueAs: (value) =>
+                  value === "" || value == null ? undefined : Number(value),
+              })}
+            />
           </Field>
           <Field label="Description" htmlFor="location-description">
             <Input id="location-description" {...form.register("description")} />

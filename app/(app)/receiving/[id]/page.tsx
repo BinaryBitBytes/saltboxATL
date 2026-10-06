@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/format";
 import { jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import { JobIdEditor } from "@/frontend/client/job-id-editor";
 import { remainingExpectedPallets } from "@/lib/receiving/reopen";
+import { buildCubingLocations } from "@/lib/cubing/capacity";
 import {
   Card,
   CardContent,
@@ -148,6 +149,13 @@ export default async function ReceivingOrderPage({
         jobIdNumber={jobIdNumber}
         knownProducts={collectKnownProducts(system)}
         canReopen={canReopen}
+        cubes={system.itemCubes}
+        cubingLocations={buildCubingLocations({
+          locations: system.locations,
+          items: system.inventoryItems,
+          orders: system.receivingOrders,
+          cubes: system.itemCubes,
+        })}
       />
     </div>
   );

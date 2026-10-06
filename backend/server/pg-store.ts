@@ -10,6 +10,7 @@ import { readJsonFile } from "@/backend/server/json-store";
 import {
   assembleSystem,
   mapItem,
+  mapItemCube,
   mapLocation,
   mapPhoto,
   mapPurchaseOrder,
@@ -38,6 +39,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
   const shippingOrders = await client.query(
     "SELECT * FROM shipping_orders ORDER BY shipped_at, id",
   );
+  const itemCubes = await client.query("SELECT * FROM item_cubes ORDER BY sku");
 
   return InventorySystemSchema.parse(
     assembleSystem({
@@ -50,6 +52,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       purchaseOrders: purchaseOrders.rows.map(mapPurchaseOrder),
       receivingOrders: receivingOrders.rows.map(mapReceivingOrder),
       shippingOrders: shippingOrders.rows.map(mapShippingOrder),
+      itemCubes: itemCubes.rows.map(mapItemCube),
     }),
   );
 }
@@ -64,6 +67,7 @@ export async function saveSystem(
   await client.query("DELETE FROM receiving_orders");
   await client.query("DELETE FROM shipping_orders");
   await client.query("DELETE FROM purchase_orders");
+  await client.query("DELETE FROM item_cubes");
   await client.query("DELETE FROM locations");
   await client.query("DELETE FROM rooms");
   await client.query("DELETE FROM users");
@@ -76,14 +80,17 @@ export async function saveSystem(
   }
   for (const location of system.locations) {
     await client.query(
-      `INSERT INTO locations (id, code, room_id, description, is_active)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO locations (
+         id, code, room_id, description, is_active, storage_class, cube_capacity_cubic_inches
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         location.id,
         location.code,
         location.roomId,
         location.description ?? null,
         location.isActive,
+        location.storageClass,
+        location.cubeCapacityCubicInches,
       ],
     );
   }
@@ -258,6 +265,25 @@ export async function saveSystem(
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,
+      ],
+    );
+  }
+  for (const cube of system.itemCubes) {
+    await client.query(
+      `INSERT INTO item_cubes (
+         sku, description, length_inches, width_inches, height_inches,
+         cubic_inches, units_per_case, cubed_at, cubed_by
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        cube.sku,
+        cube.description,
+        cube.lengthInches,
+        cube.widthInches,
+        cube.heightInches,
+        cube.cubicInches,
+        cube.unitsPerCase,
+        cube.cubedAt,
+        cube.cubedBy ?? null,
       ],
     );
   }

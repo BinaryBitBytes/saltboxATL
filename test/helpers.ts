@@ -1,6 +1,7 @@
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import type { InventoryItem, Location, User } from "@/lib/inventory-schema";
 import { uniqueUsernameFromEmail } from "@/lib/auth/username";
+import { DEFAULT_RACK_CUBE_CUBIC_INCHES } from "@/lib/cubing/measure";
 
 export function makeLocation(overrides: Partial<Location> = {}): Location {
   return {
@@ -9,6 +10,8 @@ export function makeLocation(overrides: Partial<Location> = {}): Location {
     roomId: createId(),
     description: "Test bin",
     isActive: true,
+    storageClass: "rack",
+    cubeCapacityCubicInches: DEFAULT_RACK_CUBE_CUBIC_INCHES,
     ...overrides,
   };
 }

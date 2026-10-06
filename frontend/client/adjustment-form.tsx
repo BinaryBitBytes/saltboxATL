@@ -6,7 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { createAdjustment } from "@/backend/server/serverAction";
-import type { InventoryRow, Location } from "@/lib/inventory-schema";
+import type { InventoryRow, ItemCube, Location } from "@/lib/inventory-schema";
+import { inventoryQuantityCubeMessage } from "@/lib/cubing/workflow";
+import type { LocationCubeRow } from "@/frontend/client/location-cube-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,11 +45,15 @@ type AdjustmentFormValues = z.infer<typeof AdjustmentFormSchema>;
 export function AdjustmentForm({
   inventory,
   locations,
+  cubes = [],
+  locationCubes = [],
   selectedItemId,
   onSelectedItemIdChange,
 }: {
   inventory: InventoryRow[];
   locations: Location[];
+  cubes?: ItemCube[];
+  locationCubes?: LocationCubeRow[];
   selectedItemId?: string;
   onSelectedItemIdChange?: (id: string | undefined) => void;
 }) {
@@ -86,7 +92,18 @@ export function AdjustmentForm({
     control: form.control,
     name: "inventoryItemId",
   });
+  const moveDamaged = useWatch({ control: form.control, name: "moveDamaged" });
   const selected = inventory.find((item) => item.id === selectedId);
+  const cubeHint = cubeHintForAdjustment({
+    type,
+    quantity: Number(quantity) || 0,
+    selected,
+    inventory,
+    cubes,
+    locationCubes,
+    damagedLocationId,
+    moveDamaged: Boolean(moveDamaged),
+  });
 
   function applyScan(payload: ScanPayload) {
     setScannedCode(payload.raw);
@@ -209,6 +226,11 @@ export function AdjustmentForm({
               {selected.roomName}/{selected.locationCode}
             </p>
           ) : null}
+          {cubeHint ? (
+            <p className={cubeHint.blocks ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+              {cubeHint.text}
+            </p>
+          ) : null}
           <Field
             label="Reason"
             htmlFor="reason"
@@ -255,4 +277,68 @@ export function AdjustmentForm({
       </CardContent>
     </Card>
   );
+}
+
+function cubeHintForAdjustment(input: {
+  type: "overage" | "shortage" | "damage";
+  quantity: number;
+  selected: InventoryRow | undefined;
+  inventory: InventoryRow[];
+  cubes: ItemCube[];
+  locationCubes: LocationCubeRow[];
+  damagedLocationId: string;
+  moveDamaged: boolean;
+}): { text: string; blocks: boolean } | null {
+  const { selected, quantity, type } = input;
+  if (!selected || quantity < 1 || type === "shortage") return null;
+  const cube = input.cubes.find((entry) => entry.sku === selected.sku);
+  const profile = cube
+    ? {
+        sku: cube.sku,
+        cubicInches: cube.cubicInches,
+        unitsPerCase: cube.unitsPerCase,
+      }
+    : null;
+
+  if (type === "overage") {
+    const location = input.locationCubes.find((entry) => entry.id === selected.locationId);
+    if (!location) return null;
+    if (!profile) {
+      return {
+        blocks: false,
+        text: `${selected.sku} has not been cubed. Open the Cubing tab so this location's capacity can be checked.`,
+      };
+    }
+    const message = inventoryQuantityCubeMessage({
+      sku: selected.sku,
+      locationCode: location.code,
+      capacity: location.cubeCapacityCubicInches,
+      committedCubicInches: location.committedCubicInches,
+      cube: profile,
+      quantityBefore: selected.quantity,
+      quantityAfter: selected.quantity + quantity,
+    });
+    return message ? { text: message, blocks: true } : null;
+  }
+
+  if (!input.moveDamaged || !input.damagedLocationId) return null;
+  const location = input.locationCubes.find((entry) => entry.id === input.damagedLocationId);
+  if (!location || !profile) return null;
+  const destination = input.inventory.find(
+    (item) =>
+      item.sku === selected.sku &&
+      item.locationId === input.damagedLocationId &&
+      (item.batch ?? null) === (selected.batch ?? null),
+  );
+  const before = destination?.quantity ?? 0;
+  const message = inventoryQuantityCubeMessage({
+    sku: selected.sku,
+    locationCode: location.code,
+    capacity: location.cubeCapacityCubicInches,
+    committedCubicInches: location.committedCubicInches,
+    cube: profile,
+    quantityBefore: before,
+    quantityAfter: before + quantity,
+  });
+  return message ? { text: message, blocks: true } : null;
 }

@@ -3,6 +3,7 @@ import {
   type InventoryItem,
   type InventorySystem,
   type InventoryTransaction,
+  type ItemCube,
   type Location,
   type Pallet,
   type PhotoAttachment,
@@ -12,6 +13,11 @@ import {
   type ShippingOrder,
   type User,
 } from "@/lib/inventory-schema";
+import {
+  defaultCubeCapacity,
+  defaultStorageClass,
+  type StorageClass,
+} from "@/lib/cubing/measure";
 
 export function parseStoredPallets(raw: unknown): Pallet[] {
   const parsed = PalletSchema.array().safeParse(raw ?? []);
@@ -66,19 +72,67 @@ export function mapRoom(row: {
   };
 }
 
+function storageClassFrom(
+  value: string | null | undefined,
+  code: string,
+): StorageClass {
+  if (
+    value === "pallet" ||
+    value === "rack" ||
+    value === "staging" ||
+    value === "hold"
+  ) {
+    return value;
+  }
+  return defaultStorageClass(code);
+}
+
 export function mapLocation(row: {
   id: string;
   code: string;
   room_id: string;
   description: string | null;
   is_active: boolean;
+  storage_class?: string | null;
+  cube_capacity_cubic_inches?: number | string | null;
 }): Location {
+  const storageClass = storageClassFrom(row.storage_class, row.code);
+  const capacity = Number(row.cube_capacity_cubic_inches);
   return {
     id: row.id,
     code: row.code,
     roomId: row.room_id,
     description: row.description ?? undefined,
     isActive: row.is_active,
+    storageClass,
+    cubeCapacityCubicInches:
+      Number.isFinite(capacity) && capacity > 0
+        ? capacity
+        : defaultCubeCapacity(storageClass),
+  };
+}
+
+export function mapItemCube(row: {
+  sku: string;
+  description: string | null;
+  length_inches: number | string;
+  width_inches: number | string;
+  height_inches: number | string;
+  cubic_inches: number | string;
+  units_per_case: number | string;
+  cubed_at: Date | string;
+  cubed_by: string | null;
+}): ItemCube {
+  return {
+    sku: row.sku,
+    description: row.description ?? "",
+    lengthInches: Number(row.length_inches),
+    widthInches: Number(row.width_inches),
+    heightInches: Number(row.height_inches),
+    cubicInches: Number(row.cubic_inches),
+    unitsPerCase: Number(row.units_per_case) || 1,
+    cubedAt: isoRequired(row.cubed_at),
+    cubedBy: row.cubed_by ?? undefined,
   };
 }
 
@@ -347,6 +401,7 @@ export function assembleSystem(parts: {
   purchaseOrders: PurchaseOrder[];
   receivingOrders: ReceivingOrder[];
   shippingOrders: ShippingOrder[];
+  itemCubes?: ItemCube[];
 }): InventorySystem {
   return {
     rooms: parts.rooms,
@@ -358,5 +413,6 @@ export function assembleSystem(parts: {
     purchaseOrders: parts.purchaseOrders,
     receivingOrders: parts.receivingOrders,
     shippingOrders: parts.shippingOrders,
+    itemCubes: parts.itemCubes ?? [],
   };
 }

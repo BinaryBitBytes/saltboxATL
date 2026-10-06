@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS locations (
   code TEXT NOT NULL UNIQUE,
   room_id UUID NOT NULL REFERENCES rooms (id),
   description TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  storage_class TEXT NOT NULL DEFAULT 'rack'
+    CHECK (storage_class IN ('pallet', 'rack', 'staging', 'hold')),
+  cube_capacity_cubic_inches DOUBLE PRECISION NOT NULL DEFAULT 18144
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -132,6 +135,18 @@ CREATE TABLE IF NOT EXISTS shipping_orders (
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
   created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS item_cubes (
+  sku TEXT PRIMARY KEY,
+  description TEXT NOT NULL DEFAULT '',
+  length_inches DOUBLE PRECISION NOT NULL,
+  width_inches DOUBLE PRECISION NOT NULL,
+  height_inches DOUBLE PRECISION NOT NULL,
+  cubic_inches DOUBLE PRECISION NOT NULL,
+  units_per_case INTEGER NOT NULL DEFAULT 1,
+  cubed_at TIMESTAMPTZ NOT NULL,
+  cubed_by TEXT
 );
 
 CREATE INDEX IF NOT EXISTS inventory_items_sku_idx ON inventory_items (sku);

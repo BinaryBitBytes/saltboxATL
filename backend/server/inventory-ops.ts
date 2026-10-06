@@ -60,6 +60,7 @@ export function recountPallet(pallet: Pallet): Pallet {
   const skus = new Set(pallet.cases.map((item) => item.sku));
   return {
     ...pallet,
+    cubeRoute: pallet.cubeRoute ?? null,
     actualCaseCount: pallet.cases.length,
     actualSkuCount: skus.size,
   };

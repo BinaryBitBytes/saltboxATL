@@ -1,11 +1,20 @@
 import type {
   InventoryItem,
   InventorySystem,
+  ItemCube,
+  Location,
   User,
   UserRole,
 } from "@/lib/inventory-schema";
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { hashPassword } from "@/lib/auth/password";
+import {
+  DEFAULT_HOLD_CUBE_CUBIC_INCHES,
+  DEFAULT_PALLET_CUBE_CUBIC_INCHES,
+  DEFAULT_RACK_CUBE_CUBIC_INCHES,
+  DEFAULT_STAGING_CUBE_CUBIC_INCHES,
+  type StorageClass,
+} from "@/lib/cubing/measure";
 
 const ROOM_RECEIVING = "11111111-1111-4111-8111-111111111111";
 const ROOM_FIBER = "22222222-2222-4222-8222-222222222222";
@@ -17,6 +26,8 @@ const LOC_FIBER = "aaaa2222-2222-4222-8222-222222222222";
 const LOC_A0101 = "aaaa3333-3333-4333-8333-333333333333";
 const LOC_A0102 = "aaaa4444-4444-4444-8444-444444444444";
 export const LOC_DAMAGED = "aaaa5555-5555-4555-8555-555555555555";
+const LOC_PLT01 = "aaaa6666-6666-4666-8666-666666666666";
+const LOC_PLT02 = "aaaa7777-7777-4777-8777-777777777777";
 
 const USER_MANAGER = "bbbb1111-1111-4111-8111-111111111111";
 const USER_ASSOCIATE = "bbbb2222-2222-4222-8222-222222222222";
@@ -53,6 +64,46 @@ export const DEMO_ACCOUNTS: Array<{
     role: "user",
   },
 ];
+
+function sampleLocation(
+  id: string,
+  code: string,
+  roomId: string,
+  description: string,
+  storageClass: StorageClass,
+  cubeCapacityCubicInches: number,
+): Location {
+  return {
+    id,
+    code,
+    roomId,
+    description,
+    isActive: true,
+    storageClass,
+    cubeCapacityCubicInches,
+  };
+}
+
+function sampleCube(
+  sku: string,
+  lengthInches: number,
+  widthInches: number,
+  heightInches: number,
+  description: string,
+): ItemCube {
+  const cubicInches = Math.round(lengthInches * widthInches * heightInches * 1000) / 1000;
+  return {
+    sku,
+    description,
+    lengthInches,
+    widthInches,
+    heightInches,
+    cubicInches,
+    unitsPerCase: 1,
+    cubedAt: nowIso(),
+    cubedBy: "system",
+  };
+}
 
 function sampleItem(
   sku: string,
@@ -107,41 +158,62 @@ export function createSeedSystem(): InventorySystem {
       },
     ],
     locations: [
-      {
-        id: LOC_DOCK,
-        code: "DOCK-01",
-        roomId: ROOM_RECEIVING,
-        description: "Inbound pallet lane 1",
-        isActive: true,
-      },
-      {
-        id: LOC_FIBER,
-        code: "FIBER-A1",
-        roomId: ROOM_FIBER,
-        description: "Fiber rack A1",
-        isActive: true,
-      },
-      {
-        id: LOC_A0101,
-        code: "A-01-01",
-        roomId: ROOM_WAREHOUSE,
-        description: "Aisle A, bay 01, level 01",
-        isActive: true,
-      },
-      {
-        id: LOC_A0102,
-        code: "A-01-02",
-        roomId: ROOM_WAREHOUSE,
-        description: "Aisle A, bay 01, level 02",
-        isActive: true,
-      },
-      {
-        id: LOC_DAMAGED,
-        code: "DMG-01",
-        roomId: ROOM_DAMAGED,
-        description: "Damaged / quarantine cage",
-        isActive: true,
-      },
+      sampleLocation(
+        LOC_DOCK,
+        "DOCK-01",
+        ROOM_RECEIVING,
+        "Inbound pallet lane 1",
+        "staging",
+        DEFAULT_STAGING_CUBE_CUBIC_INCHES,
+      ),
+      sampleLocation(
+        LOC_FIBER,
+        "FIBER-A1",
+        ROOM_FIBER,
+        "Fiber rack A1",
+        "rack",
+        DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      ),
+      sampleLocation(
+        LOC_A0101,
+        "A-01-01",
+        ROOM_WAREHOUSE,
+        "Aisle A, bay 01, level 01",
+        "rack",
+        DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      ),
+      sampleLocation(
+        LOC_A0102,
+        "A-01-02",
+        ROOM_WAREHOUSE,
+        "Aisle A, bay 01, level 02",
+        "rack",
+        DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      ),
+      sampleLocation(
+        LOC_PLT01,
+        "PLT-01",
+        ROOM_WAREHOUSE,
+        "Full pallet location 1",
+        "pallet",
+        DEFAULT_PALLET_CUBE_CUBIC_INCHES,
+      ),
+      sampleLocation(
+        LOC_PLT02,
+        "PLT-02",
+        ROOM_WAREHOUSE,
+        "Full pallet location 2",
+        "pallet",
+        DEFAULT_PALLET_CUBE_CUBIC_INCHES,
+      ),
+      sampleLocation(
+        LOC_DAMAGED,
+        "DMG-01",
+        ROOM_DAMAGED,
+        "Damaged / quarantine cage",
+        "hold",
+        DEFAULT_HOLD_CUBE_CUBIC_INCHES,
+      ),
     ],
     inventoryItems: [
       sampleItem(
@@ -170,12 +242,65 @@ export function createSeedSystem(): InventorySystem {
     transactions: [],
     photos: [],
     users: [],
+    itemCubes: [
+      sampleCube("FBR-LC-12-100", 12.25, 8.25, 3.25, "12-strand LC fiber, 100m"),
+      sampleCube("CAT6-BLU-1000", 8, 6, 4, "Cat6 blue 1000ft box"),
+      sampleCube("FBR-MPO-24-50", 10.25, 8.25, 4.25, "24-strand MPO trunk, 50m"),
+    ],
   };
 }
 
 export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
   if (!system.transactions) system.transactions = [];
   if (!system.photos) system.photos = [];
+  if (!system.itemCubes) system.itemCubes = [];
+
+  for (const location of system.locations) {
+    if (
+      location.code === "DOCK-01" &&
+      location.storageClass === "rack" &&
+      location.cubeCapacityCubicInches === DEFAULT_RACK_CUBE_CUBIC_INCHES
+    ) {
+      location.storageClass = "staging";
+      location.cubeCapacityCubicInches = DEFAULT_STAGING_CUBE_CUBIC_INCHES;
+    }
+    if (
+      location.code === "DMG-01" &&
+      location.storageClass === "rack" &&
+      location.cubeCapacityCubicInches === DEFAULT_RACK_CUBE_CUBIC_INCHES
+    ) {
+      location.storageClass = "hold";
+      location.cubeCapacityCubicInches = DEFAULT_HOLD_CUBE_CUBIC_INCHES;
+    }
+  }
+
+  const warehouse =
+    system.rooms.find((room) => room.id === ROOM_WAREHOUSE) ??
+    system.rooms.find((room) => room.name === "Warehouse A");
+  if (warehouse && !system.locations.some((location) => location.code === "PLT-01")) {
+    system.locations.push(
+      sampleLocation(
+        LOC_PLT01,
+        "PLT-01",
+        warehouse.id,
+        "Full pallet location 1",
+        "pallet",
+        DEFAULT_PALLET_CUBE_CUBIC_INCHES,
+      ),
+    );
+  }
+  if (warehouse && !system.locations.some((location) => location.code === "PLT-02")) {
+    system.locations.push(
+      sampleLocation(
+        LOC_PLT02,
+        "PLT-02",
+        warehouse.id,
+        "Full pallet location 2",
+        "pallet",
+        DEFAULT_PALLET_CUBE_CUBIC_INCHES,
+      ),
+    );
+  }
 
   if (!system.rooms.some((room) => room.id === ROOM_DAMAGED)) {
     system.rooms.push({
@@ -185,13 +310,16 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
     });
   }
   if (!system.locations.some((location) => location.code === "DMG-01")) {
-    system.locations.push({
-      id: LOC_DAMAGED,
-      code: "DMG-01",
-      roomId: ROOM_DAMAGED,
-      description: "Damaged / quarantine cage",
-      isActive: true,
-    });
+    system.locations.push(
+      sampleLocation(
+        LOC_DAMAGED,
+        "DMG-01",
+        ROOM_DAMAGED,
+        "Damaged / quarantine cage",
+        "hold",
+        DEFAULT_HOLD_CUBE_CUBIC_INCHES,
+      ),
+    );
   }
   return system;
 }
