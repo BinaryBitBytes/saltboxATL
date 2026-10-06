@@ -6,6 +6,7 @@ import { PutawayWorkspace } from "@/frontend/client/putaway-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
+import { buildCubingLocations } from "@/lib/cubing/capacity";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -78,6 +79,13 @@ export default async function PutawayOrderPage({
         order={order}
         rooms={system.rooms}
         locations={system.locations}
+        cubes={system.itemCubes}
+        cubingLocations={buildCubingLocations({
+          locations: system.locations,
+          items: system.inventoryItems,
+          orders: system.receivingOrders,
+          cubes: system.itemCubes,
+        })}
       />
     </div>
   );

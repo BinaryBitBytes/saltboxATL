@@ -24,6 +24,7 @@ import {
   refineConfirmPassword,
   refinePasswordNotIdentity,
 } from "@/lib/validation/password-rules";
+import { DEFAULT_RACK_CUBE_CUBIC_INCHES } from "@/lib/cubing/measure";
 
 /**
  * Canonical Zod models for the Saltbox inventory app.
@@ -144,6 +145,7 @@ export const PalletSchema = z.object({
   expectedCaseCount: PositiveIntegerSchema.default(0),
   actualCaseCount: PositiveIntegerSchema.default(0),
   cases: z.array(CaseItemSchema).default([]),
+  cubeRoute: z.enum(["pallet", "rack"]).nullable().default(null),
 });
 export type Pallet = z.infer<typeof PalletSchema>;
 
@@ -470,12 +472,22 @@ export const CreateAdjustmentInputSchema = z.object({
 });
 export type CreateAdjustmentInput = z.infer<typeof CreateAdjustmentInputSchema>;
 
+export const StorageClassSchema = z.enum(["pallet", "rack", "staging", "hold"]);
+export type StorageClass = z.infer<typeof StorageClassSchema>;
+export const STORAGE_CLASSES = StorageClassSchema.options;
+
 export const LocationSchema = z.object({
   id: UuidSchema,
   code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
   isActive: z.boolean().default(true),
+  storageClass: StorageClassSchema.default("rack"),
+  cubeCapacityCubicInches: z.coerce
+    .number()
+    .positive()
+    .max(10_000_000)
+    .default(DEFAULT_RACK_CUBE_CUBIC_INCHES),
 });
 export type Location = z.infer<typeof LocationSchema>;
 
@@ -483,6 +495,8 @@ export const CreateLocationInputSchema = z.object({
   code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
+  storageClass: StorageClassSchema,
+  cubeCapacityCubicInches: z.number().positive().max(10_000_000).optional(),
 });
 export type CreateLocationInput = z.infer<typeof CreateLocationInputSchema>;
 
@@ -611,6 +625,39 @@ export const UpdateUserInputSchema = z
   .strict();
 export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;
 
+export const ItemCubeSchema = z.object({
+  sku: SkuSchema,
+  description: z.string().trim().max(LIMITS.description).default(""),
+  lengthInches: z.number().positive(),
+  widthInches: z.number().positive(),
+  heightInches: z.number().positive(),
+  cubicInches: z.number().positive(),
+  unitsPerCase: z.number().int().positive().max(LIMITS.quantityMax).default(1),
+  cubedAt: DateTimeSchema,
+  cubedBy: z.string().optional(),
+});
+export type ItemCube = z.infer<typeof ItemCubeSchema>;
+
+export const CubeItemInputSchema = z.object({
+  sku: SkuSchema,
+  description: z.string().trim().max(LIMITS.description).optional().default(""),
+  lengthInches: z.coerce.number().positive().max(500),
+  widthInches: z.coerce.number().positive().max(500),
+  heightInches: z.coerce.number().positive().max(500),
+  unitsPerCase: z.coerce.number().int().min(1).max(LIMITS.quantityMax).default(1),
+  cubedBy: z.string().optional(),
+});
+export type CubeItemInput = z.infer<typeof CubeItemInputSchema>;
+
+export const UpdateLocationCapacityInputSchema = z.object({
+  id: UuidSchema,
+  storageClass: StorageClassSchema,
+  cubeCapacityCubicInches: z.coerce.number().positive().max(10_000_000),
+});
+export type UpdateLocationCapacityInput = z.infer<
+  typeof UpdateLocationCapacityInputSchema
+>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
   receivingOrders: z.array(ReceivingOrderSchema).default([]),
@@ -621,6 +668,7 @@ export const InventorySystemSchema = z.object({
   transactions: z.array(InventoryTransactionSchema).default([]),
   photos: z.array(PhotoAttachmentSchema).default([]),
   users: z.array(UserSchema).default([]),
+  itemCubes: z.array(ItemCubeSchema).default([]),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
 

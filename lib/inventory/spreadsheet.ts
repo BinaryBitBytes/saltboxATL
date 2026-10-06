@@ -10,6 +10,7 @@ import {
   inventoryDetailsDiffer,
   type InventoryLineDetails,
 } from "@/lib/inventory/details";
+import { caseCubicInches, cubeExceeds, formatCubicInches } from "@/lib/cubing/measure";
 import { inventoryKey } from "@/lib/inventory/keys";
 import { parseCsv, serializeCsv } from "@/lib/spreadsheet/csv";
 import { LIMITS } from "@/lib/validation/limits";
@@ -203,6 +204,23 @@ export function parseInventorySpreadsheet(
   }));
 }
 
+function cubeByLocation(
+  items: Array<{ sku: string; locationId: string; quantity: number }>,
+  cubes: Array<{ sku: string; cubicInches: number; unitsPerCase: number }>,
+): Map<string, number> {
+  const profiles = new Map(cubes.map((cube) => [cube.sku, cube]));
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    const profile = profiles.get(item.sku);
+    if (!profile || item.quantity <= 0) continue;
+    totals.set(
+      item.locationId,
+      (totals.get(item.locationId) ?? 0) + caseCubicInches(item.quantity, profile),
+    );
+  }
+  return totals;
+}
+
 export function planInventoryImport(input: {
   rows: ParsedInventorySpreadsheetRow[];
   items: InventoryItem[];
@@ -210,6 +228,7 @@ export function planInventoryImport(input: {
   rooms: Room[];
   products: KnownProduct[];
   mode: SpreadsheetImportMode;
+  cubes?: Array<{ sku: string; cubicInches: number; unitsPerCase: number }>;
 }): SpreadsheetImportPlan {
   const errors: SpreadsheetImportError[] = [];
   const changes: SpreadsheetImportChange[] = [];
@@ -312,6 +331,32 @@ export function planInventoryImport(input: {
   }
 
   const unitsDelta = changes.reduce((sum, change) => sum + change.quantityDelta, 0);
+
+  if (input.cubes && input.cubes.length > 0) {
+    const before = cubeByLocation(input.items, input.cubes);
+    const after = cubeByLocation([...lines.values()], input.cubes);
+    const capacities = new Map(
+      input.locations.map((location) => [
+        location.id,
+        location.cubeCapacityCubicInches,
+      ]),
+    );
+    for (const [locationId, afterCube] of after) {
+      const beforeCube = before.get(locationId) ?? 0;
+      const capacity = capacities.get(locationId);
+      if (capacity == null || !cubeExceeds(afterCube, beforeCube)) continue;
+      if (!cubeExceeds(afterCube, capacity)) continue;
+      const location = input.locations.find((entry) => entry.id === locationId);
+      const row =
+        changes.find(
+          (change) => change.locationId === locationId && change.quantityDelta > 0,
+        )?.row ?? input.rows[0]?.row ?? 1;
+      errors.push({
+        row,
+        message: `Location ${location?.code ?? locationId} would hold ${formatCubicInches(afterCube)}, above its cube capacity of ${formatCubicInches(capacity)}.`,
+      });
+    }
+  }
 
   return {
     mode: input.mode,

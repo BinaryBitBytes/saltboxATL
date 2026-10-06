@@ -24,6 +24,8 @@ const bin: Location = {
   code: "FIBER-A1",
   roomId: room.id,
   isActive: true,
+  storageClass: "rack",
+  cubeCapacityCubicInches: 18144,
 };
 const onHand: InventoryItem = {
   id: createId(),

@@ -19,11 +19,20 @@ import {
   removeCaseFromPallet,
   assignPutawayLocation,
   completePutawayOrder,
+  breakDownPalletForCube,
+  saveItemCubeRecord,
+  updateLocationCapacityRecord,
   importInventorySpreadsheet,
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
-import type { PurchaseOrder, ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
+import type {
+  ItemCube,
+  Location,
+  PurchaseOrder,
+  ReceivingOrder,
+  ShippingOrder,
+} from "@/lib/inventory-schema";
 import {
   replaySpreadsheetText,
   spreadsheetTextFromForm,
@@ -57,6 +66,7 @@ function revalidateInventory() {
   revalidatePath("/receiving");
   revalidatePath("/putaway");
   revalidatePath("/inventory");
+  revalidatePath("/cubing");
   revalidatePath("/shipping");
   revalidatePath("/locations");
   revalidatePath("/transactions");
@@ -301,6 +311,50 @@ export async function createRoom(rawData: unknown): Promise<ActionResult<{ id: s
     await requireApiPermission("manageLocations");
     const data = await createRoomRecord(rawData);
     revalidatePath("/locations");
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function breakDownReceivingPallet(
+  orderId: string,
+  palletId: string,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    await requireApiPermission("receive");
+    const data = await breakDownPalletForCube(orderId, palletId);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    revalidatePath(`/putaway/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function saveItemCube(
+  rawData: unknown,
+): Promise<ActionResult<ItemCube>> {
+  try {
+    const user = await requireApiPermission("cube");
+    const data = await saveItemCubeRecord(withCreatedBy(rawData, user));
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function updateLocationCapacity(
+  rawData: unknown,
+): Promise<ActionResult<Location>> {
+  try {
+    await requireApiPermission("manageLocations");
+    const data = await updateLocationCapacityRecord(rawData);
+    revalidateInventory();
+    revalidatePath("/locations");
+    revalidatePath("/cubing");
     return { ok: true, data };
   } catch (error) {
     return fail(error);
