@@ -1,8 +1,11 @@
 import {
   PalletSchema,
+  CustomerOrderSchema,
+  type CustomerOrder,
   type InventoryItem,
   type InventorySystem,
   type InventoryTransaction,
+  type ItemCube,
   type Location,
   type Pallet,
   type PhotoAttachment,
@@ -12,6 +15,11 @@ import {
   type ShippingOrder,
   type User,
 } from "@/lib/inventory-schema";
+import {
+  defaultCubeCapacity,
+  defaultStorageClass,
+  type StorageClass,
+} from "@/lib/cubing/measure";
 
 export function parseStoredPallets(raw: unknown): Pallet[] {
   const parsed = PalletSchema.array().safeParse(raw ?? []);
@@ -66,19 +74,67 @@ export function mapRoom(row: {
   };
 }
 
+function storageClassFrom(
+  value: string | null | undefined,
+  code: string,
+): StorageClass {
+  if (
+    value === "pallet" ||
+    value === "rack" ||
+    value === "staging" ||
+    value === "hold"
+  ) {
+    return value;
+  }
+  return defaultStorageClass(code);
+}
+
 export function mapLocation(row: {
   id: string;
   code: string;
   room_id: string;
   description: string | null;
   is_active: boolean;
+  storage_class?: string | null;
+  cube_capacity_cubic_inches?: number | string | null;
 }): Location {
+  const storageClass = storageClassFrom(row.storage_class, row.code);
+  const capacity = Number(row.cube_capacity_cubic_inches);
   return {
     id: row.id,
     code: row.code,
     roomId: row.room_id,
     description: row.description ?? undefined,
     isActive: row.is_active,
+    storageClass,
+    cubeCapacityCubicInches:
+      Number.isFinite(capacity) && capacity > 0
+        ? capacity
+        : defaultCubeCapacity(storageClass),
+  };
+}
+
+export function mapItemCube(row: {
+  sku: string;
+  description: string | null;
+  length_inches: number | string;
+  width_inches: number | string;
+  height_inches: number | string;
+  cubic_inches: number | string;
+  units_per_case: number | string;
+  cubed_at: Date | string;
+  cubed_by: string | null;
+}): ItemCube {
+  return {
+    sku: row.sku,
+    description: row.description ?? "",
+    lengthInches: Number(row.length_inches),
+    widthInches: Number(row.width_inches),
+    heightInches: Number(row.height_inches),
+    cubicInches: Number(row.cubic_inches),
+    unitsPerCase: Number(row.units_per_case) || 1,
+    cubedAt: isoRequired(row.cubed_at),
+    cubedBy: row.cubed_by ?? undefined,
   };
 }
 
@@ -116,9 +172,28 @@ export function mapItem(row: {
   location_id: string;
   quantity: number;
   description: string | null;
+  manufacturer?: string | null;
+  color?: string | null;
+  is_fiber?: boolean | null;
+  connection_type?: string | null;
+  strand_count?: number | string | null;
+  length_meters?: number | string | null;
   last_moved_at: Date | string | null;
   updated_at: Date | string | null;
 }): InventoryItem {
+  const strandCount =
+    row.strand_count == null || row.strand_count === ""
+      ? null
+      : Number(row.strand_count);
+  const lengthMeters =
+    row.length_meters == null || row.length_meters === ""
+      ? null
+      : Number(row.length_meters);
+  const hasFiber =
+    Boolean(row.is_fiber) ||
+    Boolean(row.connection_type) ||
+    strandCount != null ||
+    lengthMeters != null;
   return {
     id: row.id,
     sku: row.sku,
@@ -127,6 +202,25 @@ export function mapItem(row: {
     locationId: row.location_id,
     quantity: row.quantity,
     description: row.description ?? undefined,
+    manufacturer: row.manufacturer ?? "",
+    color: row.color ?? null,
+    fiber: hasFiber
+      ? {
+          isFiber: Boolean(row.is_fiber),
+          connectionType:
+            row.connection_type === "LC" ||
+            row.connection_type === "SC" ||
+            row.connection_type === "ST" ||
+            row.connection_type === "FC" ||
+            row.connection_type === "MPO" ||
+            row.connection_type === "MTP" ||
+            row.connection_type === "Other"
+              ? row.connection_type
+              : null,
+          strandCount: Number.isFinite(strandCount) ? strandCount : null,
+          lengthMeters: Number.isFinite(lengthMeters) ? lengthMeters : null,
+        }
+      : null,
     lastMovedAt: iso(row.last_moved_at),
     updatedAt: iso(row.updated_at),
   };
@@ -205,12 +299,15 @@ export function mapPurchaseOrder(row: {
   purchase_order_number: string;
   generated_at: Date | string;
   created_at: Date | string | null;
+  job_id_number?: string | null;
 }): PurchaseOrder {
+  const jobId = row.job_id_number?.trim();
   return {
     id: row.id,
     purchaseOrderNumber: row.purchase_order_number,
     generatedAt: isoRequired(row.generated_at),
     createdAt: iso(row.created_at),
+    jobIdNumber: jobId ? jobId : null,
   };
 }
 
@@ -296,6 +393,47 @@ export function mapShippingOrder(row: {
   };
 }
 
+function parseStoredJson(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+}
+
+export function mapCustomerOrder(row: {
+  id: string;
+  order_number: string;
+  customer: string;
+  placed_by: string;
+  notes: string | null;
+  status: CustomerOrder["status"];
+  submitted_at: Date | string;
+  lines: unknown;
+  print_batch: unknown;
+  pick_request: unknown;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+  created_by: string | null;
+}): CustomerOrder {
+  return CustomerOrderSchema.parse({
+    id: row.id,
+    orderNumber: row.order_number,
+    customer: row.customer,
+    placedBy: row.placed_by,
+    notes: row.notes ?? undefined,
+    status: row.status,
+    submittedAt: isoRequired(row.submitted_at),
+    lines: parseStoredJson(row.lines) ?? [],
+    printBatch: parseStoredJson(row.print_batch),
+    pickRequest: parseStoredJson(row.pick_request),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+    createdBy: row.created_by ?? undefined,
+  });
+}
+
 export function assembleSystem(parts: {
   rooms: Room[];
   locations: Location[];
@@ -306,6 +444,8 @@ export function assembleSystem(parts: {
   purchaseOrders: PurchaseOrder[];
   receivingOrders: ReceivingOrder[];
   shippingOrders: ShippingOrder[];
+  customerOrders?: CustomerOrder[];
+  itemCubes?: ItemCube[];
 }): InventorySystem {
   return {
     rooms: parts.rooms,
@@ -317,5 +457,7 @@ export function assembleSystem(parts: {
     purchaseOrders: parts.purchaseOrders,
     receivingOrders: parts.receivingOrders,
     shippingOrders: parts.shippingOrders,
+    customerOrders: parts.customerOrders ?? [],
+    itemCubes: parts.itemCubes ?? [],
   };
 }

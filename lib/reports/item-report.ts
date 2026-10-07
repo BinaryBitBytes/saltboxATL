@@ -1,11 +1,13 @@
 import type {
   InventoryItem,
   Location,
+  PurchaseOrder,
   ReceivingOrder,
   Room,
   ShippingOrder,
 } from "@/lib/inventory-schema";
 import { uniqueSkuCount } from "@/lib/format";
+import { jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import { LIMITS } from "@/lib/validation/limits";
 import { csvCell } from "@/lib/spreadsheet/csv";
 
@@ -15,6 +17,7 @@ export type ItemReportFilters = {
   sku?: string;
   upc?: string;
   poNumber?: string;
+  jobIdNumber?: string;
   location?: string;
   description?: string;
 };
@@ -33,6 +36,7 @@ export type ItemReportRow = {
   source: ItemReportSource;
   sourceLabel: string;
   poNumber?: string;
+  jobIdNumber?: string;
   status?: string;
 };
 
@@ -59,6 +63,7 @@ export function normalizeReportFilters(
     sku: normalizeFilter(input.sku, LIMITS.sku),
     upc: normalizeFilter(input.upc, LIMITS.upc),
     poNumber: normalizeFilter(input.poNumber, LIMITS.text),
+    jobIdNumber: normalizeFilter(input.jobIdNumber, LIMITS.code),
     location: normalizeFilter(input.location, LIMITS.code),
     description: normalizeFilter(input.description, LIMITS.description),
   };
@@ -70,6 +75,7 @@ export function hasReportFilters(filters: ItemReportFilters): boolean {
     normalized.sku ||
       normalized.upc ||
       normalized.poNumber ||
+      normalized.jobIdNumber ||
       normalized.location ||
       normalized.description,
   );
@@ -86,7 +92,9 @@ export function buildItemCatalog(input: {
   rooms: Room[];
   receivingOrders: ReceivingOrder[];
   shippingOrders: ShippingOrder[];
+  purchaseOrders?: PurchaseOrder[];
 }): ItemReportRow[] {
+  const purchaseOrders = input.purchaseOrders ?? [];
   const rooms = new Map(input.rooms.map((room) => [room.id, room]));
   const locations = new Map(
     input.locations.map((location) => [location.id, location]),
@@ -114,8 +122,8 @@ export function buildItemCatalog(input: {
       sku: item.sku,
       upc: item.upc ?? "",
       description: item.description ?? item.sku,
-      manufacturer: "",
-      color: null,
+      manufacturer: item.manufacturer ?? "",
+      color: item.color ?? null,
       batch: item.batch,
       quantity: item.quantity,
       locationCode: slot.locationCode,
@@ -131,6 +139,7 @@ export function buildItemCatalog(input: {
         const slot = item.putawayLocationId
           ? place(item.putawayLocationId)
           : { locationCode: pallet.palletNumber, roomName: "Receiving" };
+        const jobIdNumber = jobIdForPurchaseOrder(purchaseOrders, order.poNumber);
         return {
           id: `inbound:${order.id}:${item.id}`,
           sku: item.sku,
@@ -143,8 +152,11 @@ export function buildItemCatalog(input: {
           locationCode: slot.locationCode,
           roomName: slot.roomName,
           source: "inbound" as const,
-          sourceLabel: `PO ${order.poNumber} · ${order.orderNumber}`,
+          sourceLabel: jobIdNumber
+            ? `PO ${order.poNumber} · Job ${jobIdNumber} · ${order.orderNumber}`
+            : `PO ${order.poNumber} · ${order.orderNumber}`,
           poNumber: order.poNumber,
+          jobIdNumber: jobIdNumber ?? undefined,
           status: order.status,
         };
       }),
@@ -185,19 +197,14 @@ export function queryItemReport(
     return { filters, rows: [], totals: { lines: 0, units: 0, skus: 0 } };
   }
 
-  const poSkus = new Set(
+  const relatedSkus = new Set(
     catalog
-      .filter(
-        (row) =>
-          row.source === "inbound" &&
-          filters.poNumber &&
-          containsNeedle(row.poNumber, filters.poNumber),
-      )
+      .filter((row) => row.source === "inbound" && matchesProject(row, filters))
       .map((row) => row.sku.toLowerCase()),
   );
 
   const rows = catalog
-    .filter((row) => rowMatchesFilters(row, filters, poSkus))
+    .filter((row) => rowMatchesFilters(row, filters, relatedSkus))
     .sort((a, b) => {
       const sku = a.sku.localeCompare(b.sku);
       if (sku !== 0) return sku;
@@ -230,6 +237,7 @@ export function itemReportToCsv(report: ItemReport): string {
     "Room",
     "Source",
     "PO",
+    "Job ID",
   ];
   const lines = [
     headers.join(","),
@@ -246,6 +254,7 @@ export function itemReportToCsv(report: ItemReport): string {
         row.roomName,
         row.sourceLabel,
         row.poNumber ?? "",
+        row.jobIdNumber ?? "",
       ]
         .map(csvCell)
         .join(","),
@@ -254,10 +263,19 @@ export function itemReportToCsv(report: ItemReport): string {
   return `${lines.join("\n")}\n`;
 }
 
+function matchesProject(row: ItemReportRow, filters: ItemReportFilters): boolean {
+  if (!filters.poNumber && !filters.jobIdNumber) return false;
+  if (filters.poNumber && !containsNeedle(row.poNumber, filters.poNumber)) return false;
+  if (filters.jobIdNumber && !containsNeedle(row.jobIdNumber, filters.jobIdNumber)) {
+    return false;
+  }
+  return true;
+}
+
 function rowMatchesFilters(
   row: ItemReportRow,
   filters: ItemReportFilters,
-  poSkus: Set<string>,
+  relatedSkus: Set<string>,
 ): boolean {
   if (filters.sku && !containsNeedle(row.sku, filters.sku)) return false;
   if (filters.upc && !containsNeedle(row.upc, filters.upc)) return false;
@@ -271,11 +289,9 @@ function rowMatchesFilters(
   ) {
     return false;
   }
-  if (filters.poNumber) {
-    if (row.source === "inbound") {
-      return containsNeedle(row.poNumber, filters.poNumber);
-    }
-    return poSkus.has(row.sku.toLowerCase());
+  if (filters.poNumber || filters.jobIdNumber) {
+    if (row.source === "inbound") return matchesProject(row, filters);
+    return relatedSkus.has(row.sku.toLowerCase());
   }
   return true;
 }

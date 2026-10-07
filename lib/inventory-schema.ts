@@ -24,17 +24,20 @@ import {
   refineConfirmPassword,
   refinePasswordNotIdentity,
 } from "@/lib/validation/password-rules";
+import { DEFAULT_RACK_CUBE_CUBIC_INCHES } from "@/lib/cubing/measure";
 
 /**
  * Canonical Zod models for the Saltbox inventory app.
  *
  * Field mapping from `backend/schema/schema.json`:
  * - PO_# → PurchaseOrder
+ * - PO_#.JobIDNumber → PurchaseOrder.jobIdNumber (optional internal project tracking number)
  * - Order → ReceivingOrder
  * - Shipment_Contents.Pallet_Receiving / Current_Pallet_Working → Pallet[]
  * - Case_Item → CaseItem (including Manufacturer, Color_of_Item, Is_Fiber_Item, Putaway_Room, Putaway_Location)
  * - Current_Pallet_Working.Tracking_Number → Pallet.trackingNumber
  * - Outbound_Shipped → ShippingOrder
+ * - Remote customer order → CustomerOrder (print batch + pick request)
  * - Rooms / Locations → Room / Location
  */
 
@@ -143,6 +146,7 @@ export const PalletSchema = z.object({
   expectedCaseCount: PositiveIntegerSchema.default(0),
   actualCaseCount: PositiveIntegerSchema.default(0),
   cases: z.array(CaseItemSchema).default([]),
+  cubeRoute: z.enum(["pallet", "rack"]).nullable().default(null),
 });
 export type Pallet = z.infer<typeof PalletSchema>;
 
@@ -189,11 +193,34 @@ export function isClosedReceiving(status: ReceivingOrderStatus): boolean {
   return status === "received" || status === "completed";
 }
 
+/** Optional internal tracking number stored under PO #. Blank values are stored as null. */
+export const JobIdNumberSchema = z.preprocess(
+  (value) => {
+    if (value == null) return null;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed === "" ? null : trimmed;
+    }
+    return value;
+  },
+  z
+    .string()
+    .max(LIMITS.code, { error: `Must be ${LIMITS.code} characters or fewer.` })
+    .refine((value) => !hasControlChars(value), {
+      error: "Control characters are not allowed.",
+    })
+    .refine((value) => !hasHtmlMarkup(value), {
+      error: "HTML markup is not allowed.",
+    })
+    .nullable(),
+);
+
 export const PurchaseOrderSchema = z.object({
   id: UuidSchema,
   purchaseOrderNumber: NonEmptyStringSchema,
   generatedAt: DateTimeSchema,
   createdAt: DateTimeSchema.optional(),
+  jobIdNumber: JobIdNumberSchema.optional().default(null),
 });
 export type PurchaseOrder = z.infer<typeof PurchaseOrderSchema>;
 
@@ -223,6 +250,7 @@ export type ReceivingOrder = z.infer<typeof ReceivingOrderSchema>;
 
 export const CreateReceivingOrderInputSchema = z.object({
   poNumber: NonEmptyStringSchema,
+  jobIdNumber: JobIdNumberSchema.optional().default(null),
   poGeneratedAt: DateTimeSchema.optional(),
   receivedAt: DateTimeSchema.optional(),
   vendor: NonEmptyStringSchema,
@@ -237,6 +265,14 @@ export const CreateReceivingOrderInputSchema = z.object({
 });
 export type CreateReceivingOrderInput = z.infer<
   typeof CreateReceivingOrderInputSchema
+>;
+
+export const SetPurchaseOrderJobIdInputSchema = z.object({
+  purchaseOrderNumber: NonEmptyStringSchema,
+  jobIdNumber: JobIdNumberSchema.optional().default(null),
+});
+export type SetPurchaseOrderJobIdInput = z.infer<
+  typeof SetPurchaseOrderJobIdInputSchema
 >;
 
 export const ReopenReceivingInputSchema = z
@@ -296,6 +332,18 @@ export type CreateShippingOrderInput = z.infer<
   typeof CreateShippingOrderInputSchema
 >;
 
+const OptionalColorSchema = z.preprocess(
+  (value) => (value === "" || value === undefined ? null : value),
+  z
+    .string()
+    .trim()
+    .max(LIMITS.code)
+    .nullable()
+    .refine((value) => value == null || (!hasControlChars(value) && !hasHtmlMarkup(value)), {
+      error: "Color contains invalid characters.",
+    }),
+);
+
 export const InventoryItemSchema = z.object({
   id: UuidSchema,
   sku: SkuSchema,
@@ -304,6 +352,9 @@ export const InventoryItemSchema = z.object({
   locationId: UuidSchema,
   quantity: NonNegativeCountSchema,
   description: z.string().optional(),
+  manufacturer: OptionalSafeTextSchema,
+  color: OptionalColorSchema.default(null),
+  fiber: FiberItemSchema.nullable().default(null),
   lastMovedAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
 });
@@ -313,6 +364,7 @@ export const InventoryTransactionTypeSchema = z.enum([
   "receiving",
   "putaway",
   "shipping",
+  "pick",
   "overage",
   "shortage",
   "damage",
@@ -337,7 +389,13 @@ export const InventoryTransactionSchema = z.object({
   quantityAfter: z.coerce.number().int().min(0).optional(),
   reason: OptionalNotesSchema,
   referenceType: z
-    .enum(["receiving-order", "shipping-order", "adjustment", "spreadsheet-import"])
+    .enum([
+      "receiving-order",
+      "shipping-order",
+      "customer-order",
+      "adjustment",
+      "spreadsheet-import",
+    ])
     .optional(),
   referenceId: UuidSchema.optional(),
   scannedCode: z.string().optional(),
@@ -422,12 +480,22 @@ export const CreateAdjustmentInputSchema = z.object({
 });
 export type CreateAdjustmentInput = z.infer<typeof CreateAdjustmentInputSchema>;
 
+export const StorageClassSchema = z.enum(["pallet", "rack", "staging", "hold"]);
+export type StorageClass = z.infer<typeof StorageClassSchema>;
+export const STORAGE_CLASSES = StorageClassSchema.options;
+
 export const LocationSchema = z.object({
   id: UuidSchema,
   code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
   isActive: z.boolean().default(true),
+  storageClass: StorageClassSchema.default("rack"),
+  cubeCapacityCubicInches: z.coerce
+    .number()
+    .positive()
+    .max(10_000_000)
+    .default(DEFAULT_RACK_CUBE_CUBIC_INCHES),
 });
 export type Location = z.infer<typeof LocationSchema>;
 
@@ -435,6 +503,8 @@ export const CreateLocationInputSchema = z.object({
   code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
+  storageClass: StorageClassSchema,
+  cubeCapacityCubicInches: z.number().positive().max(10_000_000).optional(),
 });
 export type CreateLocationInput = z.infer<typeof CreateLocationInputSchema>;
 
@@ -563,16 +633,157 @@ export const UpdateUserInputSchema = z
   .strict();
 export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;
 
+export const ItemCubeSchema = z.object({
+  sku: SkuSchema,
+  description: z.string().trim().max(LIMITS.description).default(""),
+  lengthInches: z.number().positive(),
+  widthInches: z.number().positive(),
+  heightInches: z.number().positive(),
+  cubicInches: z.number().positive(),
+  unitsPerCase: z.number().int().positive().max(LIMITS.quantityMax).default(1),
+  cubedAt: DateTimeSchema,
+  cubedBy: z.string().optional(),
+});
+export type ItemCube = z.infer<typeof ItemCubeSchema>;
+
+export const CubeItemInputSchema = z.object({
+  sku: SkuSchema,
+  description: z.string().trim().max(LIMITS.description).optional().default(""),
+  lengthInches: z.coerce.number().positive().max(500),
+  widthInches: z.coerce.number().positive().max(500),
+  heightInches: z.coerce.number().positive().max(500),
+  unitsPerCase: z.coerce.number().int().min(1).max(LIMITS.quantityMax).default(1),
+  cubedBy: z.string().optional(),
+});
+export type CubeItemInput = z.infer<typeof CubeItemInputSchema>;
+
+export const UpdateLocationCapacityInputSchema = z.object({
+  id: UuidSchema,
+  storageClass: StorageClassSchema,
+  cubeCapacityCubicInches: z.coerce.number().positive().max(10_000_000),
+});
+export type UpdateLocationCapacityInput = z.infer<
+  typeof UpdateLocationCapacityInputSchema
+>;
+
+export const CustomerOrderStatusSchema = z.enum([
+  "picking",
+  "fulfilled",
+  "cancelled",
+]);
+export type CustomerOrderStatus = z.infer<typeof CustomerOrderStatusSchema>;
+
+export const CustomerOrderLineSchema = z.object({
+  id: UuidSchema,
+  inventoryItemId: UuidSchema,
+  sku: SkuSchema,
+  upc: UpcSchema,
+  description: DescriptionSchema,
+  manufacturer: z.string().trim().max(LIMITS.text).default(""),
+  color: OptionalColorSchema,
+  batch: z.string().trim().max(LIMITS.code).nullable().default(null),
+  locationId: UuidSchema,
+  quantity: QuantitySchema,
+});
+export type CustomerOrderLine = z.infer<typeof CustomerOrderLineSchema>;
+
+export const OrderPrintDocumentSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("item-label"),
+    itemId: UuidSchema,
+    sku: SkuSchema,
+    copies: z.literal(1),
+  }),
+  z.object({
+    kind: z.literal("pack-slip"),
+    copies: z.literal(1),
+  }),
+  z.object({
+    kind: z.literal("loading-sheet"),
+    copies: z.literal(1),
+  }),
+]);
+export type OrderPrintDocument = z.infer<typeof OrderPrintDocumentSchema>;
+
+export const WarehousePrintBatchSchema = z.object({
+  id: UuidSchema,
+  printerName: NonEmptyStringSchema,
+  status: z.enum(["dispatched", "printed"]),
+  dispatchedAt: DateTimeSchema,
+  printedAt: DateTimeSchema.nullable().default(null),
+  documents: z.array(OrderPrintDocumentSchema).min(3),
+  itemLabelCount: z.number().int().min(1),
+  includesPackSlip: z.literal(true),
+  includesLoadingSheet: z.literal(true),
+});
+export type WarehousePrintBatch = z.infer<typeof WarehousePrintBatchSchema>;
+
+export const PickRequestStatusSchema = z.enum([
+  "open",
+  "completed",
+  "cancelled",
+]);
+export type PickRequestStatus = z.infer<typeof PickRequestStatusSchema>;
+
+export const PickRequestSchema = z.object({
+  id: UuidSchema,
+  requestNumber: NonEmptyStringSchema,
+  status: PickRequestStatusSchema,
+  triggeredByPrintBatchId: UuidSchema,
+  printerName: NonEmptyStringSchema,
+  requestedAt: DateTimeSchema,
+  completedAt: DateTimeSchema.nullable().default(null),
+  completedBy: z.string().trim().max(LIMITS.name).optional(),
+});
+export type PickRequest = z.infer<typeof PickRequestSchema>;
+
+export const CustomerOrderSchema = z.object({
+  id: UuidSchema,
+  orderNumber: NonEmptyStringSchema,
+  customer: NonEmptyStringSchema,
+  placedBy: PersonNameSchema,
+  notes: OptionalNotesSchema,
+  status: CustomerOrderStatusSchema,
+  submittedAt: DateTimeSchema,
+  lines: z.array(CustomerOrderLineSchema).min(1),
+  printBatch: WarehousePrintBatchSchema,
+  pickRequest: PickRequestSchema,
+  createdAt: DateTimeSchema.optional(),
+  updatedAt: DateTimeSchema.optional(),
+  createdBy: z.string().optional(),
+});
+export type CustomerOrder = z.infer<typeof CustomerOrderSchema>;
+
+export const CreateCustomerOrderLineSchema = z.object({
+  inventoryItemId: UuidSchema,
+  quantity: QuantitySchema,
+});
+
+export const CreateCustomerOrderInputSchema = z.object({
+  customer: NonEmptyStringSchema,
+  notes: OptionalNotesSchema,
+  createdBy: z.string().optional(),
+  placedBy: PersonNameSchema.optional(),
+  lines: z.array(CreateCustomerOrderLineSchema).min(1),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
+});
+export type CreateCustomerOrderInput = z.infer<
+  typeof CreateCustomerOrderInputSchema
+>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
   receivingOrders: z.array(ReceivingOrderSchema).default([]),
   shippingOrders: z.array(ShippingOrderSchema).default([]),
+  customerOrders: z.array(CustomerOrderSchema).default([]),
   inventoryItems: z.array(InventoryItemSchema).default([]),
   locations: z.array(LocationSchema).default([]),
   rooms: z.array(RoomSchema).default([]),
   transactions: z.array(InventoryTransactionSchema).default([]),
   photos: z.array(PhotoAttachmentSchema).default([]),
   users: z.array(UserSchema).default([]),
+  itemCubes: z.array(ItemCubeSchema).default([]),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
 

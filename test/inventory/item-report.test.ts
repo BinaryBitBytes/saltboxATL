@@ -24,6 +24,8 @@ const bin: Location = {
   code: "FIBER-A1",
   roomId: room.id,
   isActive: true,
+  storageClass: "rack",
+  cubeCapacityCubicInches: 18144,
 };
 const onHand: InventoryItem = {
   id: createId(),
@@ -33,6 +35,14 @@ const onHand: InventoryItem = {
   locationId: bin.id,
   quantity: 24,
   description: "12-strand LC fiber, 100m",
+  manufacturer: "Corning",
+  color: "Blue",
+  fiber: {
+    isFiber: true,
+    connectionType: "LC",
+    strandCount: 12,
+    lengthMeters: 100,
+  },
 };
 const receiving = {
   id: createId(),
@@ -115,6 +125,12 @@ describe("item report queries", () => {
     expect(bySku.rows.some((row) => row.source === "inbound")).to.equal(true);
     expect(bySku.rows.some((row) => row.source === "outbound")).to.equal(true);
     expect(bySku.totals.skus).to.equal(1);
+    expect(
+      bySku.rows.find((row) => row.source === "on-hand")?.manufacturer,
+    ).to.equal("Corning");
+    expect(bySku.rows.find((row) => row.source === "on-hand")?.color).to.equal(
+      "Blue",
+    );
 
     const byUpc = queryItemReport(catalog, { upc: "010000000002" });
     expect(byUpc.rows).to.have.length(1);

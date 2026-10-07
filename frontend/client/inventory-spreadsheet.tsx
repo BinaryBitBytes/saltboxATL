@@ -70,8 +70,10 @@ export function InventorySpreadsheetCard({
         <CardTitle>Spreadsheet import & export</CardTitle>
         <CardDescription>
           Download on-hand inventory as a CSV spreadsheet for Excel or Google
-          Sheets. Managers can import the same file to load or update existing
-          stock. Location codes must already exist.
+          Sheets. The file and template include SKU, UPC, description,
+          manufacturer, color, batch, quantity, location, room, fiber details,
+          and last moved. Managers can import the same file to load or update
+          existing stock. Location codes must already exist.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -125,7 +127,7 @@ export function InventorySpreadsheetCard({
                 rows={5}
                 key={sourceText ?? "blank"}
                 defaultValue={sourceText ?? ""}
-                placeholder={"SKU,UPC,Description,Batch,Qty,Location\nPATCH-SM-100,010000000099,Patch panel,,7,A-01-02"}
+                placeholder={"SKU,UPC,Description,Manufacturer,Color,Batch,Qty,Location,Room,Fiber,Connection,Strand count,Length (m)\nFBR-LC-12-100,010000000001,12-strand LC fiber,Corning,Blue,B1,7,A-01-02,Fiber Room,Yes,LC,12,100"}
                 className={cn(
                   "flex min-h-16 w-full resize-y rounded-md border border-input bg-input/20 px-2 py-2 text-sm outline-none",
                 )}

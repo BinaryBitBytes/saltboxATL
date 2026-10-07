@@ -48,6 +48,9 @@ import {
 } from "@/lib/codes/product-codes";
 import { LabelPrintSheet } from "@/frontend/client/label-sheet";
 import { buildInboundLabels } from "@/lib/labels/build-labels";
+import type { ItemCube } from "@/lib/inventory-schema";
+import type { CubingLocation } from "@/lib/cubing/workflow";
+import { PalletCubeDirective } from "@/frontend/client/pallet-cube-directive";
 
 const PalletFormSchema = z.object({
   palletNumber: z.string().trim().min(1),
@@ -141,11 +144,17 @@ function valuesFromCase(item: CaseItem): CaseFormValues {
 export function ReceivingWorkspace({
   order,
   knownProducts,
+  jobIdNumber = null,
   canReopen = false,
+  cubes = [],
+  cubingLocations = [],
 }: {
   order: ReceivingOrder;
   knownProducts: KnownProduct[];
+  jobIdNumber?: string | null;
   canReopen?: boolean;
+  cubes?: ItemCube[];
+  cubingLocations?: CubingLocation[];
 }) {
   const router = useRouter();
   const editable = isReceivingEditable(order.status);
@@ -227,6 +236,9 @@ export function ReceivingWorkspace({
                   router.refresh();
                 }}
                 orderId={order.id}
+                cubes={cubes}
+                cubingLocations={cubingLocations}
+                canBreakDown={editable || order.status === "received"}
               />
             ))
           )}
@@ -243,7 +255,7 @@ export function ReceivingWorkspace({
               printId="inbound-labels"
               title="Print inbound labels"
               description="Print case labels after receiving so putaway and inventory can scan the freight."
-              labels={buildInboundLabels(order)}
+              labels={buildInboundLabels(order, jobIdNumber)}
             />
           </CardContent>
         </Card>
@@ -292,6 +304,9 @@ function PalletCard({
   onSelect,
   onEdit,
   onRemoved,
+  cubes,
+  cubingLocations,
+  canBreakDown,
 }: {
   orderId: string;
   pallet: ReceivingOrder["pallets"][number];
@@ -301,6 +316,9 @@ function PalletCard({
   onSelect: () => void;
   onEdit: (caseId: string) => void;
   onRemoved: (caseId: string) => void;
+  cubes: ItemCube[];
+  cubingLocations: CubingLocation[];
+  canBreakDown: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -394,6 +412,13 @@ function PalletCard({
           ))}
         </ul>
       ) : null}
+      <PalletCubeDirective
+        orderId={orderId}
+        pallet={pallet}
+        cubes={cubes}
+        locations={cubingLocations}
+        canBreakDown={canBreakDown}
+      />
       <ErrorText error={error} />
     </div>
   );

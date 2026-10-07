@@ -161,12 +161,15 @@ describe("postgresql inventory mapping", () => {
       created_at: now,
       created_by: "Avery Manager",
     }).ownerType).to.equal("receiving-order");
-    expect(mapPurchaseOrder({
+    const purchaseOrder = mapPurchaseOrder({
       id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
       purchase_order_number: "PO-1",
       generated_at: now,
       created_at: now,
-    }).purchaseOrderNumber).to.equal("PO-1");
+      job_id_number: "JOB-1",
+    });
+    expect(purchaseOrder.purchaseOrderNumber).to.equal("PO-1");
+    expect(purchaseOrder.jobIdNumber).to.equal("JOB-1");
     expect(mapShippingOrder({
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
       shipped_at: now,
@@ -230,6 +233,14 @@ describe("postgresql inventory mapping", () => {
         locationId: location.id,
         quantity: 3,
         description: "postgres roundtrip",
+        manufacturer: "Corning",
+        color: "Blue",
+        fiber: {
+          isFiber: true,
+          connectionType: "LC",
+          strandCount: 12,
+          lengthMeters: 100,
+        },
         lastMovedAt: nowIso(),
         updatedAt: nowIso(),
       });
@@ -237,6 +248,11 @@ describe("postgresql inventory mapping", () => {
     const loaded = await readFromPostgres();
     const row = loaded.inventoryItems.find((item) => item.sku === marker);
     expect(row?.quantity).to.equal(3);
+    expect(row?.manufacturer).to.equal("Corning");
+    expect(row?.color).to.equal("Blue");
+    expect(row?.fiber?.connectionType).to.equal("LC");
+    expect(row?.fiber?.strandCount).to.equal(12);
+    expect(row?.fiber?.lengthMeters).to.equal(100);
     await updatePostgres((system) => {
       system.inventoryItems = system.inventoryItems.filter((item) => item.sku !== marker);
     });

@@ -4,8 +4,11 @@ export const PERMISSIONS = {
   viewDashboard: ["user", "associate", "manager"],
   viewInventory: ["user", "associate", "manager"],
   viewTransactions: ["user", "associate", "manager"],
+  placeOrder: ["user", "associate", "manager"],
+  fulfillOrder: ["associate", "manager"],
   receive: ["associate", "manager"],
   putaway: ["associate", "manager"],
+  cube: ["associate", "manager"],
   ship: ["associate", "manager"],
   scanLookup: ["user", "associate", "manager"],
   adjustInventory: ["manager"],
@@ -27,6 +30,9 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   if (pathname.startsWith("/inventory") || pathname.startsWith("/reports")) {
     return hasPermission(role, "viewInventory");
   }
+  if (pathname.startsWith("/cubing")) {
+    return hasPermission(role, "cube");
+  }
   if (pathname.startsWith("/transactions") || pathname.startsWith("/logbook")) {
     return hasPermission(role, "viewTransactions");
   }
@@ -35,6 +41,12 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
   }
   if (pathname.startsWith("/putaway")) {
     return hasPermission(role, "putaway");
+  }
+  if (pathname.startsWith("/orders/printer")) {
+    return hasPermission(role, "fulfillOrder");
+  }
+  if (pathname.startsWith("/orders")) {
+    return hasPermission(role, "placeOrder");
   }
   if (pathname.startsWith("/shipping")) {
     return hasPermission(role, "ship");

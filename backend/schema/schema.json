@@ -1,7 +1,8 @@
 {
     "PO_#":{
         "Purchase_Order_Number": "String",
-        "Date_PO_Generated": "String"
+        "Date_PO_Generated": "String",
+        "JobIDNumber": "String"
     },
     "Order":{
         "ID": "Number",
@@ -57,7 +58,8 @@
             "Role":["user","associate","manager"],
             "Login":"Email and password",
             "User":"View dashboard, inventory, and transaction log",
-            "Associate":"User access plus receiving and shipping",
+            "Associate":"User access plus receiving, cubing, and shipping",
+            "Cubing":"Case length x width x height in inches, rounded up to the nearest quarter inch. Pallet cube above a full pallet location limit is broken down to the cases that fit. The remainder routes to a full pallet location or a racked location.",
             "Manager":"Associate access plus adjustments, locations, and user admin",
             "LargeInputConfirmation":"Quantities at or above threshold require checkbox plus matching re-entry"
         },

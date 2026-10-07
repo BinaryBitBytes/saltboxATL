@@ -10,11 +10,13 @@ import { readJsonFile } from "@/backend/server/json-store";
 import {
   assembleSystem,
   mapItem,
+  mapItemCube,
   mapLocation,
   mapPhoto,
   mapPurchaseOrder,
   mapReceivingOrder,
   mapRoom,
+  mapCustomerOrder,
   mapShippingOrder,
   mapTransaction,
   mapUser,
@@ -38,6 +40,10 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
   const shippingOrders = await client.query(
     "SELECT * FROM shipping_orders ORDER BY shipped_at, id",
   );
+  const customerOrders = await client.query(
+    "SELECT * FROM customer_orders ORDER BY submitted_at, id",
+  );
+  const itemCubes = await client.query("SELECT * FROM item_cubes ORDER BY sku");
 
   return InventorySystemSchema.parse(
     assembleSystem({
@@ -50,6 +56,8 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       purchaseOrders: purchaseOrders.rows.map(mapPurchaseOrder),
       receivingOrders: receivingOrders.rows.map(mapReceivingOrder),
       shippingOrders: shippingOrders.rows.map(mapShippingOrder),
+      customerOrders: customerOrders.rows.map(mapCustomerOrder),
+      itemCubes: itemCubes.rows.map(mapItemCube),
     }),
   );
 }
@@ -62,8 +70,10 @@ export async function saveSystem(
   await client.query("DELETE FROM photos");
   await client.query("DELETE FROM inventory_items");
   await client.query("DELETE FROM receiving_orders");
+  await client.query("DELETE FROM customer_orders");
   await client.query("DELETE FROM shipping_orders");
   await client.query("DELETE FROM purchase_orders");
+  await client.query("DELETE FROM item_cubes");
   await client.query("DELETE FROM locations");
   await client.query("DELETE FROM rooms");
   await client.query("DELETE FROM users");
@@ -76,14 +86,17 @@ export async function saveSystem(
   }
   for (const location of system.locations) {
     await client.query(
-      `INSERT INTO locations (id, code, room_id, description, is_active)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO locations (
+         id, code, room_id, description, is_active, storage_class, cube_capacity_cubic_inches
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         location.id,
         location.code,
         location.roomId,
         location.description ?? null,
         location.isActive,
+        location.storageClass,
+        location.cubeCapacityCubicInches,
       ],
     );
   }
@@ -111,8 +124,9 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO inventory_items (
          id, sku, upc, batch, location_id, quantity, description,
+         manufacturer, color, is_fiber, connection_type, strand_count, length_meters,
          last_moved_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         item.id,
         item.sku,
@@ -121,6 +135,12 @@ export async function saveSystem(
         item.locationId,
         item.quantity,
         item.description ?? null,
+        item.manufacturer ?? "",
+        item.color ?? null,
+        item.fiber?.isFiber ?? false,
+        item.fiber?.connectionType ?? null,
+        item.fiber?.strandCount ?? null,
+        item.fiber?.lengthMeters ?? null,
         item.lastMovedAt ?? null,
         item.updatedAt ?? null,
       ],
@@ -179,9 +199,16 @@ export async function saveSystem(
   }
   for (const order of system.purchaseOrders) {
     await client.query(
-      `INSERT INTO purchase_orders (id, purchase_order_number, generated_at, created_at)
-       VALUES ($1, $2, $3, $4)`,
-      [order.id, order.purchaseOrderNumber, order.generatedAt, order.createdAt ?? null],
+      `INSERT INTO purchase_orders (
+         id, purchase_order_number, generated_at, created_at, job_id_number
+       ) VALUES ($1, $2, $3, $4, $5)`,
+      [
+        order.id,
+        order.purchaseOrderNumber,
+        order.generatedAt,
+        order.createdAt ?? null,
+        order.jobIdNumber ?? null,
+      ],
     );
   }
   for (const order of system.receivingOrders) {
@@ -244,6 +271,50 @@ export async function saveSystem(
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,
+      ],
+    );
+  }
+  for (const order of system.customerOrders ?? []) {
+    await client.query(
+      `INSERT INTO customer_orders (
+         id, order_number, customer, placed_by, notes, status, submitted_at,
+         lines, print_batch, pick_request, created_at, updated_at, created_by
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+       )`,
+      [
+        order.id,
+        order.orderNumber,
+        order.customer,
+        order.placedBy,
+        order.notes ?? null,
+        order.status,
+        order.submittedAt,
+        JSON.stringify(order.lines),
+        JSON.stringify(order.printBatch),
+        JSON.stringify(order.pickRequest),
+        order.createdAt ?? null,
+        order.updatedAt ?? null,
+        order.createdBy ?? null,
+      ],
+    );
+  }
+  for (const cube of system.itemCubes) {
+    await client.query(
+      `INSERT INTO item_cubes (
+         sku, description, length_inches, width_inches, height_inches,
+         cubic_inches, units_per_case, cubed_at, cubed_by
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        cube.sku,
+        cube.description,
+        cube.lengthInches,
+        cube.widthInches,
+        cube.heightInches,
+        cube.cubicInches,
+        cube.unitsPerCase,
+        cube.cubedAt,
+        cube.cubedBy ?? null,
       ],
     );
   }

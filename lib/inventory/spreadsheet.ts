@@ -1,9 +1,16 @@
 import type {
+  FiberItem,
   InventoryItem,
   InventoryRow,
   Location,
   Room,
 } from "@/lib/inventory-schema";
+import { CONNECTION_TYPES, STRAND_COUNTS } from "@/lib/inventory-schema";
+import {
+  inventoryDetailsDiffer,
+  type InventoryLineDetails,
+} from "@/lib/inventory/details";
+import { caseCubicInches, cubeExceeds, formatCubicInches } from "@/lib/cubing/measure";
 import { inventoryKey } from "@/lib/inventory/keys";
 import { parseCsv, serializeCsv } from "@/lib/spreadsheet/csv";
 import { LIMITS } from "@/lib/validation/limits";
@@ -31,10 +38,16 @@ export const INVENTORY_SPREADSHEET_HEADERS = [
   "SKU",
   "UPC",
   "Description",
+  "Manufacturer",
+  "Color",
   "Batch",
   "Qty",
   "Location",
   "Room",
+  "Fiber",
+  "Connection",
+  "Strand count",
+  "Length (m)",
   "Last moved",
 ] as const;
 
@@ -56,6 +69,9 @@ export type SpreadsheetImportChange = {
   quantityBefore: number;
   quantityAfter: number;
   quantityDelta: number;
+  manufacturer?: string;
+  color?: string | null;
+  fiber?: FiberItem | null;
   action: "create" | "update" | "unchanged";
 };
 
@@ -64,10 +80,16 @@ export type ParsedInventorySpreadsheetRow = {
   sku: string;
   upc?: string;
   description?: string;
+  manufacturer?: string;
+  color?: string;
   batch: string | null;
   quantityText: string;
   locationCode: string;
   roomName?: string;
+  fiber?: string;
+  connection?: string;
+  strandCount?: string;
+  lengthMeters?: string;
 };
 
 export type SpreadsheetImportPlan = {
@@ -90,6 +112,12 @@ const HEADER_ALIASES: Record<string, string[]> = {
   qty: ["qty", "quantity", "qty on hand", "on hand", "count", "units"],
   location: ["location", "location code", "bin", "loc", "bin location"],
   room: ["room", "area"],
+  manufacturer: ["manufacturer", "mfr", "brand"],
+  color: ["color", "colour"],
+  fiber: ["fiber", "fibre", "is fiber", "is fibre"],
+  connection: ["connection", "connection type", "connector"],
+  strandCount: ["strand count", "strands", "strand"],
+  lengthMeters: ["length (m)", "length m", "length meters", "length", "meters"],
 };
 
 function normalizeHeader(value: string): string {
@@ -112,10 +140,16 @@ export function inventoryRowsToSpreadsheet(rows: InventoryRow[]): string {
       row.sku,
       row.upc ?? "",
       row.description ?? "",
+      row.manufacturer ?? "",
+      row.color ?? "",
       row.batch ?? "",
       row.quantity,
       row.locationCode,
       row.roomName,
+      row.fiber?.isFiber ? "Yes" : row.fiber ? "No" : "",
+      row.fiber?.connectionType ?? "",
+      row.fiber?.strandCount ?? "",
+      row.fiber?.lengthMeters ?? "",
       row.lastMovedAt ?? "",
     ]),
     { bom: true },
@@ -137,8 +171,14 @@ export function parseInventorySpreadsheet(
 
   const upcIndex = columnIndex(headers, "upc");
   const descriptionIndex = columnIndex(headers, "description");
+  const manufacturerIndex = columnIndex(headers, "manufacturer");
+  const colorIndex = columnIndex(headers, "color");
   const batchIndex = columnIndex(headers, "batch");
   const roomIndex = columnIndex(headers, "room");
+  const fiberIndex = columnIndex(headers, "fiber");
+  const connectionIndex = columnIndex(headers, "connection");
+  const strandIndex = columnIndex(headers, "strandCount");
+  const lengthIndex = columnIndex(headers, "lengthMeters");
 
   if (rows.length > LIMITS.spreadsheetMaxRows) {
     throw new ValidationError(
@@ -151,11 +191,34 @@ export function parseInventorySpreadsheet(
     sku: cellAt(cells, skuIndex),
     upc: optionalCell(cells, upcIndex),
     description: optionalCell(cells, descriptionIndex),
+    manufacturer: columnText(cells, manufacturerIndex),
+    color: columnText(cells, colorIndex),
     batch: optionalCell(cells, batchIndex) ?? null,
     quantityText: cellAt(cells, qtyIndex),
     locationCode: cellAt(cells, locationIndex),
     roomName: optionalCell(cells, roomIndex),
+    fiber: columnText(cells, fiberIndex),
+    connection: columnText(cells, connectionIndex),
+    strandCount: columnText(cells, strandIndex),
+    lengthMeters: columnText(cells, lengthIndex),
   }));
+}
+
+function cubeByLocation(
+  items: Array<{ sku: string; locationId: string; quantity: number }>,
+  cubes: Array<{ sku: string; cubicInches: number; unitsPerCase: number }>,
+): Map<string, number> {
+  const profiles = new Map(cubes.map((cube) => [cube.sku, cube]));
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    const profile = profiles.get(item.sku);
+    if (!profile || item.quantity <= 0) continue;
+    totals.set(
+      item.locationId,
+      (totals.get(item.locationId) ?? 0) + caseCubicInches(item.quantity, profile),
+    );
+  }
+  return totals;
 }
 
 export function planInventoryImport(input: {
@@ -165,14 +228,15 @@ export function planInventoryImport(input: {
   rooms: Room[];
   products: KnownProduct[];
   mode: SpreadsheetImportMode;
+  cubes?: Array<{ sku: string; cubicInches: number; unitsPerCase: number }>;
 }): SpreadsheetImportPlan {
   const errors: SpreadsheetImportError[] = [];
   const changes: SpreadsheetImportChange[] = [];
   const seen = new Map<string, number>();
-  const quantities = new Map(
+  const lines = new Map(
     input.items.map((item) => [
       inventoryKey(item.sku, item.batch, item.locationId),
-      item.quantity,
+      item,
     ]),
   );
   const products = [...input.products];
@@ -186,8 +250,9 @@ export function planInventoryImport(input: {
     }
 
     const key = inventoryKey(parsed.sku, parsed.batch, parsed.location.id);
-    const quantityBefore = quantities.get(key) ?? 0;
-    const exists = quantities.has(key);
+    const existing = lines.get(key);
+    const quantityBefore = existing?.quantity ?? 0;
+    const exists = existing != null;
     const quantityAfter =
       input.mode === "add" ? quantityBefore + parsed.quantity : parsed.quantity;
 
@@ -210,15 +275,35 @@ export function planInventoryImport(input: {
     }
 
     const quantityDelta = quantityAfter - quantityBefore;
+    const details = lineDetails(parsed);
+    const attributesDiffer = existing
+      ? inventoryDetailsDiffer(existing, details)
+      : false;
     const action: SpreadsheetImportChange["action"] = !exists
       ? quantityAfter === 0
         ? "unchanged"
         : "create"
-      : quantityDelta === 0
+      : quantityDelta === 0 && !attributesDiffer
         ? "unchanged"
         : "update";
 
-    quantities.set(key, quantityAfter);
+    lines.set(key, {
+      id: existing?.id ?? "00000000-0000-4000-8000-000000000000",
+      sku: parsed.sku,
+      upc: parsed.upc ?? existing?.upc,
+      batch: parsed.batch,
+      locationId: parsed.location.id,
+      quantity: quantityAfter,
+      description: parsed.description ?? existing?.description,
+      manufacturer:
+        parsed.manufacturer !== undefined
+          ? parsed.manufacturer
+          : (existing?.manufacturer ?? ""),
+      color: parsed.color !== undefined ? parsed.color : (existing?.color ?? null),
+      fiber: parsed.fiber !== undefined ? parsed.fiber : (existing?.fiber ?? null),
+      lastMovedAt: existing?.lastMovedAt,
+      updatedAt: existing?.updatedAt,
+    });
     if (parsed.upc) {
       products.push({
         sku: parsed.sku,
@@ -238,11 +323,40 @@ export function planInventoryImport(input: {
       quantityBefore,
       quantityAfter,
       quantityDelta,
+      manufacturer: parsed.manufacturer,
+      color: parsed.color,
+      fiber: parsed.fiber,
       action,
     });
   }
 
   const unitsDelta = changes.reduce((sum, change) => sum + change.quantityDelta, 0);
+
+  if (input.cubes && input.cubes.length > 0) {
+    const before = cubeByLocation(input.items, input.cubes);
+    const after = cubeByLocation([...lines.values()], input.cubes);
+    const capacities = new Map(
+      input.locations.map((location) => [
+        location.id,
+        location.cubeCapacityCubicInches,
+      ]),
+    );
+    for (const [locationId, afterCube] of after) {
+      const beforeCube = before.get(locationId) ?? 0;
+      const capacity = capacities.get(locationId);
+      if (capacity == null || !cubeExceeds(afterCube, beforeCube)) continue;
+      if (!cubeExceeds(afterCube, capacity)) continue;
+      const location = input.locations.find((entry) => entry.id === locationId);
+      const row =
+        changes.find(
+          (change) => change.locationId === locationId && change.quantityDelta > 0,
+        )?.row ?? input.rows[0]?.row ?? 1;
+      errors.push({
+        row,
+        message: `Location ${location?.code ?? locationId} would hold ${formatCubicInches(afterCube)}, above its cube capacity of ${formatCubicInches(capacity)}.`,
+      });
+    }
+  }
 
   return {
     mode: input.mode,
@@ -294,6 +408,9 @@ function validateImportRow(
       sku: string;
       upc?: string;
       description?: string;
+      manufacturer?: string;
+      color?: string | null;
+      fiber?: FiberItem | null;
       batch: string | null;
       quantity: number;
       location: Location;
@@ -352,6 +469,9 @@ function validateImportRow(
     return { error: "Batch contains invalid characters." };
   }
 
+  const attributes = parseLineAttributes(row);
+  if ("error" in attributes) return { error: attributes.error };
+
   const locationCodeParsed = LocationCodeSchema.safeParse(row.locationCode);
   if (!locationCodeParsed.success) {
     return { error: "Location code is invalid." };
@@ -407,6 +527,9 @@ function validateImportRow(
     sku: skuParsed.data,
     upc,
     description,
+    manufacturer: attributes.manufacturer,
+    color: attributes.color,
+    fiber: attributes.fiber,
     batch,
     quantity,
     location,
@@ -429,6 +552,121 @@ function optionalCell(cells: string[], index: number): string | undefined {
   if (index < 0) return undefined;
   const value = cellAt(cells, index);
   return value || undefined;
+}
+
+function columnText(cells: string[], index: number): string | undefined {
+  if (index < 0) return undefined;
+  return cellAt(cells, index);
+}
+
+function lineDetails(parsed: {
+  manufacturer?: string;
+  color?: string | null;
+  fiber?: FiberItem | null;
+}): InventoryLineDetails | undefined {
+  const details: InventoryLineDetails = {};
+  if (parsed.manufacturer !== undefined) details.manufacturer = parsed.manufacturer;
+  if (parsed.color !== undefined) details.color = parsed.color;
+  if (parsed.fiber !== undefined) details.fiber = parsed.fiber;
+  return Object.keys(details).length > 0 ? details : undefined;
+}
+
+function parseYesNo(value: string): boolean | null {
+  const normalized = value.trim().toLowerCase();
+  if (["yes", "y", "true", "1", "fiber"].includes(normalized)) return true;
+  if (["no", "n", "false", "0"].includes(normalized)) return false;
+  return null;
+}
+
+function parseLineAttributes(row: ParsedInventorySpreadsheetRow):
+  | { manufacturer?: string; color?: string | null; fiber?: FiberItem | null }
+  | { error: string } {
+  let manufacturer: string | undefined;
+  if (row.manufacturer !== undefined) {
+    if (row.manufacturer && (hasHtmlMarkup(row.manufacturer) || hasControlChars(row.manufacturer))) {
+      return { error: "Manufacturer contains invalid characters." };
+    }
+    if (row.manufacturer.length > LIMITS.text) {
+      return { error: "Manufacturer is too long." };
+    }
+    manufacturer = row.manufacturer;
+  }
+
+  let color: string | null | undefined;
+  if (row.color !== undefined) {
+    if (row.color && (hasHtmlMarkup(row.color) || hasControlChars(row.color))) {
+      return { error: "Color contains invalid characters." };
+    }
+    if (row.color.length > LIMITS.code) {
+      return { error: "Color is too long." };
+    }
+    color = row.color || null;
+  }
+
+  const fiberColumns = [row.fiber, row.connection, row.strandCount, row.lengthMeters];
+  if (fiberColumns.every((value) => value === undefined)) {
+    return { manufacturer, color };
+  }
+
+  let isFiber: boolean | null = null;
+  if (row.fiber) {
+    isFiber = parseYesNo(row.fiber);
+    if (isFiber === null) return { error: "Fiber must be Yes or No." };
+  }
+
+  let connectionType: FiberItem["connectionType"] = null;
+  if (row.connection) {
+    const match = CONNECTION_TYPES.find(
+      (option) => option.toLowerCase() === row.connection?.toLowerCase(),
+    );
+    if (!match) {
+      return {
+        error: `Connection must be one of ${CONNECTION_TYPES.join(", ")}.`,
+      };
+    }
+    connectionType = match;
+  }
+
+  let strandCount: number | null = null;
+  if (row.strandCount) {
+    const strand = Number(row.strandCount);
+    if (!STRAND_COUNTS.includes(strand as (typeof STRAND_COUNTS)[number])) {
+      return {
+        error: `Strand count must be one of ${STRAND_COUNTS.join(", ")}.`,
+      };
+    }
+    strandCount = strand;
+  }
+
+  let lengthMeters: number | null = null;
+  if (row.lengthMeters) {
+    const length = Number(row.lengthMeters);
+    if (!Number.isFinite(length) || length < 0) {
+      return { error: "Length (m) must be a number zero or greater." };
+    }
+    lengthMeters = length;
+  }
+
+  const hasDetails = Boolean(connectionType || strandCount != null || lengthMeters != null);
+  if (isFiber === false && hasDetails) {
+    return {
+      error: "Clear connection, strand count, and length when Fiber is No.",
+    };
+  }
+  if (isFiber === null && !hasDetails) {
+    return { manufacturer, color, fiber: null };
+  }
+
+  return {
+    manufacturer,
+    color,
+    fiber: {
+      isFiber: isFiber ?? true,
+      connectionType,
+      strandCount,
+      lengthMeters,
+    },
+  };
 }
 
 function parseQuantityValue(value: string): number | null {

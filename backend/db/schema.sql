@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS locations (
   code TEXT NOT NULL UNIQUE,
   room_id UUID NOT NULL REFERENCES rooms (id),
   description TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  storage_class TEXT NOT NULL DEFAULT 'rack'
+    CHECK (storage_class IN ('pallet', 'rack', 'staging', 'hold')),
+  cube_capacity_cubic_inches DOUBLE PRECISION NOT NULL DEFAULT 18144
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -41,6 +44,12 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   location_id UUID NOT NULL REFERENCES locations (id),
   quantity INTEGER NOT NULL CHECK (quantity >= 0),
   description TEXT,
+  manufacturer TEXT NOT NULL DEFAULT '',
+  color TEXT,
+  is_fiber BOOLEAN NOT NULL DEFAULT FALSE,
+  connection_type TEXT,
+  strand_count INTEGER,
+  length_meters DOUBLE PRECISION,
   last_moved_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ
 );
@@ -83,7 +92,8 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   id UUID PRIMARY KEY,
   purchase_order_number TEXT NOT NULL,
   generated_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ
+  created_at TIMESTAMPTZ,
+  job_id_number TEXT
 );
 
 CREATE TABLE IF NOT EXISTS receiving_orders (
@@ -127,7 +137,37 @@ CREATE TABLE IF NOT EXISTS shipping_orders (
   created_by TEXT
 );
 
+CREATE TABLE IF NOT EXISTS customer_orders (
+  id UUID PRIMARY KEY,
+  order_number TEXT NOT NULL,
+  customer TEXT NOT NULL,
+  placed_by TEXT NOT NULL,
+  notes TEXT,
+  status TEXT NOT NULL CHECK (status IN ('picking', 'fulfilled', 'cancelled')),
+  submitted_at TIMESTAMPTZ NOT NULL,
+  lines JSONB NOT NULL DEFAULT '[]'::jsonb,
+  print_batch JSONB NOT NULL,
+  pick_request JSONB NOT NULL,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ,
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS item_cubes (
+  sku TEXT PRIMARY KEY,
+  description TEXT NOT NULL DEFAULT '',
+  length_inches DOUBLE PRECISION NOT NULL,
+  width_inches DOUBLE PRECISION NOT NULL,
+  height_inches DOUBLE PRECISION NOT NULL,
+  cubic_inches DOUBLE PRECISION NOT NULL,
+  units_per_case INTEGER NOT NULL DEFAULT 1,
+  cubed_at TIMESTAMPTZ NOT NULL,
+  cubed_by TEXT
+);
+
 CREATE INDEX IF NOT EXISTS inventory_items_sku_idx ON inventory_items (sku);
 CREATE INDEX IF NOT EXISTS inventory_items_location_idx ON inventory_items (location_id);
 CREATE INDEX IF NOT EXISTS inventory_transactions_occurred_idx ON inventory_transactions (occurred_at DESC);
 CREATE INDEX IF NOT EXISTS photos_owner_idx ON photos (owner_type, owner_id);
+CREATE INDEX IF NOT EXISTS customer_orders_submitted_idx ON customer_orders (submitted_at DESC);
+CREATE INDEX IF NOT EXISTS customer_orders_status_idx ON customer_orders (status);

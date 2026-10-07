@@ -9,7 +9,8 @@ import {
   Image01Icon,
 } from "@hugeicons/core-free-icons";
 import type { PhotoAttachment, PhotoDocumentKind, PhotoOwnerType } from "@/lib/inventory-schema";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ProofCamera, openCameraStream } from "@/frontend/client/camera-capture";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -47,6 +48,10 @@ export function revokePhotoDrafts(drafts: PhotoDraft[]) {
   }
 }
 
+function selectedFiles(fileList: FileList | null): File[] {
+  return Array.from(fileList ?? []);
+}
+
 function PhotoAddControls({
   disabled,
   remaining,
@@ -54,53 +59,63 @@ function PhotoAddControls({
 }: {
   disabled?: boolean;
   remaining: number;
-  onFiles: (files: FileList) => void;
+  onFiles: (files: File[]) => void;
 }) {
-  const libraryRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
+  const blocked = Boolean(disabled) || remaining <= 0;
+  const [cameraStream, setCameraStream] = useState<Promise<MediaStream> | null>(
+    null,
+  );
+
+  function addSelected(fileList: FileList | null) {
+    const files = selectedFiles(fileList).slice(0, Math.max(0, remaining));
+    if (files.length > 0) onFiles(files);
+  }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <input
-        ref={libraryRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/*"
-        multiple
-        className="sr-only"
-        onChange={(event) => {
-          if (event.target.files?.length) onFiles(event.target.files);
-          event.target.value = "";
-        }}
-      />
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={(event) => {
-          if (event.target.files?.length) onFiles(event.target.files);
-          event.target.value = "";
-        }}
-      />
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled || remaining <= 0}
-        onClick={() => libraryRef.current?.click()}
-      >
-        <HugeiconsIcon icon={Image01Icon} strokeWidth={2} data-icon="inline-start" />
-        Add photos
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled || remaining <= 0}
-        onClick={() => cameraRef.current?.click()}
-      >
-        <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} data-icon="inline-start" />
-        Take photo
-      </Button>
+    <div className="grid gap-2">
+      <div className="flex flex-wrap gap-2">
+        <label
+          className={cn(
+            buttonVariants({ variant: "outline" }),
+            "relative",
+            blocked && "pointer-events-none opacity-50",
+          )}
+        >
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/*"
+            multiple
+            disabled={blocked}
+            aria-label="Add photos"
+            className="absolute inset-0 z-10 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+            onChange={(event) => {
+              addSelected(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <HugeiconsIcon icon={Image01Icon} strokeWidth={2} data-icon="inline-start" />
+          Add photos
+        </label>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={blocked || cameraStream !== null}
+          onClick={() => setCameraStream(openCameraStream())}
+        >
+          <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} data-icon="inline-start" />
+          Take photo
+        </Button>
+      </div>
+      {cameraStream ? (
+        <ProofCamera
+          stream={cameraStream}
+          onCapture={(file) => {
+            setCameraStream(null);
+            onFiles([file]);
+          }}
+          onClose={() => setCameraStream(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -161,11 +176,11 @@ export function PhotoThumbnails({
   const remaining = LIMITS.photoMaxCount - photos.length;
   const canAdd = Boolean(canEdit && ownerType && ownerId && remaining > 0);
 
-  async function addFiles(fileList: FileList) {
+  async function addFiles(files: File[]) {
     if (!ownerType || !ownerId) return;
     setPending(true);
     try {
-      for (const file of Array.from(fileList).slice(0, remaining)) {
+      for (const file of files.slice(0, remaining)) {
         const result = await uploadProofPhoto({ ownerType, ownerId, file });
         if (!result.ok) return;
       }
@@ -205,8 +220,9 @@ export function PhotoThumbnails({
             multiple
             className="sr-only"
             onChange={(event) => {
-              if (event.target.files?.length) void addFiles(event.target.files);
+              const files = selectedFiles(event.target.files);
               event.target.value = "";
+              if (files.length > 0) void addFiles(files);
             }}
           />
           <Button
@@ -243,10 +259,8 @@ export function PhotoDraftCollector({
 }) {
   const remaining = LIMITS.photoMaxCount - drafts.length;
 
-  function addFiles(fileList: FileList) {
-    const incoming = createPhotoDrafts(
-      Array.from(fileList).slice(0, Math.max(0, remaining)),
-    );
+  function addFiles(files: File[]) {
+    const incoming = createPhotoDrafts(files.slice(0, Math.max(0, remaining)));
     onChange([...drafts, ...incoming]);
   }
 
@@ -332,12 +346,12 @@ export function PhotoProofCollector({
   const [active, setActive] = useState<PhotoAttachment | null>(null);
   const remaining = LIMITS.photoMaxCount - photos.length;
 
-  async function addFiles(fileList: FileList) {
+  async function addFiles(files: File[]) {
     setError(null);
     setPending(true);
     try {
-      const files = Array.from(fileList).slice(0, Math.max(0, remaining));
-      for (const file of files) {
+      const selected = files.slice(0, Math.max(0, remaining));
+      for (const file of selected) {
         const result = await uploadProofPhoto({
           ownerType,
           ownerId,

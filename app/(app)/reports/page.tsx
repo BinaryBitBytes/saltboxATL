@@ -12,6 +12,7 @@ export default async function ReportsPage() {
     rooms: system.rooms,
     receivingOrders: system.receivingOrders,
     shippingOrders: system.shippingOrders,
+    purchaseOrders: system.purchaseOrders,
   });
 
   return (
@@ -19,8 +20,8 @@ export default async function ReportsPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold">Reports</h1>
         <p className="text-sm text-muted-foreground">
-          Query items by SKU, UPC, purchase order, location, or description,
-          then print or export a report of the matches.
+          Query items by SKU, UPC, purchase order, job ID, location, or
+          description, then print or export a report of the matches.
         </p>
       </div>
       <ReportWorkspace catalog={catalog} />

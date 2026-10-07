@@ -3,6 +3,8 @@
 import { Badge } from "@/components/ui/badge";
 import type {
   InventoryTransactionType,
+  CustomerOrderStatus,
+  PickRequestStatus,
   ReceivingOrderStatus,
   ShippingOrderStatus,
 } from "@/lib/inventory-schema";
@@ -44,6 +46,40 @@ export function ReceivingStatusBadge({
   );
 }
 
+const customerOrderVariant: Record<
+  CustomerOrderStatus,
+  "outline" | "secondary" | "default" | "destructive"
+> = {
+  picking: "secondary",
+  fulfilled: "default",
+  cancelled: "destructive",
+};
+
+const pickRequestVariant: Record<
+  PickRequestStatus,
+  "outline" | "secondary" | "default" | "destructive"
+> = {
+  open: "secondary",
+  completed: "default",
+  cancelled: "destructive",
+};
+
+export function CustomerOrderStatusBadge({
+  status,
+}: {
+  status: CustomerOrderStatus;
+}) {
+  return <Badge variant={customerOrderVariant[status]}>{status}</Badge>;
+}
+
+export function PickRequestStatusBadge({
+  status,
+}: {
+  status: PickRequestStatus;
+}) {
+  return <Badge variant={pickRequestVariant[status]}>{status}</Badge>;
+}
+
 export function ShippingStatusBadge({
   status,
 }: {
@@ -59,6 +95,7 @@ const transactionVariant: Record<
   receiving: "secondary",
   putaway: "default",
   shipping: "outline",
+  pick: "secondary",
   overage: "default",
   shortage: "destructive",
   damage: "destructive",

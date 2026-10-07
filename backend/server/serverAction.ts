@@ -8,7 +8,12 @@ import {
   reopenReceivingOrder,
   createLocationRecord,
   createReceivingOrderRecord,
+  setPurchaseOrderJobIdRecord,
   createRoomRecord,
+  acknowledgeWarehousePrintsRecord,
+  cancelCustomerOrderRecord,
+  completeCustomerOrderPickRecord,
+  createCustomerOrderRecord,
   createShippingOrderRecord,
   createAdjustmentRecord,
   addCaseToPallet,
@@ -18,11 +23,21 @@ import {
   removeCaseFromPallet,
   assignPutawayLocation,
   completePutawayOrder,
+  breakDownPalletForCube,
+  saveItemCubeRecord,
+  updateLocationCapacityRecord,
   importInventorySpreadsheet,
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
-import type { ReceivingOrder, ShippingOrder } from "@/lib/inventory-schema";
+import type {
+  ItemCube,
+  Location,
+  PurchaseOrder,
+  CustomerOrder,
+  ReceivingOrder,
+  ShippingOrder,
+} from "@/lib/inventory-schema";
 import {
   replaySpreadsheetText,
   spreadsheetTextFromForm,
@@ -56,7 +71,9 @@ function revalidateInventory() {
   revalidatePath("/receiving");
   revalidatePath("/putaway");
   revalidatePath("/inventory");
+  revalidatePath("/cubing");
   revalidatePath("/shipping");
+  revalidatePath("/orders");
   revalidatePath("/locations");
   revalidatePath("/transactions");
 }
@@ -69,6 +86,19 @@ export async function createReceivingOrder(
     const data = await createReceivingOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     revalidatePath(`/receiving/${data.id}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function setPurchaseOrderJobId(
+  rawData: unknown,
+): Promise<ActionResult<PurchaseOrder>> {
+  try {
+    await requireApiPermission("receive");
+    const data = await setPurchaseOrderJobIdRecord(rawData);
+    revalidateInventory();
     return { ok: true, data };
   } catch (error) {
     return fail(error);
@@ -268,6 +298,70 @@ export async function completePutaway(
   }
 }
 
+export async function createCustomerOrder(
+  rawData: unknown,
+): Promise<ActionResult<CustomerOrder>> {
+  try {
+    const user = await requireApiPermission("placeOrder");
+    const data = await createCustomerOrderRecord({
+      ...withCreatedBy(rawData, user),
+      placedBy: user.name,
+    });
+    revalidateInventory();
+    revalidatePath(`/orders/${data.id}`);
+    revalidatePath("/orders/printer");
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function cancelCustomerOrder(
+  orderId: string,
+): Promise<ActionResult<CustomerOrder>> {
+  try {
+    await requireApiPermission("placeOrder");
+    const data = await cancelCustomerOrderRecord(orderId);
+    revalidateInventory();
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders/printer");
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function completeCustomerOrderPick(
+  orderId: string,
+): Promise<ActionResult<CustomerOrder>> {
+  try {
+    const user = await requireApiPermission("fulfillOrder");
+    const data = await completeCustomerOrderPickRecord(orderId, user.name);
+    revalidateInventory();
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function acknowledgeWarehousePrints(
+  orderIds: string[],
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    await requireApiPermission("fulfillOrder");
+    const count = await acknowledgeWarehousePrintsRecord(orderIds);
+    revalidatePath("/orders");
+    revalidatePath("/orders/printer");
+    for (const orderId of orderIds) {
+      revalidatePath(`/orders/${orderId}`);
+    }
+    return { ok: true, data: { count } };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function createShippingOrder(
   rawData: unknown,
 ): Promise<ActionResult<ShippingOrder>> {
@@ -287,6 +381,50 @@ export async function createRoom(rawData: unknown): Promise<ActionResult<{ id: s
     await requireApiPermission("manageLocations");
     const data = await createRoomRecord(rawData);
     revalidatePath("/locations");
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function breakDownReceivingPallet(
+  orderId: string,
+  palletId: string,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    await requireApiPermission("receive");
+    const data = await breakDownPalletForCube(orderId, palletId);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    revalidatePath(`/putaway/${orderId}`);
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function saveItemCube(
+  rawData: unknown,
+): Promise<ActionResult<ItemCube>> {
+  try {
+    const user = await requireApiPermission("cube");
+    const data = await saveItemCubeRecord(withCreatedBy(rawData, user));
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function updateLocationCapacity(
+  rawData: unknown,
+): Promise<ActionResult<Location>> {
+  try {
+    await requireApiPermission("manageLocations");
+    const data = await updateLocationCapacityRecord(rawData);
+    revalidateInventory();
+    revalidatePath("/locations");
+    revalidatePath("/cubing");
     return { ok: true, data };
   } catch (error) {
     return fail(error);

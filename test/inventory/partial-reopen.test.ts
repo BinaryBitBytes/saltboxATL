@@ -43,6 +43,7 @@ function makePallet(overrides: Partial<Pallet> = {}): Pallet {
     expectedCaseCount: 1,
     actualCaseCount: 1,
     cases: [makeCase()],
+    cubeRoute: null,
     ...overrides,
   };
 }

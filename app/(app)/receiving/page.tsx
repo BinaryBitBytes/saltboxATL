@@ -13,6 +13,7 @@ import {
 import ReceivingForm from "@/frontend/client/reactHookForm";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { formatDateTime } from "@/lib/format";
+import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import {
   Card,
   CardContent,
@@ -39,8 +40,8 @@ export default async function ReceivingPage() {
         <CardHeader>
           <CardTitle>New inbound order</CardTitle>
           <CardDescription>
-            Matches PO #, vendor, carrier, receiver, and pallet count from the
-            warehouse schema.
+            Matches PO #, optional job ID, vendor, carrier, receiver, and pallet
+            count from the warehouse schema.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -55,6 +56,7 @@ export default async function ReceivingPage() {
             <TableRow>
               <TableHead>Order</TableHead>
               <TableHead>PO</TableHead>
+              <TableHead>Job ID</TableHead>
               <TableHead>Vendor</TableHead>
               <TableHead>Received</TableHead>
               <TableHead>Pallets</TableHead>
@@ -65,7 +67,7 @@ export default async function ReceivingPage() {
           <TableBody>
             {system.receivingOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground">
+                <TableCell colSpan={8} className="text-muted-foreground">
                   No receiving orders yet.
                 </TableCell>
               </TableRow>
@@ -74,6 +76,11 @@ export default async function ReceivingPage() {
                 <TableRow key={order.id}>
                   <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>{order.poNumber}</TableCell>
+                  <TableCell>
+                    {formatJobId(
+                      jobIdForPurchaseOrder(system.purchaseOrders, order.poNumber),
+                    )}
+                  </TableCell>
                   <TableCell>{order.vendor}</TableCell>
                   <TableCell>{formatDateTime(order.receivedAt)}</TableCell>
                   <TableCell>

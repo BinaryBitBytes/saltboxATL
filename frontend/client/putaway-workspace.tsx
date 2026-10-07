@@ -3,7 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { Location, ReceivingOrder, Room } from "@/lib/inventory-schema";
+import type { ItemCube, Location, ReceivingOrder, Room } from "@/lib/inventory-schema";
+import type { CubingLocation } from "@/lib/cubing/workflow";
+import { formatCubicInches, storageClassLabel } from "@/lib/cubing/measure";
+import { PalletCubeDirective } from "@/frontend/client/pallet-cube-directive";
 import { isAwaitingPutaway } from "@/lib/inventory-schema";
 import { casesPendingPutaway, isCasePutawayPosted } from "@/lib/receiving/reopen";
 import {
@@ -26,10 +29,14 @@ export function PutawayWorkspace({
   order,
   rooms,
   locations,
+  cubes = [],
+  cubingLocations = [],
 }: {
   order: ReceivingOrder;
   rooms: Room[];
   locations: Location[];
+  cubes?: ItemCube[];
+  cubingLocations?: CubingLocation[];
 }) {
   const awaiting = isAwaitingPutaway(order.status);
   const pendingCases = casesPendingPutaway(order);
@@ -90,6 +97,13 @@ export function PutawayWorkspace({
                 <p className="text-sm font-medium">
                   {formatPalletHeading(pallet)}
                 </p>
+                <PalletCubeDirective
+                  orderId={order.id}
+                  pallet={pallet}
+                  cubes={cubes}
+                  locations={cubingLocations}
+                  canBreakDown={awaiting}
+                />
                 <ul className="mt-2 grid gap-3">
                   {pallet.cases.map((item) => (
                     <li key={`${item.id}:${item.putawayLocationId ?? "none"}`}>
@@ -101,6 +115,8 @@ export function PutawayWorkspace({
                           item={item}
                           rooms={rooms}
                           locations={locations}
+                          cubingLocations={cubingLocations}
+                          preferredRoute={pallet.cubeRoute}
                         />
                       ) : (
                         <p className="text-xs text-muted-foreground">
@@ -141,6 +157,8 @@ function PutawayCaseRow({
   item,
   rooms,
   locations,
+  cubingLocations,
+  preferredRoute,
 }: {
   orderId: string;
   palletId: string;
@@ -148,15 +166,23 @@ function PutawayCaseRow({
   item: ReceivingOrder["pallets"][number]["cases"][number];
   rooms: Room[];
   locations: Location[];
+  cubingLocations: CubingLocation[];
+  preferredRoute: "pallet" | "rack" | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [roomId, setRoomId] = useState(item.putawayRoomId ?? rooms[0]?.id ?? "");
   const [locationId, setLocationId] = useState(item.putawayLocationId ?? "");
-  const roomLocations = locations.filter(
-    (location) => location.isActive && location.roomId === roomId,
-  );
+  const cubeById = new Map(cubingLocations.map((location) => [location.id, location]));
+  const roomLocations = locations
+    .filter((location) => location.isActive && location.roomId === roomId)
+    .sort((left, right) => {
+      const leftPreferred = cubeById.get(left.id)?.storageClass === preferredRoute ? 0 : 1;
+      const rightPreferred = cubeById.get(right.id)?.storageClass === preferredRoute ? 0 : 1;
+      if (leftPreferred !== rightPreferred) return leftPreferred - rightPreferred;
+      return left.code.localeCompare(right.code);
+    });
 
   function save(applyToPallet: boolean) {
     setError(null);
@@ -209,11 +235,20 @@ function PutawayCaseRow({
             onChange={(event) => setLocationId(event.target.value)}
           >
             <option value="">Select location</option>
-            {roomLocations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.code}
-              </option>
-            ))}
+            {roomLocations.map((location) => {
+              const cube = cubeById.get(location.id);
+              const open = cube
+                ? cube.cubeCapacityCubicInches - cube.committedCubicInches
+                : null;
+              return (
+                <option key={location.id} value={location.id}>
+                  {location.code}
+                  {cube
+                    ? ` · ${storageClassLabel(cube.storageClass)} · ${formatCubicInches(Math.max(0, open ?? 0))} open`
+                    : ""}
+                </option>
+              );
+            })}
           </NativeSelect>
         </Field>
       </div>
