@@ -30,6 +30,17 @@ import {
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
+import { hasPermission } from "@/lib/auth/permissions";
+import {
+  arriveSiteTransferRecord,
+  cancelSiteTransferRecord,
+  consolidateInventoryRecord,
+  departSiteTransferRecord,
+  loadSiteTransferRecord,
+  moveInventoryRecord,
+  openSiteTransferRecord,
+  unloadSiteTransferRecord,
+} from "@/backend/server/rf-moves";
 import type {
   ItemCube,
   Location,
@@ -37,6 +48,7 @@ import type {
   CustomerOrder,
   ReceivingOrder,
   ShippingOrder,
+  SiteTransfer,
 } from "@/lib/inventory-schema";
 import {
   replaySpreadsheetText,
@@ -74,6 +86,7 @@ function revalidateInventory() {
   revalidatePath("/cubing");
   revalidatePath("/shipping");
   revalidatePath("/orders");
+  revalidatePath("/moves");
   revalidatePath("/locations");
   revalidatePath("/transactions");
 }
@@ -284,11 +297,17 @@ export async function assignReceivingPutawayLocation(
 
 export async function completePutaway(
   orderId: string,
-  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+  confirmation?: {
+    confirmLargeInput?: boolean;
+    confirmationQuantity?: number;
+    approveProjectCombine?: boolean;
+  },
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
-    await requireApiPermission("putaway");
-    const data = await completePutawayOrder(orderId, confirmation);
+    const user = await requireApiPermission("putaway");
+    const data = await completePutawayOrder(orderId, confirmation, {
+      approverIsAdmin: hasPermission(user.role, "approveProjectCombine"),
+    });
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
@@ -526,5 +545,117 @@ export async function importInventoryForm(
       ...fail(error),
       sourceText: replaySpreadsheetText(source, true),
     };
+  }
+}
+
+async function moveActor() {
+  const user = await requireApiPermission("moveInventory");
+  return {
+    name: user.name,
+    approverIsAdmin: hasPermission(user.role, "approveProjectCombine"),
+  };
+}
+
+export async function moveInventory(
+  rawData: unknown,
+): Promise<ActionResult<{ destinationItemId: string }>> {
+  try {
+    const actor = await moveActor();
+    const data = await moveInventoryRecord(rawData, actor);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function consolidateInventory(
+  rawData: unknown,
+): Promise<ActionResult<{ destinationItemId: string }>> {
+  try {
+    const actor = await moveActor();
+    const data = await consolidateInventoryRecord(rawData, actor);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function openSiteTransfer(
+  rawData: unknown,
+): Promise<ActionResult<SiteTransfer>> {
+  try {
+    const actor = await moveActor();
+    const data = await openSiteTransferRecord(rawData, actor);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function loadSiteTransfer(
+  rawData: unknown,
+): Promise<ActionResult<SiteTransfer>> {
+  try {
+    const actor = await moveActor();
+    const data = await loadSiteTransferRecord(rawData, actor);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function departSiteTransfer(
+  rawData: unknown,
+): Promise<ActionResult<SiteTransfer>> {
+  try {
+    await requireApiPermission("moveInventory");
+    const data = await departSiteTransferRecord(rawData);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function arriveSiteTransfer(
+  rawData: unknown,
+): Promise<ActionResult<SiteTransfer>> {
+  try {
+    await requireApiPermission("moveInventory");
+    const data = await arriveSiteTransferRecord(rawData);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function unloadSiteTransfer(
+  rawData: unknown,
+): Promise<ActionResult<SiteTransfer>> {
+  try {
+    const actor = await moveActor();
+    const data = await unloadSiteTransferRecord(rawData, actor);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function cancelSiteTransfer(
+  rawData: unknown,
+): Promise<ActionResult<SiteTransfer>> {
+  try {
+    const actor = await moveActor();
+    const data = await cancelSiteTransferRecord(rawData, actor);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
   }
 }

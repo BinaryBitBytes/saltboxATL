@@ -241,6 +241,7 @@ describe("postgresql inventory mapping", () => {
           strandCount: 12,
           lengthMeters: 100,
         },
+        projectId: null,
         lastMovedAt: nowIso(),
         updatedAt: nowIso(),
       });

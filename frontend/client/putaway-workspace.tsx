@@ -3,7 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { ItemCube, Location, ReceivingOrder, Room } from "@/lib/inventory-schema";
+import type { InventoryItem, ItemCube, Location, ReceivingOrder, Room } from "@/lib/inventory-schema";
+import { putawayMergesExistingProjectStock } from "@/lib/moves/project";
 import type { CubingLocation } from "@/lib/cubing/workflow";
 import { formatCubicInches, storageClassLabel } from "@/lib/cubing/measure";
 import { PalletCubeDirective } from "@/frontend/client/pallet-cube-directive";
@@ -31,12 +32,18 @@ export function PutawayWorkspace({
   locations,
   cubes = [],
   cubingLocations = [],
+  inventoryItems = [],
+  jobIdNumber = null,
+  canApproveProjectCombine = false,
 }: {
   order: ReceivingOrder;
   rooms: Room[];
   locations: Location[];
   cubes?: ItemCube[];
   cubingLocations?: CubingLocation[];
+  inventoryItems?: InventoryItem[];
+  jobIdNumber?: string | null;
+  canApproveProjectCombine?: boolean;
 }) {
   const awaiting = isAwaitingPutaway(order.status);
   const pendingCases = casesPendingPutaway(order);
@@ -46,6 +53,11 @@ export function PutawayWorkspace({
     () => new Map(locations.map((location) => [location.id, location.code])),
     [locations],
   );
+  const needsProjectApproval = putawayMergesExistingProjectStock({
+    items: inventoryItems,
+    cases: pendingCases,
+    projectId: jobIdNumber,
+  });
 
   if (order.status === "draft" || order.status === "in-progress") {
     return (
@@ -144,6 +156,9 @@ export function PutawayWorkspace({
           orderId={order.id}
           totalUnits={totalUnits}
           missingLocations={missingLocations}
+          needsProjectApproval={needsProjectApproval}
+          canApproveProjectCombine={canApproveProjectCombine}
+          jobIdNumber={jobIdNumber}
         />
       ) : null}
     </div>
@@ -174,7 +189,20 @@ function PutawayCaseRow({
   const [error, setError] = useState<string | null>(null);
   const [roomId, setRoomId] = useState(item.putawayRoomId ?? rooms[0]?.id ?? "");
   const [locationId, setLocationId] = useState(item.putawayLocationId ?? "");
+  const [destinationMode, setDestinationMode] = useState<"bin" | "move">(
+    item.putawayLocationId &&
+      locations.some(
+        (location) =>
+          location.id === item.putawayLocationId && location.storageClass === "container",
+      )
+      ? "move"
+      : "bin",
+  );
   const cubeById = new Map(cubingLocations.map((location) => [location.id, location]));
+  const roomById = new Map(rooms.map((room) => [room.id, room.name]));
+  const moveLocations = locations
+    .filter((location) => location.isActive)
+    .sort((left, right) => left.code.localeCompare(right.code));
   const roomLocations = locations
     .filter((location) => location.isActive && location.roomId === roomId)
     .sort((left, right) => {
@@ -190,13 +218,14 @@ function PutawayCaseRow({
       setError("Select a putaway location.");
       return;
     }
+    const selected = locations.find((location) => location.id === locationId);
     startTransition(async () => {
       const result = await assignReceivingPutawayLocation(
         orderId,
         palletId,
         item.id,
         {
-          putawayRoomId: roomId || null,
+          putawayRoomId: selected?.roomId ?? roomId ?? null,
           putawayLocationId: locationId,
           applyToPallet,
         },
@@ -213,39 +242,77 @@ function PutawayCaseRow({
     <div className="grid gap-2 rounded-md border border-border px-2 py-2">
       <p className="text-xs">{formatCaseItemLine(item)}</p>
       <p className="text-xs text-muted-foreground">{item.description}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={destinationMode === "bin" ? "default" : "outline"}
+          onClick={() => {
+            setDestinationMode("bin");
+            setLocationId("");
+          }}
+        >
+          Bin in room
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={destinationMode === "move" ? "default" : "outline"}
+          onClick={() => {
+            setDestinationMode("move");
+            setLocationId("");
+          }}
+        >
+          RF move
+        </Button>
+      </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <Field label="Room">
-          <NativeSelect
-            value={roomId}
-            onChange={(event) => {
-              setRoomId(event.target.value);
-              setLocationId("");
-            }}
-          >
-            {rooms.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </Field>
+        {destinationMode === "bin" ? (
+          <Field label="Room">
+            <NativeSelect
+              value={roomId}
+              onChange={(event) => {
+                setRoomId(event.target.value);
+                setLocationId("");
+              }}
+            >
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+        ) : (
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            RF move can land this case in any active location, including a transfer trailer.
+          </p>
+        )}
         <Field label="Location">
           <NativeSelect
             value={locationId}
             onChange={(event) => setLocationId(event.target.value)}
           >
             <option value="">Select location</option>
-            {roomLocations.map((location) => {
+            {(destinationMode === "move" ? moveLocations : roomLocations).map((location) => {
               const cube = cubeById.get(location.id);
               const open = cube
                 ? cube.cubeCapacityCubicInches - cube.committedCubicInches
                 : null;
+              const trailer =
+                location.storageClass === "container"
+                  ? ` · ${storageClassLabel(location.storageClass)} · ${roomById.get(location.roomId) ?? "site"}`
+                  : "";
+              const cubeLabel = cube
+                ? location.storageClass === "container"
+                  ? ` · ${formatCubicInches(Math.max(0, open ?? 0))} open`
+                  : ` · ${storageClassLabel(cube.storageClass)} · ${formatCubicInches(Math.max(0, open ?? 0))} open`
+                : "";
               return (
                 <option key={location.id} value={location.id}>
                   {location.code}
-                  {cube
-                    ? ` · ${storageClassLabel(cube.storageClass)} · ${formatCubicInches(Math.max(0, open ?? 0))} open`
-                    : ""}
+                  {trailer}
+                  {cubeLabel}
                 </option>
               );
             })}
@@ -275,16 +342,23 @@ function PutawayActions({
   orderId,
   totalUnits,
   missingLocations,
+  needsProjectApproval,
+  canApproveProjectCombine,
+  jobIdNumber,
 }: {
   orderId: string;
   totalUnits: number;
   missingLocations: number;
+  needsProjectApproval: boolean;
+  canApproveProjectCombine: boolean;
+  jobIdNumber: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
+  const [approveProjectCombine, setApproveProjectCombine] = useState(false);
 
   return (
     <div className="grid gap-3">
@@ -299,6 +373,24 @@ function PutawayActions({
           inventory.
         </p>
       )}
+      {needsProjectApproval ? (
+        <div className="grid gap-2 rounded-md border border-border p-3">
+          <p className="text-xs text-muted-foreground">
+            This putaway combines on-hand inventory tracked by project ID {jobIdNumber}.
+            A manager has to approve that combine.
+          </p>
+          {canApproveProjectCombine ? (
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={approveProjectCombine}
+                onChange={(event) => setApproveProjectCombine(event.target.checked)}
+              />
+              Approve combining project-tracked inventory
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       <LargeInputConfirm
         total={totalUnits}
         threshold={LIMITS.largeQuantity}
@@ -314,14 +406,14 @@ function PutawayActions({
           onClick={() => {
             setError(null);
             startTransition(async () => {
-              const result = await completePutaway(
-                orderId,
-                largeInputPayload(
+              const result = await completePutaway(orderId, {
+                ...largeInputPayload(
                   totalUnits,
                   confirmLargeInput,
                   confirmationQuantity,
                 ),
-              );
+                approveProjectCombine,
+              });
               if (!result.ok) {
                 setError(result.error);
                 return;

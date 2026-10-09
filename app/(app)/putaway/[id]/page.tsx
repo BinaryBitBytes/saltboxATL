@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
+import { hasPermission } from "@/lib/auth/permissions";
 import { PutawayWorkspace } from "@/frontend/client/putaway-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 import { formatDateTime } from "@/lib/format";
@@ -21,7 +22,7 @@ export default async function PutawayOrderPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("putaway");
+  const user = await requirePermission("putaway");
   const { id } = await params;
   const system = await getSystem();
   const order = system.receivingOrders.find((entry) => entry.id === id);
@@ -86,6 +87,9 @@ export default async function PutawayOrderPage({
           orders: system.receivingOrders,
           cubes: system.itemCubes,
         })}
+        inventoryItems={system.inventoryItems}
+        jobIdNumber={jobIdNumber}
+        canApproveProjectCombine={hasPermission(user.role, "approveProjectCombine")}
       />
     </div>
   );

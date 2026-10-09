@@ -17,6 +17,7 @@ import {
   mapReceivingOrder,
   mapRoom,
   mapCustomerOrder,
+  mapSiteTransfer,
   mapShippingOrder,
   mapTransaction,
   mapUser,
@@ -43,6 +44,9 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
   const customerOrders = await client.query(
     "SELECT * FROM customer_orders ORDER BY submitted_at, id",
   );
+  const siteTransfers = await client.query(
+    "SELECT * FROM site_transfers ORDER BY created_at, id",
+  );
   const itemCubes = await client.query("SELECT * FROM item_cubes ORDER BY sku");
 
   return InventorySystemSchema.parse(
@@ -57,6 +61,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       receivingOrders: receivingOrders.rows.map(mapReceivingOrder),
       shippingOrders: shippingOrders.rows.map(mapShippingOrder),
       customerOrders: customerOrders.rows.map(mapCustomerOrder),
+      siteTransfers: siteTransfers.rows.map(mapSiteTransfer),
       itemCubes: itemCubes.rows.map(mapItemCube),
     }),
   );
@@ -66,6 +71,7 @@ export async function saveSystem(
   client: PoolClient,
   system: InventorySystem,
 ): Promise<void> {
+  await client.query("DELETE FROM site_transfers");
   await client.query("DELETE FROM inventory_transactions");
   await client.query("DELETE FROM photos");
   await client.query("DELETE FROM inventory_items");
@@ -125,8 +131,8 @@ export async function saveSystem(
       `INSERT INTO inventory_items (
          id, sku, upc, batch, location_id, quantity, description,
          manufacturer, color, is_fiber, connection_type, strand_count, length_meters,
-         last_moved_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+         project_id, last_moved_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
       [
         item.id,
         item.sku,
@@ -141,6 +147,7 @@ export async function saveSystem(
         item.fiber?.connectionType ?? null,
         item.fiber?.strandCount ?? null,
         item.fiber?.lengthMeters ?? null,
+        item.projectId ?? null,
         item.lastMovedAt ?? null,
         item.updatedAt ?? null,
       ],
@@ -296,6 +303,32 @@ export async function saveSystem(
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,
+      ],
+    );
+  }
+  for (const transfer of system.siteTransfers ?? []) {
+    await client.query(
+      `INSERT INTO site_transfers (
+         id, transfer_number, trailer_location_id, from_room_id, to_room_id,
+         status, pallets, notes, created_at, updated_at, departed_at, arrived_at,
+         created_by
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+       )`,
+      [
+        transfer.id,
+        transfer.transferNumber,
+        transfer.trailerLocationId,
+        transfer.fromRoomId,
+        transfer.toRoomId,
+        transfer.status,
+        JSON.stringify(transfer.pallets ?? []),
+        transfer.notes ?? null,
+        transfer.createdAt ?? null,
+        transfer.updatedAt ?? null,
+        transfer.departedAt ?? null,
+        transfer.arrivedAt ?? null,
+        transfer.createdBy ?? null,
       ],
     );
   }
