@@ -735,15 +735,17 @@ function TransferCard({
                 type="button"
                 disabled={pending}
                 onClick={() =>
-                  run(async () =>
-                    loadSiteTransfer({
+                  run(async () => {
+                    const result = await loadSiteTransfer({
                       transferId: transfer.id,
                       inventoryItemId,
                       palletNumber,
                       quantity: qty,
                       approveProjectCombine: approved,
-                    }),
-                  )
+                    });
+                    if (result.ok) setQuantity("");
+                    return result;
+                  })
                 }
               >
                 Load pallet

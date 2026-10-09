@@ -303,13 +303,16 @@ function PutawayCaseRow({
                 location.storageClass === "container"
                   ? ` · ${storageClassLabel(location.storageClass)} · ${roomById.get(location.roomId) ?? "site"}`
                   : "";
+              const cubeLabel = cube
+                ? location.storageClass === "container"
+                  ? ` · ${formatCubicInches(Math.max(0, open ?? 0))} open`
+                  : ` · ${storageClassLabel(cube.storageClass)} · ${formatCubicInches(Math.max(0, open ?? 0))} open`
+                : "";
               return (
                 <option key={location.id} value={location.id}>
                   {location.code}
                   {trailer}
-                  {cube
-                    ? ` · ${storageClassLabel(cube.storageClass)} · ${formatCubicInches(Math.max(0, open ?? 0))} open`
-                    : ""}
+                  {cubeLabel}
                 </option>
               );
             })}
