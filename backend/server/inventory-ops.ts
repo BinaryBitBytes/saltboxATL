@@ -11,7 +11,8 @@ import {
   inventoryDetailsDiffer,
   type InventoryLineDetails,
 } from "@/lib/inventory/details";
-import { inventoryKey } from "@/lib/inventory/keys";
+import { inventoryKey, normalizeProjectId } from "@/lib/inventory/keys";
+import { ValidationError } from "@/lib/validation/errors";
 import {
   assertEnoughOnHand,
   assertFiniteQuantity,
@@ -69,7 +70,7 @@ export function recountPallet(pallet: Pallet): Pallet {
 function itemMap(items: InventoryItem[]) {
   return new Map(
     items.map((item) => [
-      inventoryKey(item.sku, item.batch, item.locationId),
+      inventoryKey(item.sku, item.batch, item.locationId, item.projectId),
       item,
     ]),
   );
@@ -85,13 +86,22 @@ export function addQuantity(
     quantity: number;
     description?: string;
     details?: InventoryLineDetails;
+    projectId?: string | null;
+    allowProjectCombine?: boolean;
     now: string;
   },
 ): { items: InventoryItem[]; change: StockChange } {
   assertPositiveQuantity(input.quantity);
+  const projectId = normalizeProjectId(input.projectId);
   const map = itemMap(items);
-  const key = inventoryKey(input.sku, input.batch, input.locationId);
+  const key = inventoryKey(input.sku, input.batch, input.locationId, projectId);
   const existing = map.get(key);
+
+  if (existing && existing.quantity > 0 && projectId && !input.allowProjectCombine) {
+    throw new ValidationError(
+      `Combining inventory tracked by project ID ${projectId} requires administrative approval.`,
+    );
+  }
 
   if (existing) {
     const quantityBefore = existing.quantity;
@@ -136,6 +146,7 @@ export function addQuantity(
       manufacturer: "",
       color: null,
       fiber: null,
+      projectId,
       lastMovedAt: input.now,
       updatedAt: input.now,
     },
@@ -162,9 +173,18 @@ export function putAwayCases(
   items: InventoryItem[],
   cases: CaseItem[],
   now: string,
+  options?: { projectId?: string | null; allowProjectCombine?: boolean },
 ): { items: InventoryItem[]; changes: StockChange[] } {
   let next = items;
   const changes: StockChange[] = [];
+  const projectId = normalizeProjectId(options?.projectId);
+  const preexistingProjectKeys = new Set(
+    items
+      .filter(
+        (item) => item.quantity > 0 && normalizeProjectId(item.projectId) === projectId && projectId,
+      )
+      .map((item) => inventoryKey(item.sku, item.batch, item.locationId, item.projectId)),
+  );
 
   for (const caseItem of cases) {
     if (!caseItem.putawayLocationId) {
@@ -173,6 +193,14 @@ export function putAwayCases(
       );
     }
 
+    const destinationKey = inventoryKey(
+      caseItem.sku,
+      caseItem.batch,
+      caseItem.putawayLocationId,
+      projectId,
+    );
+    const mergesExistingProject =
+      Boolean(projectId) && preexistingProjectKeys.has(destinationKey);
     const result = addQuantity(next, {
       sku: caseItem.sku,
       upc: caseItem.upc,
@@ -180,6 +208,9 @@ export function putAwayCases(
       locationId: caseItem.putawayLocationId,
       quantity: caseItem.quantityInCase,
       description: caseItem.description,
+      projectId,
+      allowProjectCombine:
+        options?.allowProjectCombine === true || !mergesExistingProject,
       details: {
         ...(caseItem.manufacturer ? { manufacturer: caseItem.manufacturer } : {}),
         ...(caseItem.color ? { color: caseItem.color } : {}),
@@ -204,12 +235,14 @@ export function setOnHandQuantity(
     quantity: number;
     description?: string;
     details?: InventoryLineDetails;
+    projectId?: string | null;
     now: string;
   },
 ): { items: InventoryItem[]; change: StockChange | null } {
   assertFiniteQuantity(input.quantity);
+  const projectId = normalizeProjectId(input.projectId);
   const map = itemMap(items);
-  const key = inventoryKey(input.sku, input.batch, input.locationId);
+  const key = inventoryKey(input.sku, input.batch, input.locationId, projectId);
   const existing = map.get(key);
 
   if (!existing) {
@@ -227,22 +260,23 @@ export function setOnHandQuantity(
         description: input.description,
         manufacturer: "",
         color: null,
-        fiber: null,
-        lastMovedAt: input.now,
-        updatedAt: input.now,
-      },
-      input.details,
-    );
-    map.set(key, created);
-    return {
-      items: [...map.values()],
-      change: {
-        inventoryItemId: created.id,
-        sku: created.sku,
-        upc: created.upc,
-        batch: created.batch,
-        locationId: created.locationId,
-        quantityDelta: created.quantity,
+      fiber: null,
+      projectId,
+      lastMovedAt: input.now,
+      updatedAt: input.now,
+    },
+    input.details,
+  );
+  map.set(key, created);
+  return {
+    items: [...map.values()],
+    change: {
+      inventoryItemId: created.id,
+      sku: created.sku,
+      upc: created.upc,
+      batch: created.batch,
+      locationId: created.locationId,
+      quantityDelta: created.quantity,
         quantityBefore: 0,
         quantityAfter: created.quantity,
         description: created.description,
@@ -370,6 +404,8 @@ export function applyAdjustment(input: {
       locationId: current.locationId,
       quantity,
       description: current.description,
+      projectId: current.projectId,
+      allowProjectCombine: true,
       now,
     });
     return { items: result.items, changes: [result.change] };
@@ -403,6 +439,8 @@ export function applyAdjustment(input: {
       locationId: damagedLocationId,
       quantity,
       description: current.description,
+      projectId: current.projectId,
+      allowProjectCombine: true,
       details: {
         manufacturer: current.manufacturer ?? "",
         color: current.color ?? null,

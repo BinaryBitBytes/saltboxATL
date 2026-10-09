@@ -28,7 +28,7 @@ import {
   type CustomerOrder,
   type ShippingOrder,
 } from "@/lib/inventory-schema";
-import { upsertPurchaseOrder } from "@/lib/purchase-orders";
+import { jobIdForPurchaseOrder, upsertPurchaseOrder } from "@/lib/purchase-orders";
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
@@ -162,7 +162,7 @@ export function enrichTransactions(
 
 const MAX_TRANSACTIONS = 5000;
 
-function appendTransactions(
+export function appendTransactions(
   system: InventorySystem,
   type: InventoryTransaction["type"],
   changes: StockChange[],
@@ -778,7 +778,12 @@ export async function assignPutawayLocation(
 
 export async function completePutawayOrder(
   orderId: string,
-  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+  confirmation?: {
+    confirmLargeInput?: boolean;
+    confirmationQuantity?: number;
+    approveProjectCombine?: boolean;
+  },
+  actor?: { approverIsAdmin?: boolean },
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
@@ -811,7 +816,16 @@ export async function completePutawayOrder(
     );
 
     const now = nowIso();
-    const result = putAwayCases(system.inventoryItems, pending, now);
+    const projectId = jobIdForPurchaseOrder(
+      system.purchaseOrders,
+      order.poNumber,
+    );
+    const result = putAwayCases(system.inventoryItems, pending, now, {
+      projectId,
+      allowProjectCombine:
+        confirmation?.approveProjectCombine === true &&
+        actor?.approverIsAdmin === true,
+    });
     system.inventoryItems = result.items;
     appendTransactions(system, "putaway", result.changes, {
       occurredAt: now,
@@ -1325,6 +1339,7 @@ export async function importInventorySpreadsheet(input: {
         locationId: change.locationId,
         quantity: change.quantityAfter,
         description: change.description,
+        projectId: change.projectId,
         details: {
           ...(change.manufacturer !== undefined
             ? { manufacturer: change.manufacturer }

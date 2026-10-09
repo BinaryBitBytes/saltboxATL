@@ -96,6 +96,7 @@ const transactionVariant: Record<
   putaway: "default",
   shipping: "outline",
   pick: "secondary",
+  move: "secondary",
   overage: "default",
   shortage: "destructive",
   damage: "destructive",

@@ -43,6 +43,7 @@ const onHand: InventoryItem = {
     strandCount: 12,
     lengthMeters: 100,
   },
+  projectId: null,
 };
 const receiving = {
   id: createId(),
