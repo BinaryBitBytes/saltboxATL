@@ -166,6 +166,34 @@ describe("online sign-in", function () {
     });
   }
 
+  it("signs in from a browser form post while the server is running", async () => {
+    const account = DEMO_ACCOUNTS.find((entry) => entry.role === "driver");
+    expect(account).to.not.equal(undefined);
+    const response = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        identifier: account!.email,
+        password: DEMO_PASSWORD,
+        from: "/",
+      }),
+      redirect: "manual",
+    });
+    expect(response.status).to.equal(303);
+    expect(new URL(response.headers.get("location") ?? "").pathname).to.equal("/");
+    const sessionCookie = response.headers
+      .getSetCookie()
+      .find((cookie) => cookie.startsWith("saltbox_session="));
+    expect(sessionCookie).to.be.a("string");
+    expect(sessionCookie!.toLowerCase()).to.not.match(/;\s*secure(?:;|$)/);
+    const home = await fetch(`${base}/`, {
+      headers: { cookie: sessionCookie!.split(";")[0] },
+      redirect: "manual",
+    });
+    expect(home.status).to.equal(200);
+    expect(await home.text()).to.include("Dashboard");
+  });
+
   it("also accepts the username without the email domain", async () => {
     const response = await fetch(`${base}/api/auth/login`, {
       method: "POST",

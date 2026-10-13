@@ -360,7 +360,14 @@ async function loadSeededSystem(client: PoolClient): Promise<InventorySystem> {
   ensureSystemDefaults(system);
   const seededUsers = await ensureDemoUsers(system);
   if (empty || seededUsers) {
-    await saveSystem(client, InventorySystemSchema.parse(system));
+    await client.query("SAVEPOINT seed_users");
+    try {
+      await saveSystem(client, InventorySystemSchema.parse(system));
+      await client.query("RELEASE SAVEPOINT seed_users");
+    } catch (error) {
+      console.error("Could not persist seeded demo accounts.", error);
+      await client.query("ROLLBACK TO SAVEPOINT seed_users");
+    }
   }
   return system;
 }
