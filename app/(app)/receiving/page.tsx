@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
+import { hasPermission } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -40,12 +41,15 @@ export default async function ReceivingPage() {
         <CardHeader>
           <CardTitle>New inbound order</CardTitle>
           <CardDescription>
-            Matches PO #, optional job ID, vendor, carrier, receiver, and pallet
-            count from the warehouse schema.
+            Matches PO #, vendor, carrier, receiver, and pallet count. Job IDs
+            are assigned by a project manager on the inbound board.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ReceivingForm defaultReceiverName={user.name} />
+          <ReceivingForm
+            defaultReceiverName={user.name}
+            canAssignJobId={hasPermission(user.role, "assignJobId")}
+          />
         </CardContent>
       </Card>
 

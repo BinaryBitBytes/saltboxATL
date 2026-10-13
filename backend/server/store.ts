@@ -7,10 +7,16 @@ import { persistToJson, readFromJson } from "@/backend/server/json-store";
 let writeChain: Promise<unknown> = Promise.resolve();
 
 async function readFromStore(): Promise<InventorySystem> {
-  if (usesPostgres()) {
-    return readFromPostgres();
+  if (!usesPostgres()) return readFromJson();
+  try {
+    return await readFromPostgres();
+  } catch (error) {
+    console.error(
+      "PostgreSQL is unavailable. Demo sign-in is using the local account file.",
+      error,
+    );
+    return readFromJson();
   }
-  return readFromJson();
 }
 
 export async function getSystem(): Promise<InventorySystem> {

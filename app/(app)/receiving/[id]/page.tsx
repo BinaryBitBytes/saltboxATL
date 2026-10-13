@@ -8,7 +8,7 @@ import { collectKnownProducts } from "@/lib/codes/product-codes";
 import { photosForOwnerKind } from "@/lib/photos/query";
 import { hasPermission } from "@/lib/auth/permissions";
 import { formatDateTime } from "@/lib/format";
-import { jobIdForPurchaseOrder } from "@/lib/purchase-orders";
+import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import { JobIdEditor } from "@/frontend/client/job-id-editor";
 import { remainingExpectedPallets } from "@/lib/receiving/reopen";
 import { buildCubingLocations } from "@/lib/cubing/capacity";
@@ -34,6 +34,7 @@ export default async function ReceivingOrderPage({
   const canEditPhotos = order.status !== "cancelled";
   const remaining = remainingExpectedPallets(order);
   const canReopen = hasPermission(user.role, "reopenReceiving");
+  const canAssignJobId = hasPermission(user.role, "assignJobId");
   const jobIdNumber = jobIdForPurchaseOrder(system.purchaseOrders, order.poNumber);
 
   return (
@@ -67,10 +68,14 @@ export default async function ReceivingOrderPage({
           <CardDescription>PO {order.poNumber}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <JobIdEditor
-            purchaseOrderNumber={order.poNumber}
-            jobIdNumber={jobIdNumber}
-          />
+          {canAssignJobId ? (
+            <JobIdEditor
+              purchaseOrderNumber={order.poNumber}
+              jobIdNumber={jobIdNumber}
+            />
+          ) : (
+            <Detail label="Job ID" value={formatJobId(jobIdNumber)} />
+          )}
           <Detail label="Receiver" value={order.receiverName} />
           <Detail
             label="Expected pallets"

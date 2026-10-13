@@ -4,10 +4,10 @@ import type {
   ItemCube,
   Location,
   User,
-  UserRole,
 } from "@/lib/inventory-schema";
 import { createId, nowIso } from "@/backend/server/helperUtils";
-import { hashPassword } from "@/lib/auth/password";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   DEFAULT_HOLD_CUBE_CUBIC_INCHES,
   DEFAULT_PALLET_CUBE_CUBIC_INCHES,
@@ -29,41 +29,7 @@ export const LOC_DAMAGED = "aaaa5555-5555-4555-8555-555555555555";
 const LOC_PLT01 = "aaaa6666-6666-4666-8666-666666666666";
 const LOC_PLT02 = "aaaa7777-7777-4777-8777-777777777777";
 
-const USER_MANAGER = "bbbb1111-1111-4111-8111-111111111111";
-const USER_ASSOCIATE = "bbbb2222-2222-4222-8222-222222222222";
-const USER_VIEWER = "bbbb3333-3333-4333-8333-333333333333";
-
-export const DEMO_PASSWORD = "saltbox123";
-
-export const DEMO_ACCOUNTS: Array<{
-  id: string;
-  name: string;
-  username: string;
-  email: string;
-  role: UserRole;
-}> = [
-  {
-    id: USER_MANAGER,
-    name: "Avery Manager",
-    username: "manager",
-    email: "manager@saltbox.local",
-    role: "manager",
-  },
-  {
-    id: USER_ASSOCIATE,
-    name: "Jordan Associate",
-    username: "associate",
-    email: "associate@saltbox.local",
-    role: "associate",
-  },
-  {
-    id: USER_VIEWER,
-    name: "Riley User",
-    username: "user",
-    email: "user@saltbox.local",
-    role: "user",
-  },
-];
+export { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 
 function sampleLocation(
   id: string,
@@ -326,31 +292,72 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
   return system;
 }
 
+let demoPasswordsChecked = false;
+
+/** Test hook. Demo password checks run once per process so sign-in stays fast. */
+export function resetDemoPasswordCheckForTests(): void {
+  demoPasswordsChecked = false;
+}
+
 export async function ensureDemoUsers(
   system: InventorySystem,
 ): Promise<boolean> {
   if (!system.users) system.users = [];
 
+  const checkPasswords = !demoPasswordsChecked;
   let changed = false;
   const now = nowIso();
   for (const account of DEMO_ACCOUNTS) {
-    if (system.users.some((user) => user.email === account.email)) {
+    const existing = system.users.find((user) => user.email === account.email);
+    if (!existing) {
+      const usernameTaken = system.users.some(
+        (user) => user.username === account.username,
+      );
+      if (usernameTaken) continue;
+      const user: User = {
+        id: account.id,
+        name: account.name,
+        username: account.username,
+        email: account.email,
+        passwordHash: await hashPassword(DEMO_PASSWORD),
+        role: account.role,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: "system",
+      };
+      system.users.push(user);
+      changed = true;
       continue;
     }
-    const user: User = {
-      id: account.id,
-      name: account.name,
-      username: account.username,
-      email: account.email,
-      passwordHash: await hashPassword(DEMO_PASSWORD),
-      role: account.role,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: "system",
-    };
-    system.users.push(user);
-    changed = true;
+
+    if (existing.role !== account.role) {
+      existing.role = account.role;
+      changed = true;
+    }
+    if (!existing.isActive) {
+      existing.isActive = true;
+      changed = true;
+    }
+    if (
+      existing.username !== account.username &&
+      !system.users.some(
+        (user) => user.username === account.username && user.email !== account.email,
+      )
+    ) {
+      existing.username = account.username;
+      changed = true;
+    }
+    if (checkPasswords) {
+      const matches = await verifyPassword(DEMO_PASSWORD, existing.passwordHash).catch(
+        () => false,
+      );
+      if (!matches) {
+        existing.passwordHash = await hashPassword(DEMO_PASSWORD);
+        changed = true;
+      }
+    }
   }
+  demoPasswordsChecked = true;
   return changed;
 }

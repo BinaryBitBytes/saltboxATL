@@ -1,5 +1,9 @@
 import {
+  BuyerPoLineSchema,
+  DeliveryRecordSchema,
+  ExpectationStatusSchema,
   PalletSchema,
+  PurchaseOrderSourceSchema,
   CustomerOrderSchema,
   type CustomerOrder,
   type InventoryItem,
@@ -294,20 +298,57 @@ export function mapPhoto(row: {
   };
 }
 
+function parseBuyerLines(raw: unknown): PurchaseOrder["lines"] {
+  if (raw == null) return undefined;
+  const parsed = BuyerPoLineSchema.array().safeParse(raw);
+  return parsed.success ? parsed.data : [];
+}
+
+function parseDelivery(raw: unknown): ShippingOrder["delivery"] {
+  if (raw == null) return undefined;
+  const parsed = DeliveryRecordSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
+
 export function mapPurchaseOrder(row: {
   id: string;
   purchase_order_number: string;
   generated_at: Date | string;
   created_at: Date | string | null;
   job_id_number?: string | null;
+  project_id?: string | null;
+  vendor?: string | null;
+  carrier?: string | null;
+  expected_arrival_at?: Date | string | null;
+  buyer_name?: string | null;
+  expectation_notes?: string | null;
+  expectation_status?: string | null;
+  expected_pallet_count?: number | null;
+  lines?: unknown;
+  uploaded_by?: string | null;
+  source?: string | null;
 }): PurchaseOrder {
   const jobId = row.job_id_number?.trim();
+  const projectId = row.project_id?.trim();
+  const expectationStatus = ExpectationStatusSchema.safeParse(row.expectation_status);
+  const source = PurchaseOrderSourceSchema.safeParse(row.source);
   return {
     id: row.id,
     purchaseOrderNumber: row.purchase_order_number,
     generatedAt: isoRequired(row.generated_at),
     createdAt: iso(row.created_at),
     jobIdNumber: jobId ? jobId : null,
+    projectId: projectId ? projectId : null,
+    vendor: row.vendor ?? null,
+    carrier: row.carrier ?? null,
+    expectedArrivalAt: iso(row.expected_arrival_at) ?? null,
+    buyerName: row.buyer_name ?? null,
+    expectationNotes: row.expectation_notes ?? undefined,
+    expectationStatus: expectationStatus.success ? expectationStatus.data : null,
+    expectedPalletCount: row.expected_pallet_count ?? null,
+    lines: parseBuyerLines(row.lines),
+    uploadedBy: row.uploaded_by ?? undefined,
+    source: source.success ? source.data : undefined,
   };
 }
 
@@ -370,6 +411,7 @@ export function mapShippingOrder(row: {
   status: ShippingOrder["status"];
   pallets: unknown;
   notes: string | null;
+  delivery?: unknown;
   created_at: Date | string | null;
   updated_at: Date | string | null;
   created_by: string | null;
@@ -387,6 +429,7 @@ export function mapShippingOrder(row: {
     status: row.status,
     pallets: parseStoredPallets(row.pallets),
     notes: row.notes ?? undefined,
+    delivery: parseDelivery(row.delivery),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     createdBy: row.created_by ?? undefined,

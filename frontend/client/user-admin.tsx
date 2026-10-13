@@ -107,7 +107,7 @@ export function UserAdmin({
         <CardHeader>
           <CardTitle>Add teammate</CardTitle>
           <CardDescription>
-            Managers can create users, associates, and additional managers.
+            Managers assign each person to the work they should touch: warehouse, coordinator, 3PL, project manager, or driver.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -13,10 +13,29 @@ export type SessionPayload = {
   exp: number;
 };
 
-export function sessionCookieOptions() {
+/**
+ * `Secure` cookies are ignored by browsers on plain HTTP, including
+ * `next start` on localhost. Only mark the session secure when this request
+ * actually arrived over HTTPS.
+ */
+export function connectionIsSecure(request: Request): boolean {
+  const forwarded = request.headers.get("x-forwarded-proto");
+  if (forwarded) {
+    const proto = forwarded.split(",")[0]?.trim().toLowerCase();
+    if (proto === "https") return true;
+    if (proto === "http") return false;
+  }
+  try {
+    return new URL(request.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function sessionCookieOptions(request?: Request) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: request ? connectionIsSecure(request) : false,
     sameSite: "lax" as const,
     path: "/",
     maxAge: SESSION_MAX_AGE,

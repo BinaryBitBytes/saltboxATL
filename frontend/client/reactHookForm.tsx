@@ -35,8 +35,10 @@ type ReceivingFormValues = z.infer<typeof ReceivingFormSchema>;
 
 export default function ReceivingForm({
   defaultReceiverName = "",
+  canAssignJobId = false,
 }: {
   defaultReceiverName?: string;
+  canAssignJobId?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -65,7 +67,7 @@ export default function ReceivingForm({
     startTransition(async () => {
       const result = await createReceivingOrder({
         poNumber: values.poNumber,
-        jobIdNumber: values.jobIdNumber,
+        ...(canAssignJobId ? { jobIdNumber: values.jobIdNumber } : {}),
         vendor: values.vendor,
         orderNumber: values.orderNumber,
         carrierInbound: values.carrierInbound,
@@ -104,18 +106,20 @@ export default function ReceivingForm({
         <Field label="PO number" htmlFor="poNumber" error={errors.poNumber?.message}>
           <Input id="poNumber" {...form.register("poNumber")} />
         </Field>
-        <Field
-          label="Job ID (optional)"
-          htmlFor="jobIdNumber"
-          error={errors.jobIdNumber?.message}
-        >
-          <Input
-            id="jobIdNumber"
-            maxLength={LIMITS.code}
-            placeholder="Internal tracking number"
-            {...form.register("jobIdNumber")}
-          />
-        </Field>
+        {canAssignJobId ? (
+          <Field
+            label="Job ID (optional)"
+            htmlFor="jobIdNumber"
+            error={errors.jobIdNumber?.message}
+          >
+            <Input
+              id="jobIdNumber"
+              maxLength={LIMITS.code}
+              placeholder="Internal tracking number"
+              {...form.register("jobIdNumber")}
+            />
+          </Field>
+        ) : null}
         <Field
           label="PO generated"
           htmlFor="poGeneratedAtLocal"

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { ServiceError } from "@/backend/server/inventory-service";
 import { readSystem } from "@/backend/server/store";
 import {
+  hasAnyPermission,
   hasPermission,
   type Permission,
 } from "@/lib/auth/permissions";
@@ -39,6 +40,16 @@ export async function requirePermission(
 ): Promise<PublicUser> {
   const user = await requireUser();
   if (!hasPermission(user.role, permission)) {
+    redirect("/");
+  }
+  return user;
+}
+
+export async function requireAnyPermission(
+  permissions: readonly Permission[],
+): Promise<PublicUser> {
+  const user = await requireUser();
+  if (!hasAnyPermission(user.role, permissions)) {
     redirect("/");
   }
   return user;

@@ -56,7 +56,7 @@ export function JobIdEditor({
         </Button>
       </div>
       <p className="text-[0.625rem] text-muted-foreground">
-        Optional internal tracking number for this purchase order.
+        Internal job ID for this buyer purchase order.
       </p>
       {saved ? (
         <p className="text-[0.625rem] text-muted-foreground">Job ID saved.</p>

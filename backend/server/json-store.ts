@@ -44,7 +44,11 @@ export async function readFromJson(): Promise<InventorySystem> {
     ensureSystemDefaults(existing);
     const seededUsers = await ensureDemoUsers(existing);
     if (!hadDamagedHold || !hadPalletLane || seededUsers) {
-      await persistToJson(existing);
+      try {
+        await persistToJson(existing);
+      } catch (error) {
+        console.error("Could not save seeded demo accounts.", error);
+      }
     }
     return existing;
   }

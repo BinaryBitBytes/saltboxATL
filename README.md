@@ -6,15 +6,23 @@ Saltbox uses credential login with httpOnly session cookies. Roles:
 
 | Role | Access |
 | --- | --- |
-| **User** | Dashboard, on-hand inventory, and the transaction log |
-| **Associate** | User access plus receiving and shipping |
-| **Manager** | Associate access plus adjustments, spreadsheet import, rooms/locations, and user admin |
+| **User** | Dashboard, on-hand inventory, the transaction log, and placing orders |
+| **Associate** | Warehouse execution: receiving, putaway, cubing, shipping, and order fulfillment, plus a read-only inbound forecast |
+| **3PL** | Same warehouse execution as an associate, without placing customer orders, adjusting inventory, or changing buyer POs and job IDs |
+| **Coordinator** | Upload buyer purchase orders (vendor, carrier, project, and expected lines) for inbound forecasting |
+| **Project Manager** | On-hand inventory and assigning job IDs to buyer purchase orders the coordinator uploaded |
+| **Driver** | Manifest and pack list for a load, delivery scans, proof photos, and delivery notes |
+| **Manager** | Every process, including adjustments, locations, and user admin |
 
 Demo accounts (password `saltbox123`) are seeded on first boot:
 
 - `manager@saltbox.local`
 - `associate@saltbox.local`
 - `user@saltbox.local`
+- `coordinator@saltbox.local`
+- `threepl@saltbox.local`
+- `project@saltbox.local`
+- `driver@saltbox.local`
 
 Set `SESSION_SECRET` in production. If it is missing, the app writes a generated secret to `data/.session-secret`.
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
-import { requirePermission } from "@/backend/server/dal";
+import { requireAnyPermission } from "@/backend/server/dal";
 import { enrichInventory } from "@/backend/server/inventory-service";
 import { hasPermission } from "@/lib/auth/permissions";
 import { reservedQuantity } from "@/lib/orders/availability";
@@ -26,16 +26,17 @@ import {
 } from "@/components/ui/table";
 
 export default async function OrdersPage() {
-  const user = await requirePermission("placeOrder");
+  const user = await requireAnyPermission(["placeOrder", "fulfillOrder"]);
+  const canPlace = hasPermission(user.role, "placeOrder");
   const system = await getSystem();
-  const inventory = enrichInventory(system).map((row) => {
+  const inventory = canPlace ? enrichInventory(system).map((row) => {
     const reserved = reservedQuantity(system.customerOrders ?? [], row.id);
     return {
       ...row,
       reserved,
       available: availableToOrder(row.quantity, reserved),
     };
-  });
+  }) : [];
   const canFulfill = hasPermission(user.role, "fulfillOrder");
   const orders = [...(system.customerOrders ?? [])].sort((left, right) =>
     left.submittedAt < right.submittedAt ? 1 : left.submittedAt > right.submittedAt ? -1 : 0,
@@ -59,17 +60,19 @@ export default async function OrdersPage() {
         ) : null}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>New remote order</CardTitle>
-          <CardDescription>
-            Quantities cannot exceed stock that is still available after open picks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <OrderForm inventory={inventory} />
-        </CardContent>
-      </Card>
+      {canPlace ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>New remote order</CardTitle>
+            <CardDescription>
+              Quantities cannot exceed stock that is still available after open picks.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OrderForm inventory={inventory} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-2">
         <h2 className="text-sm font-medium">Orders</h2>

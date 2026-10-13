@@ -200,14 +200,30 @@ export async function saveSystem(
   for (const order of system.purchaseOrders) {
     await client.query(
       `INSERT INTO purchase_orders (
-         id, purchase_order_number, generated_at, created_at, job_id_number
-       ) VALUES ($1, $2, $3, $4, $5)`,
+         id, purchase_order_number, generated_at, created_at, job_id_number,
+         project_id, vendor, carrier, expected_arrival_at, buyer_name,
+         expectation_notes, expectation_status, expected_pallet_count, lines,
+         uploaded_by, source
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+       )`,
       [
         order.id,
         order.purchaseOrderNumber,
         order.generatedAt,
         order.createdAt ?? null,
         order.jobIdNumber ?? null,
+        order.projectId ?? null,
+        order.vendor ?? null,
+        order.carrier ?? null,
+        order.expectedArrivalAt ?? null,
+        order.buyerName ?? null,
+        order.expectationNotes ?? null,
+        order.expectationStatus ?? null,
+        order.expectedPalletCount ?? null,
+        JSON.stringify(order.lines ?? []),
+        order.uploadedBy ?? null,
+        order.source ?? null,
       ],
     );
   }
@@ -251,9 +267,9 @@ export async function saveSystem(
       `INSERT INTO shipping_orders (
          id, shipped_at, customer, shipment_number, carrier_outbound, shipper_name,
          load_pallet_count, waiting_on_items, items_in_jeopardy, status, pallets,
-         notes, created_at, updated_at, created_by
+         notes, delivery, created_at, updated_at, created_by
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
        )`,
       [
         order.id,
@@ -268,6 +284,7 @@ export async function saveSystem(
         order.status,
         JSON.stringify(order.pallets ?? []),
         order.notes ?? null,
+        order.delivery ? JSON.stringify(order.delivery) : null,
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,
@@ -343,7 +360,14 @@ async function loadSeededSystem(client: PoolClient): Promise<InventorySystem> {
   ensureSystemDefaults(system);
   const seededUsers = await ensureDemoUsers(system);
   if (empty || seededUsers) {
-    await saveSystem(client, InventorySystemSchema.parse(system));
+    await client.query("SAVEPOINT seed_users");
+    try {
+      await saveSystem(client, InventorySystemSchema.parse(system));
+      await client.query("RELEASE SAVEPOINT seed_users");
+    } catch (error) {
+      console.error("Could not persist seeded demo accounts.", error);
+      await client.query("ROLLBACK TO SAVEPOINT seed_users");
+    }
   }
   return system;
 }

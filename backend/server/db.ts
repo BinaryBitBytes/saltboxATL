@@ -8,6 +8,8 @@ const MIGRATIONS = [
   { id: "003_job_id_number", file: "003_job_id_number.sql" },
   { id: "004_cubing", file: "004_cubing.sql" },
   { id: "005_customer_orders", file: "005_customer_orders.sql" },
+  { id: "006_roles_inbound_delivery", file: "006_roles_inbound_delivery.sql" },
+  { id: "007_user_roles", file: "007_user_roles.sql" },
 ] as const;
 
 let pool: Pool | undefined;

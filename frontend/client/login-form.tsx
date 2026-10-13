@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { inputClassName } from "@/components/ui/input";
 import {
@@ -13,10 +14,12 @@ import {
 import { Field } from "@/frontend/client/field";
 import { PasswordInput } from "@/frontend/client/password-input";
 import { postAuth } from "@/frontend/client/auth-api";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 import {
   authPageHref,
   type AuthPanel,
 } from "@/lib/auth/login-page";
+import { roleLabel } from "@/lib/auth/permissions";
 import {
   LoginInputSchema,
   RecoverUsernameInputSchema,
@@ -72,7 +75,7 @@ type FieldErrors = Record<string, string[] | undefined>;
 const PANEL_COPY: Record<AuthPanel, { title: string; description: string }> = {
   signin: {
     title: "Sign in",
-    description: "Use your username or email. Demo password is saltbox123.",
+    description: `Use your username or email. Every demo account uses ${DEMO_PASSWORD}.`,
   },
   register: {
     title: "Create an account",
@@ -194,19 +197,17 @@ function SignInForm({
 }) {
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>();
-  const [pending, setPending] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setFieldErrors(undefined);
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    const data = new FormData(event.currentTarget);
     const parsed = LoginInputSchema.safeParse({
-      identifier,
-      password,
+      identifier: String(data.get("identifier") ?? ""),
+      password: String(data.get("password") ?? ""),
     });
     if (!parsed.success) {
+      event.preventDefault();
       const { fieldErrors: next } = flattenError(parsed.error);
       setFieldErrors({
         identifier: next.identifier,
@@ -215,14 +216,8 @@ function SignInForm({
       setError("Enter a valid username or email and password.");
       return;
     }
-    setPending(true);
-    const result = await postAuth("/api/auth/login", parsed.data);
-    setPending(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    window.location.assign(from || "/");
+    setError(null);
+    setFieldErrors(undefined);
   }
 
   return (
@@ -269,9 +264,7 @@ function SignInForm({
         />
       </Field>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      <Button type="submit" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
-      </Button>
+      <Button type="submit">Sign in</Button>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem]">
         <ModeLink href={authPageHref("recover-username", from)}>
           Forgot username?
@@ -280,11 +273,33 @@ function SignInForm({
           Forgot password?
         </ModeLink>
       </div>
-      <ul className="grid gap-1 text-[0.625rem] text-muted-foreground">
-        <li>manager · manager@saltbox.local</li>
-        <li>associate · associate@saltbox.local</li>
-        <li>user · user@saltbox.local · view only</li>
-      </ul>
+      <div className="grid gap-1">
+        <p className="text-[0.625rem] text-muted-foreground">
+          Demo accounts · password {DEMO_PASSWORD}
+        </p>
+        <ul className="grid gap-1 text-[0.625rem] text-muted-foreground">
+          {DEMO_ACCOUNTS.map((account) => (
+            <li key={account.id}>
+              <button
+                type="button"
+                className="w-full rounded-md px-1 py-0.5 text-left hover:bg-muted hover:text-foreground"
+                onClick={(event) => {
+                  const form = event.currentTarget.form;
+                  flushSync(() => {
+                    setIdentifier(account.email);
+                    setPassword(DEMO_PASSWORD);
+                    setError(null);
+                    setFieldErrors(undefined);
+                  });
+                  form?.requestSubmit();
+                }}
+              >
+                {roleLabel(account.role)} · {account.username} · {account.email}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </form>
   );
 }

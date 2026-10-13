@@ -55,10 +55,14 @@
             }
         },
         "Users":{
-            "Role":["user","associate","manager"],
+            "Role":["user","associate","manager","coordinator","threepl","project-manager","driver"],
             "Login":"Email and password",
             "User":"View dashboard, inventory, and transaction log",
-            "Associate":"User access plus receiving, cubing, and shipping",
+            "Associate":"Warehouse execution plus a read-only inbound forecast",
+            "3PL":"Warehouse execution without placing orders, adjustments, buyer PO edits, or job IDs",
+            "Coordinator":"Upload buyer purchase orders for inbound forecasting",
+            "ProjectManager":"On-hand inventory and job IDs on coordinator purchase orders",
+            "Driver":"Load manifest, pack list, delivery scans, proof photos, and notes",
             "Cubing":"Case length x width x height in inches, rounded up to the nearest quarter inch. Pallet cube above a full pallet location limit is broken down to the cases that fit. The remainder routes to a full pallet location or a racked location.",
             "Manager":"Associate access plus adjustments, locations, and user admin",
             "LargeInputConfirmation":"Quantities at or above threshold require checkbox plus matching re-entry"

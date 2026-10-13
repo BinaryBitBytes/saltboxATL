@@ -39,7 +39,9 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     const { photo } = await getPhotoRecord(id);
-    await requireApiPermission(permissionForPhotoWrite(photo.ownerType));
+    await requireApiPermission(
+      permissionForPhotoWrite(photo.ownerType, photo.documentKind),
+    );
     await deletePhotoRecord(id);
     return NextResponse.json({ success: true, data: { id } });
   } catch (error) {

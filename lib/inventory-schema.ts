@@ -215,14 +215,120 @@ export const JobIdNumberSchema = z.preprocess(
     .nullable(),
 );
 
+export const BuyerPoLineSchema = z.object({
+  id: UuidSchema,
+  sku: z.string().trim().max(LIMITS.sku).default(""),
+  upc: z.string().trim().max(LIMITS.upc).default(""),
+  description: z.string().trim().max(LIMITS.description).default(""),
+  quantity: QuantitySchema,
+});
+export type BuyerPoLine = z.infer<typeof BuyerPoLineSchema>;
+
+/** Coordinator expectation for freight that has not been received yet. */
+export const ExpectationStatusSchema = z.enum([
+  "expected",
+  "in-transit",
+  "cancelled",
+]);
+export type ExpectationStatus = z.infer<typeof ExpectationStatusSchema>;
+
+export const PurchaseOrderSourceSchema = z.enum(["coordinator", "receipt"]);
+export type PurchaseOrderSource = z.infer<typeof PurchaseOrderSourceSchema>;
+
 export const PurchaseOrderSchema = z.object({
   id: UuidSchema,
   purchaseOrderNumber: NonEmptyStringSchema,
   generatedAt: DateTimeSchema,
   createdAt: DateTimeSchema.optional(),
   jobIdNumber: JobIdNumberSchema.optional().default(null),
+  projectId: JobIdNumberSchema.optional(),
+  vendor: z.string().trim().max(LIMITS.text).nullable().optional(),
+  carrier: z.string().trim().max(LIMITS.text).nullable().optional(),
+  expectedArrivalAt: DateTimeSchema.nullable().optional(),
+  buyerName: z.string().trim().max(LIMITS.name).nullable().optional(),
+  expectationNotes: OptionalNotesSchema,
+  expectationStatus: ExpectationStatusSchema.nullable().optional(),
+  expectedPalletCount: z.number().int().min(0).nullable().optional(),
+  lines: z.array(BuyerPoLineSchema).optional(),
+  uploadedBy: z.string().trim().max(LIMITS.name).optional(),
+  source: PurchaseOrderSourceSchema.optional(),
 });
 export type PurchaseOrder = z.infer<typeof PurchaseOrderSchema>;
+
+const OptionalBuyerLineText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .refine((value) => !hasControlChars(value), {
+      error: "Control characters are not allowed.",
+    })
+    .refine((value) => !hasHtmlMarkup(value), {
+      error: "HTML markup is not allowed.",
+    })
+    .default("");
+
+export const SaveBuyerPurchaseOrderInputSchema = z
+  .object({
+    purchaseOrderNumber: NonEmptyStringSchema,
+    projectId: JobIdNumberSchema.optional().default(null),
+    vendor: NonEmptyStringSchema,
+    carrier: NonEmptyStringSchema,
+    expectedArrivalAt: DateTimeSchema,
+    buyerName: z.preprocess(
+      (value) => {
+        if (typeof value !== "string") return value;
+        const trimmed = value.trim();
+        return trimmed === "" ? undefined : trimmed;
+      },
+      PersonNameSchema.optional(),
+    ),
+    notes: OptionalNotesSchema,
+    expectationStatus: ExpectationStatusSchema.default("expected"),
+    expectedPalletCount: NonNegativeCountSchema.default(0),
+    lines: z
+      .array(
+        z.object({
+          sku: OptionalBuyerLineText(LIMITS.sku),
+          upc: OptionalBuyerLineText(LIMITS.upc),
+          description: OptionalBuyerLineText(LIMITS.description),
+          quantity: QuantitySchema,
+        }),
+      )
+      .min(1, { error: "Add at least one line for what should arrive." })
+      .max(200),
+    createdBy: z.string().optional(),
+    confirmLargeInput: z.boolean().optional().default(false),
+    confirmationQuantity: z.coerce.number().int().optional(),
+  })
+  .superRefine((value, ctx) => {
+    value.lines.forEach((line, index) => {
+      if (!line.sku && !line.description) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Each line needs a SKU or a description.",
+          path: ["lines", index, "sku"],
+        });
+      }
+      if (line.sku && !SkuSchema.safeParse(line.sku).success) {
+        ctx.addIssue({
+          code: "custom",
+          message: "SKU contains invalid characters.",
+          path: ["lines", index, "sku"],
+        });
+      }
+      if (line.upc && !UpcSchema.safeParse(line.upc).success) {
+        ctx.addIssue({
+          code: "custom",
+          message: "UPC contains invalid characters.",
+          path: ["lines", index, "upc"],
+        });
+      }
+    });
+  });
+export type SaveBuyerPurchaseOrderInput = z.infer<
+  typeof SaveBuyerPurchaseOrderInputSchema
+>;
 
 export const ReceivingOrderSchema = z.object({
   id: UuidSchema,
@@ -297,6 +403,30 @@ export const ShippingPickSchema = z.object({
 });
 export type ShippingPick = z.infer<typeof ShippingPickSchema>;
 
+export const DeliveryScanSchema = z.object({
+  id: UuidSchema,
+  code: NonEmptyStringSchema,
+  match: z.enum(["pallet", "case"]),
+  matchedId: UuidSchema,
+  palletId: UuidSchema,
+  label: NonEmptyStringSchema,
+  scannedAt: DateTimeSchema,
+  latitude: z.number().gte(-90).lte(90).nullable().optional(),
+  longitude: z.number().gte(-180).lte(180).nullable().optional(),
+  accuracyMeters: z.number().gte(0).nullable().optional(),
+  scannedBy: z.string().trim().max(LIMITS.name).optional(),
+});
+export type DeliveryScan = z.infer<typeof DeliveryScanSchema>;
+
+export const DeliveryRecordSchema = z.object({
+  notes: OptionalNotesSchema,
+  updatedAt: DateTimeSchema.optional(),
+  updatedBy: z.string().trim().max(LIMITS.name).optional(),
+  deliveredAt: DateTimeSchema.nullable().optional(),
+  scans: z.array(DeliveryScanSchema).default([]),
+});
+export type DeliveryRecord = z.infer<typeof DeliveryRecordSchema>;
+
 export const ShippingOrderSchema = z.object({
   id: UuidSchema,
   shippedAt: DateTimeSchema,
@@ -310,11 +440,33 @@ export const ShippingOrderSchema = z.object({
   status: ShippingOrderStatusSchema.default("draft"),
   pallets: z.array(PalletSchema).default([]),
   notes: OptionalNotesSchema,
+  delivery: DeliveryRecordSchema.optional(),
   createdAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
   createdBy: z.string().optional(),
 });
 export type ShippingOrder = z.infer<typeof ShippingOrderSchema>;
+
+export const RecordDeliveryScanInputSchema = z.object({
+  shipmentId: UuidSchema,
+  code: NonEmptyStringSchema,
+  latitude: z.number().gte(-90).lte(90).nullable().optional(),
+  longitude: z.number().gte(-180).lte(180).nullable().optional(),
+  accuracyMeters: z.number().gte(0).lte(100_000).nullable().optional(),
+  scannedBy: z.string().optional(),
+});
+export type RecordDeliveryScanInput = z.infer<
+  typeof RecordDeliveryScanInputSchema
+>;
+
+export const SaveDeliveryNotesInputSchema = z.object({
+  shipmentId: UuidSchema,
+  notes: OptionalNotesSchema,
+  updatedBy: z.string().optional(),
+});
+export type SaveDeliveryNotesInput = z.infer<
+  typeof SaveDeliveryNotesInputSchema
+>;
 
 export const CreateShippingOrderInputSchema = z.object({
   customer: NonEmptyStringSchema,
@@ -416,6 +568,7 @@ export const PhotoDocumentKindSchema = z.enum([
   "manifest",
   "load-sheet",
   "pack-slip",
+  "proof-of-delivery",
 ]);
 export type PhotoDocumentKind = z.infer<typeof PhotoDocumentKindSchema>;
 export const PHOTO_DOCUMENT_KINDS = PhotoDocumentKindSchema.options;
@@ -521,7 +674,15 @@ export const CreateRoomInputSchema = z.object({
 });
 export type CreateRoomInput = z.infer<typeof CreateRoomInputSchema>;
 
-export const UserRoleSchema = z.enum(["user", "associate", "manager"]);
+export const UserRoleSchema = z.enum([
+  "user",
+  "associate",
+  "manager",
+  "coordinator",
+  "threepl",
+  "project-manager",
+  "driver",
+]);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export const USER_ROLES = UserRoleSchema.options;
 

@@ -1,4 +1,4 @@
-import type { PhotoOwnerType } from "@/lib/inventory-schema";
+import type { PhotoDocumentKind, PhotoOwnerType } from "@/lib/inventory-schema";
 import type { Permission } from "@/lib/auth/permissions";
 
 export type PhotoOwnerLookup = {
@@ -14,9 +14,15 @@ export type PhotoOwnerResult =
   | { ok: true; cancelled: false }
   | { ok: false; error: string };
 
-export function permissionForPhotoWrite(ownerType: PhotoOwnerType): Permission {
+export function permissionForPhotoWrite(
+  ownerType: PhotoOwnerType,
+  documentKind?: PhotoDocumentKind,
+): Permission {
   if (ownerType === "receiving-order") return "receive";
-  if (ownerType === "shipping-order") return "ship";
+  if (ownerType === "shipping-order") {
+    if (documentKind === "proof-of-delivery") return "confirmDelivery";
+    return "ship";
+  }
   return "adjustInventory";
 }
 
