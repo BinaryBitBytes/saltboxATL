@@ -47,7 +47,7 @@ export function sessionRedirect(
   response.cookies.set(
     SESSION_COOKIE,
     signSession(user),
-    sessionCookieOptions(),
+    sessionCookieOptions(request),
   );
   return response;
 }

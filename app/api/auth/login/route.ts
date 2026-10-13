@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       response.cookies.set(
         SESSION_COOKIE,
         signSession(user),
-        sessionCookieOptions(),
+        sessionCookieOptions(request),
       );
       return response;
     }

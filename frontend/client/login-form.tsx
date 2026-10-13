@@ -293,7 +293,7 @@ function SignInForm({
                 type="button"
                 className="w-full rounded-md px-1 py-0.5 text-left hover:bg-muted hover:text-foreground"
                 onClick={() => {
-                  setIdentifier(account.username);
+                  setIdentifier(account.email);
                   setPassword(DEMO_PASSWORD);
                   setError(null);
                   setFieldErrors(undefined);
