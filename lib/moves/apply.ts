@@ -1,6 +1,11 @@
 import type { InventoryItem, Location } from "@/lib/inventory-schema";
 import { inventoryKey, normalizeProjectId } from "@/lib/inventory/keys";
 import type { StockChange } from "@/backend/server/inventory-ops";
+import { caseCubicInches, roundCube } from "@/lib/cubing/measure";
+import {
+  inventoryQuantityCubeMessage,
+  type CubingProfile,
+} from "@/lib/cubing/workflow";
 import {
   assertActiveLocation,
   assertPositiveQuantity,
@@ -13,6 +18,11 @@ import {
   resolveCombinedProjectId,
 } from "@/lib/moves/project";
 
+export type MoveCubeInput = {
+  cubes?: CubingProfile[];
+  directedCubicInches?: (locationId: string) => number;
+};
+
 export type InventoryMoveResult = {
   items: InventoryItem[];
   changes: StockChange[];
@@ -22,6 +32,72 @@ export type InventoryMoveResult = {
 
 function lineKey(item: Pick<InventoryItem, "sku" | "batch" | "locationId" | "projectId">) {
   return inventoryKey(item.sku, item.batch, item.locationId, item.projectId);
+}
+
+function quantityOf(items: InventoryItem[], sku: string) {
+  return items.reduce((sum, item) => (item.sku === sku ? sum + item.quantity : sum), 0);
+}
+
+function onHandCube(items: InventoryItem[], locationId: string, cubes: CubingProfile[]) {
+  let total = 0;
+  for (const item of items) {
+    if (item.locationId !== locationId || item.quantity <= 0) continue;
+    const cube = cubes.find((entry) => entry.sku === item.sku);
+    if (!cube) continue;
+    total += caseCubicInches(item.quantity, cube);
+  }
+  return roundCube(total);
+}
+
+function assertDestinationHasRoom(input: {
+  items: InventoryItem[];
+  locations: Location[];
+  sourceLocationId: string;
+  destinationLocationId: string;
+  sku: string;
+  quantity: number;
+  destinationQuantityBefore: number;
+  cubes?: CubingProfile[];
+  directedCubicInches?: (locationId: string) => number;
+}) {
+  const cube = input.cubes?.find((entry) => entry.sku === input.sku);
+  if (!cube) return;
+  if (input.sourceLocationId === input.destinationLocationId) return;
+  const location = input.locations.find((entry) => entry.id === input.destinationLocationId);
+  if (!location) return;
+  const directed = input.directedCubicInches?.(location.id) ?? 0;
+  const committed = roundCube(onHandCube(input.items, location.id, input.cubes ?? []) + directed);
+  const message = inventoryQuantityCubeMessage({
+    sku: input.sku,
+    locationCode: location.code,
+    capacity: location.cubeCapacityCubicInches,
+    committedCubicInches: committed,
+    cube,
+    quantityBefore: input.destinationQuantityBefore,
+    quantityAfter: input.destinationQuantityBefore + input.quantity,
+  });
+  if (message) throw new ValidationError(message);
+}
+
+function assertQuantityConserved(
+  before: InventoryItem[],
+  after: InventoryItem[],
+  sku: string,
+) {
+  if (quantityOf(before, sku) !== quantityOf(after, sku)) {
+    throw new ValidationError(
+      `Moving ${sku} would duplicate on-hand quantity. The move was not applied.`,
+    );
+  }
+}
+
+function assertSingleLiveIdentity(items: InventoryItem[], key: string, sku: string) {
+  const live = items.filter((item) => lineKey(item) === key && item.quantity > 0);
+  if (live.length > 1) {
+    throw new ValidationError(
+      `Moving ${sku} would duplicate inventory for the same SKU, batch, location, and project.`,
+    );
+  }
 }
 
 export function applyInventoryMove(input: {
@@ -35,6 +111,8 @@ export function applyInventoryMove(input: {
   now: string;
   approveProjectCombine?: boolean;
   approverIsAdmin?: boolean;
+  cubes?: CubingProfile[];
+  directedCubicInches?: (locationId: string) => number;
 }): InventoryMoveResult {
   assertPositiveQuantity(input.quantity, "Move quantity");
   const items = input.items.map((item) => ({ ...item }));
@@ -75,6 +153,17 @@ export function applyInventoryMove(input: {
   const mergesLiveStock = Boolean(destination && destination.quantity > 0);
   const reassignsProject = destinationProject !== sourceProject;
   const combined = mergesLiveStock || reassignsProject;
+  assertDestinationHasRoom({
+    items,
+    locations: input.locations,
+    sourceLocationId: source.locationId,
+    destinationLocationId: input.destinationLocationId,
+    sku: source.sku,
+    quantity: input.quantity,
+    destinationQuantityBefore: destination?.quantity ?? 0,
+    cubes: input.cubes,
+    directedCubicInches: input.directedCubicInches,
+  });
   if (combined) {
     assertProjectCombineAllowed({
       projectIds: [sourceProject, destinationProject, destination?.projectId],
@@ -109,6 +198,8 @@ export function applyInventoryMove(input: {
     destination.updatedAt = input.now;
     if (!destination.upc) destination.upc = source.upc;
     if (!destination.description) destination.description = source.description;
+    assertQuantityConserved(input.items, items, source.sku);
+    assertSingleLiveIdentity(items, destinationKey, source.sku);
     return {
       items,
       destinationItemId: destination.id,
@@ -140,6 +231,8 @@ export function applyInventoryMove(input: {
     updatedAt: input.now,
   };
   items.push(created);
+  assertQuantityConserved(input.items, items, source.sku);
+  assertSingleLiveIdentity(items, destinationKey, source.sku);
   return {
     items,
     destinationItemId: created.id,
@@ -171,6 +264,8 @@ export function consolidateInventoryLines(input: {
   now: string;
   approveProjectCombine?: boolean;
   approverIsAdmin?: boolean;
+  cubes?: CubingProfile[];
+  directedCubicInches?: (locationId: string) => number;
 }): InventoryMoveResult {
   if (input.lines.length < 2) {
     throw new ValidationError("Select at least two inventory lines to consolidate.");
@@ -214,22 +309,41 @@ export function consolidateInventoryLines(input: {
     });
   }
 
+  const destinationKey = inventoryKey(
+    sku,
+    batch,
+    input.destinationLocationId,
+    resultingProjectId,
+  );
+  const isAlreadyThere = (source: (typeof sources)[number]) =>
+    source.item.locationId === input.destinationLocationId &&
+    normalizeProjectId(source.item.projectId) === resultingProjectId;
+  const staying = sources.find(isAlreadyThere);
+  const incoming = sources.filter((source) => !isAlreadyThere(source));
+  const alreadyAtDestination = incoming
+    .filter((source) => source.item.locationId === input.destinationLocationId)
+    .reduce((sum, source) => sum + source.quantity, 0);
+  const arriving = incoming
+    .filter((source) => source.item.locationId !== input.destinationLocationId)
+    .reduce((sum, source) => sum + source.quantity, 0);
+  const existingDestination = input.items.find((item) => lineKey(item) === destinationKey);
+  assertDestinationHasRoom({
+    items: input.items,
+    locations: input.locations,
+    sourceLocationId: "",
+    destinationLocationId: input.destinationLocationId,
+    sku,
+    quantity: arriving,
+    destinationQuantityBefore: (existingDestination?.quantity ?? 0) + alreadyAtDestination,
+    cubes: input.cubes,
+    directedCubicInches: input.directedCubicInches,
+  });
+
   let items = input.items;
   const changes: StockChange[] = [];
-  let destinationItemId =
-    sources.find(
-      (source) =>
-        source.item.locationId === input.destinationLocationId &&
-        normalizeProjectId(source.item.projectId) === resultingProjectId,
-    )?.item.id ?? "";
+  let destinationItemId = staying?.item.id ?? existingDestination?.id ?? "";
   let combined = false;
-  for (const source of sources) {
-    if (
-      source.item.locationId === input.destinationLocationId &&
-      normalizeProjectId(source.item.projectId) === resultingProjectId
-    ) {
-      continue;
-    }
+  for (const source of incoming) {
     const moved = applyInventoryMove({
       items,
       locations: input.locations,
@@ -241,6 +355,8 @@ export function consolidateInventoryLines(input: {
       now: input.now,
       approveProjectCombine: true,
       approverIsAdmin: true,
+      cubes: input.cubes,
+      directedCubicInches: input.directedCubicInches,
     });
     items = moved.items;
     destinationItemId = moved.destinationItemId;
@@ -249,6 +365,14 @@ export function consolidateInventoryLines(input: {
   }
   if (!destinationItemId) {
     throw new ValidationError("Enter a quantity to consolidate.");
+  }
+  assertQuantityConserved(input.items, items, sku);
+  assertSingleLiveIdentity(items, destinationKey, sku);
+  const net = changes.reduce((sum, change) => sum + change.quantityDelta, 0);
+  if (net !== 0) {
+    throw new ValidationError(
+      `Consolidating ${sku} would duplicate on-hand quantity. The consolidation was not applied.`,
+    );
   }
   return { items, changes, destinationItemId, combined };
 }

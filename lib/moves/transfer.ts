@@ -11,7 +11,7 @@ import { normalizeProjectId } from "@/lib/inventory/keys";
 import { ValidationError } from "@/lib/validation/errors";
 import { assertActiveLocation } from "@/lib/validation/inventory-guards";
 import type { StockChange } from "@/backend/server/inventory-ops";
-import { applyInventoryMove } from "@/lib/moves/apply";
+import { applyInventoryMove, type MoveCubeInput } from "@/lib/moves/apply";
 import { assertProjectCombineAllowed } from "@/lib/moves/project";
 
 export function nextTransferNumber(
@@ -110,7 +110,7 @@ export function loadTransferPallet(input: {
   now: string;
   approveProjectCombine?: boolean;
   approverIsAdmin?: boolean;
-}): { transfer: SiteTransfer; items: InventoryItem[]; changes: StockChange[] } {
+} & MoveCubeInput): { transfer: SiteTransfer; items: InventoryItem[]; changes: StockChange[] } {
   if (input.transfer.status !== "loading") {
     throw new ValidationError("Pallets can only be loaded while the transfer is loading.");
   }
@@ -134,6 +134,8 @@ export function loadTransferPallet(input: {
       now: input.now,
       approveProjectCombine: input.approveProjectCombine,
       approverIsAdmin: input.approverIsAdmin,
+      cubes: input.cubes,
+      directedCubicInches: input.directedCubicInches,
     });
     items = moved.items;
     changes = moved.changes;
@@ -241,7 +243,7 @@ export function unloadTransferLine(input: {
   now: string;
   approveProjectCombine?: boolean;
   approverIsAdmin?: boolean;
-}): { transfer: SiteTransfer; items: InventoryItem[]; changes: StockChange[] } {
+} & MoveCubeInput): { transfer: SiteTransfer; items: InventoryItem[]; changes: StockChange[] } {
   if (input.transfer.status !== "arrived") {
     throw new ValidationError("Unload the trailer after it arrives at the destination site.");
   }
@@ -277,6 +279,8 @@ export function unloadTransferLine(input: {
     now: input.now,
     approveProjectCombine: input.approveProjectCombine,
     approverIsAdmin: input.approverIsAdmin,
+    cubes: input.cubes,
+    directedCubicInches: input.directedCubicInches,
   });
 
   const pallets = input.transfer.pallets
@@ -311,7 +315,7 @@ export function cancelSiteTransfer(input: {
   now: string;
   approveProjectCombine?: boolean;
   approverIsAdmin?: boolean;
-}): { transfer: SiteTransfer; items: InventoryItem[]; changes: StockChange[] } {
+} & MoveCubeInput): { transfer: SiteTransfer; items: InventoryItem[]; changes: StockChange[] } {
   if (input.transfer.status !== "loading") {
     throw new ValidationError("Only a transfer that is still loading can be cancelled.");
   }
@@ -336,6 +340,8 @@ export function cancelSiteTransfer(input: {
       now: input.now,
       approveProjectCombine: true,
       approverIsAdmin: true,
+      cubes: input.cubes,
+      directedCubicInches: input.directedCubicInches,
     });
     items = moved.items;
     changes.push(...moved.changes);

@@ -2,6 +2,8 @@ import { nowIso } from "@/backend/server/helperUtils";
 import { appendTransactions, ServiceError } from "@/backend/server/inventory-service";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import { updateSystem } from "@/backend/server/store";
+import { committedCubeForLocation, profilesFromCubes } from "@/lib/cubing/capacity";
+import type { InventorySystem } from "@/lib/inventory-schema";
 import { applyInventoryMove, consolidateInventoryLines } from "@/lib/moves/apply";
 import {
   arriveSiteTransfer,
@@ -28,6 +30,15 @@ type MoveActor = {
   name?: string;
   approverIsAdmin: boolean;
 };
+
+function cubeContext(system: InventorySystem) {
+  const cubes = system.itemCubes ?? [];
+  return {
+    cubes: profilesFromCubes(cubes),
+    directedCubicInches: (locationId: string) =>
+      committedCubeForLocation(locationId, [], system.receivingOrders ?? [], cubes),
+  };
+}
 
 function locationCode(
   locations: Array<{ id: string; code: string }>,
@@ -76,6 +87,7 @@ export async function moveInventoryRecord(
       now,
       approveProjectCombine: parsed.data.approveProjectCombine,
       approverIsAdmin: actor.approverIsAdmin,
+      ...cubeContext(system),
     });
     system.inventoryItems = moved.items;
     const destination = locationCode(
@@ -124,6 +136,7 @@ export async function consolidateInventoryRecord(
       now,
       approveProjectCombine: parsed.data.approveProjectCombine,
       approverIsAdmin: actor.approverIsAdmin,
+      ...cubeContext(system),
     });
     system.inventoryItems = consolidated.items;
     const destination = locationCode(
@@ -197,6 +210,7 @@ export async function loadSiteTransferRecord(
       now,
       approveProjectCombine: parsed.data.approveProjectCombine,
       approverIsAdmin: actor.approverIsAdmin,
+      ...cubeContext(system),
     });
     system.inventoryItems = loaded.items;
     const index = system.siteTransfers.findIndex((entry) => entry.id === transfer.id);
@@ -270,6 +284,7 @@ export async function unloadSiteTransferRecord(
       now,
       approveProjectCombine: parsed.data.approveProjectCombine,
       approverIsAdmin: actor.approverIsAdmin,
+      ...cubeContext(system),
     });
     system.inventoryItems = unloaded.items;
     const index = system.siteTransfers.findIndex((entry) => entry.id === transfer.id);
@@ -305,6 +320,7 @@ export async function cancelSiteTransferRecord(
       now,
       approveProjectCombine: parsed.data.approveProjectCombine,
       approverIsAdmin: actor.approverIsAdmin,
+      ...cubeContext(system),
     });
     system.inventoryItems = cancelled.items;
     const index = system.siteTransfers.findIndex((entry) => entry.id === transfer.id);
