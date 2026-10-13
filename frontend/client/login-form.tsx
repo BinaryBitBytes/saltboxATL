@@ -13,10 +13,12 @@ import {
 import { Field } from "@/frontend/client/field";
 import { PasswordInput } from "@/frontend/client/password-input";
 import { postAuth } from "@/frontend/client/auth-api";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 import {
   authPageHref,
   type AuthPanel,
 } from "@/lib/auth/login-page";
+import { roleLabel } from "@/lib/auth/permissions";
 import {
   LoginInputSchema,
   RecoverUsernameInputSchema,
@@ -72,7 +74,7 @@ type FieldErrors = Record<string, string[] | undefined>;
 const PANEL_COPY: Record<AuthPanel, { title: string; description: string }> = {
   signin: {
     title: "Sign in",
-    description: "Use your username or email. Demo password is saltbox123.",
+    description: `Use your username or email. Every demo account uses ${DEMO_PASSWORD}.`,
   },
   register: {
     title: "Create an account",
@@ -280,11 +282,29 @@ function SignInForm({
           Forgot password?
         </ModeLink>
       </div>
-      <ul className="grid gap-1 text-[0.625rem] text-muted-foreground">
-        <li>manager · manager@saltbox.local</li>
-        <li>associate · associate@saltbox.local</li>
-        <li>user · user@saltbox.local · view only</li>
-      </ul>
+      <div className="grid gap-1">
+        <p className="text-[0.625rem] text-muted-foreground">
+          Demo accounts · password {DEMO_PASSWORD}
+        </p>
+        <ul className="grid gap-1 text-[0.625rem] text-muted-foreground">
+          {DEMO_ACCOUNTS.map((account) => (
+            <li key={account.id}>
+              <button
+                type="button"
+                className="w-full rounded-md px-1 py-0.5 text-left hover:bg-muted hover:text-foreground"
+                onClick={() => {
+                  setIdentifier(account.username);
+                  setPassword(DEMO_PASSWORD);
+                  setError(null);
+                  setFieldErrors(undefined);
+                }}
+              >
+                {roleLabel(account.role)} · {account.username} · {account.email}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </form>
   );
 }

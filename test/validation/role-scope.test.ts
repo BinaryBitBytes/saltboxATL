@@ -16,6 +16,7 @@ import {
   type PhotoOwnerType,
   type UserRole,
 } from "@/lib/inventory-schema";
+import { DEMO_ACCOUNTS } from "@/lib/auth/demo-accounts";
 import { SESSION_COOKIE, signSession, verifySessionToken } from "@/lib/auth/token";
 
 /**
@@ -167,6 +168,15 @@ function sessionRequest(role: UserRole, path: string, method = "GET"): NextReque
 }
 
 describe("role permission scope", () => {
+  it("publishes a demo sign-in for every role", () => {
+    expect(DEMO_ACCOUNTS.map((account) => account.role).sort()).to.deep.equal(
+      [...USER_ROLES].sort(),
+    );
+    expect(new Set(DEMO_ACCOUNTS.map((account) => account.username)).size).to.equal(
+      DEMO_ACCOUNTS.length,
+    );
+  });
+
   it("classifies every role and every permission", () => {
     expect(Object.keys(SCOPE).sort()).to.deep.equal([...USER_ROLES].sort());
     const named = new Set(Object.values(SCOPE).flat());
