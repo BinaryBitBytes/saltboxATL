@@ -85,6 +85,40 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "viewDriverLoad",
     "confirmDelivery",
   ],
+  "security-associate": [
+    "viewDashboard",
+    "viewInventory",
+    "viewTransactions",
+    "placeOrder",
+    "fulfillOrder",
+    "receive",
+    "putaway",
+    "cube",
+    "ship",
+    "scanLookup",
+    "viewInboundForecast",
+  ],
+  "security-manager": [
+    "viewDashboard",
+    "viewInventory",
+    "viewTransactions",
+    "placeOrder",
+    "fulfillOrder",
+    "receive",
+    "putaway",
+    "cube",
+    "ship",
+    "scanLookup",
+    "adjustInventory",
+    "reopenReceiving",
+    "manageLocations",
+    "manageUsers",
+    "uploadBuyerOrders",
+    "viewInboundForecast",
+    "assignJobId",
+    "viewDriverLoad",
+    "confirmDelivery",
+  ],
 };
 
 const ORDER_ID = "11111111-1111-4111-8111-111111111111";
@@ -217,6 +251,8 @@ describe("role permission scope", () => {
     expect(SCOPE.threepl).to.not.include("assignJobId");
     expect(SCOPE.threepl).to.not.include("confirmDelivery");
     expect(SCOPE.threepl).to.not.include("manageUsers");
+    expect(SCOPE["security-associate"]).to.deep.equal(SCOPE.associate);
+    expect(SCOPE["security-manager"]).to.deep.equal(SCOPE.manager);
     expect(SCOPE.associate).to.not.include("assignJobId");
     expect(SCOPE.associate).to.not.include("uploadBuyerOrders");
     expect(SCOPE.user).to.not.include("receive");

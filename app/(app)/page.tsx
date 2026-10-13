@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requireUser } from "@/backend/server/dal";
+import { resolveActiveDivision } from "@/backend/server/division";
+import { divisionLabel } from "@/lib/divisions";
 import { enrichInventory, enrichTransactions } from "@/backend/server/inventory-service";
 import { hasPermission } from "@/lib/auth/permissions";
 import { deliveryProgress, deliveryStatusLabel } from "@/lib/delivery/check-in";
@@ -23,6 +25,7 @@ import { emptyActiveLocations } from "@/lib/locations/availability";
 
 export default async function Home() {
   const user = await requireUser();
+  const division = await resolveActiveDivision();
   const system = await getSystem();
   const canReceive = hasPermission(user.role, "receive");
   const canPutaway = hasPermission(user.role, "putaway");
@@ -80,7 +83,9 @@ export default async function Home() {
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="font-heading text-lg font-semibold sm:text-xl">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <p className="text-sm text-muted-foreground">
+            {divisionLabel(division)}. {subtitle}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canUploadBuyer ? (

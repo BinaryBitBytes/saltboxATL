@@ -6,21 +6,37 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS divisions (
+  id TEXT PRIMARY KEY CHECK (id IN ('hyperscale', 'security')),
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL
+);
+
+INSERT INTO divisions (id, code, name) VALUES
+  ('hyperscale', 'Division_1', 'Hyperscale'),
+  ('security', 'Division_2', 'Security')
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS rooms (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
-  description TEXT
+  description TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT rooms_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS locations (
   id UUID PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
+  code TEXT NOT NULL,
   room_id UUID NOT NULL REFERENCES rooms (id),
   description TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   storage_class TEXT NOT NULL DEFAULT 'rack'
     CHECK (storage_class IN ('pallet', 'rack', 'staging', 'hold')),
-  cube_capacity_cubic_inches DOUBLE PRECISION NOT NULL DEFAULT 18144
+  cube_capacity_cubic_inches DOUBLE PRECISION NOT NULL DEFAULT 18144,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT locations_division_check CHECK (division IN ('hyperscale', 'security')),
+  CONSTRAINT locations_division_code_key UNIQUE (division, code)
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -36,9 +52,13 @@ CREATE TABLE IF NOT EXISTS users (
     'coordinator',
     'threepl',
     'project-manager',
-    'driver'
+    'driver',
+    'security-associate',
+    'security-manager'
   )),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT users_division_check CHECK (division IN ('hyperscale', 'security')),
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
   created_by TEXT
@@ -59,7 +79,9 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   strand_count INTEGER,
   length_meters DOUBLE PRECISION,
   last_moved_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ
+  updated_at TIMESTAMPTZ,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT inventory_items_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS inventory_transactions (
@@ -80,7 +102,9 @@ CREATE TABLE IF NOT EXISTS inventory_transactions (
   reference_id UUID,
   scanned_code TEXT,
   created_by TEXT,
-  notes TEXT
+  notes TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT inventory_transactions_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS photos (
@@ -93,7 +117,9 @@ CREATE TABLE IF NOT EXISTS photos (
   size INTEGER NOT NULL,
   caption TEXT,
   created_at TIMESTAMPTZ NOT NULL,
-  created_by TEXT
+  created_by TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT photos_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS purchase_orders (
@@ -115,7 +141,9 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   expected_pallet_count INTEGER,
   lines JSONB NOT NULL DEFAULT '[]'::jsonb,
   uploaded_by TEXT,
-  source TEXT CHECK (source IS NULL OR source IN ('coordinator', 'receipt'))
+  source TEXT CHECK (source IS NULL OR source IN ('coordinator', 'receipt')),
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT purchase_orders_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS receiving_orders (
@@ -138,7 +166,9 @@ CREATE TABLE IF NOT EXISTS receiving_orders (
   notes TEXT,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  created_by TEXT
+  created_by TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT receiving_orders_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS shipping_orders (
@@ -157,7 +187,9 @@ CREATE TABLE IF NOT EXISTS shipping_orders (
   delivery JSONB,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  created_by TEXT
+  created_by TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT shipping_orders_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS customer_orders (
@@ -173,11 +205,13 @@ CREATE TABLE IF NOT EXISTS customer_orders (
   pick_request JSONB NOT NULL,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  created_by TEXT
+  created_by TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT customer_orders_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 
 CREATE TABLE IF NOT EXISTS item_cubes (
-  sku TEXT PRIMARY KEY,
+  sku TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   length_inches DOUBLE PRECISION NOT NULL,
   width_inches DOUBLE PRECISION NOT NULL,
@@ -185,7 +219,10 @@ CREATE TABLE IF NOT EXISTS item_cubes (
   cubic_inches DOUBLE PRECISION NOT NULL,
   units_per_case INTEGER NOT NULL DEFAULT 1,
   cubed_at TIMESTAMPTZ NOT NULL,
-  cubed_by TEXT
+  cubed_by TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT item_cubes_division_check CHECK (division IN ('hyperscale', 'security')),
+  PRIMARY KEY (division, sku)
 );
 
 CREATE INDEX IF NOT EXISTS inventory_items_sku_idx ON inventory_items (sku);
@@ -194,3 +231,11 @@ CREATE INDEX IF NOT EXISTS inventory_transactions_occurred_idx ON inventory_tran
 CREATE INDEX IF NOT EXISTS photos_owner_idx ON photos (owner_type, owner_id);
 CREATE INDEX IF NOT EXISTS customer_orders_submitted_idx ON customer_orders (submitted_at DESC);
 CREATE INDEX IF NOT EXISTS customer_orders_status_idx ON customer_orders (status);
+CREATE INDEX IF NOT EXISTS inventory_items_division_idx ON inventory_items (division, sku);
+CREATE INDEX IF NOT EXISTS locations_division_idx ON locations (division, code);
+
+CREATE OR REPLACE VIEW hyperscale_inventory_items AS
+  SELECT * FROM inventory_items WHERE division = 'hyperscale';
+
+CREATE OR REPLACE VIEW security_inventory_items AS
+  SELECT * FROM inventory_items WHERE division = 'security';

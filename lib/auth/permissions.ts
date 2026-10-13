@@ -1,7 +1,23 @@
 import type { UserRole } from "@/lib/inventory-schema";
 
+const SECURITY_ROLE: Partial<Record<UserRole, UserRole>> = {
+  associate: "security-associate",
+  manager: "security-manager",
+};
+
+/** Security associate and security manager mirror the Hyperscale roles they copy. */
+function withSecurityRoles(roles: readonly UserRole[]): UserRole[] {
+  return [
+    ...roles,
+    ...roles.flatMap((role) => {
+      const securityRole = SECURITY_ROLE[role];
+      return securityRole ? [securityRole] : [];
+    }),
+  ];
+}
+
 export const PERMISSIONS = {
-  viewDashboard: [
+  viewDashboard: withSecurityRoles([
     "user",
     "associate",
     "threepl",
@@ -9,31 +25,37 @@ export const PERMISSIONS = {
     "project-manager",
     "driver",
     "manager",
-  ],
-  viewInventory: ["user", "associate", "threepl", "project-manager", "manager"],
-  viewTransactions: ["user", "associate", "threepl", "manager"],
-  placeOrder: ["user", "associate", "manager"],
-  fulfillOrder: ["associate", "threepl", "manager"],
-  receive: ["associate", "threepl", "manager"],
-  putaway: ["associate", "threepl", "manager"],
-  cube: ["associate", "threepl", "manager"],
-  ship: ["associate", "threepl", "manager"],
-  scanLookup: ["user", "associate", "threepl", "manager"],
-  adjustInventory: ["manager"],
-  reopenReceiving: ["manager"],
-  manageLocations: ["manager"],
-  manageUsers: ["manager"],
-  uploadBuyerOrders: ["coordinator", "manager"],
-  viewInboundForecast: [
+  ]),
+  viewInventory: withSecurityRoles([
+    "user",
+    "associate",
+    "threepl",
+    "project-manager",
+    "manager",
+  ]),
+  viewTransactions: withSecurityRoles(["user", "associate", "threepl", "manager"]),
+  placeOrder: withSecurityRoles(["user", "associate", "manager"]),
+  fulfillOrder: withSecurityRoles(["associate", "threepl", "manager"]),
+  receive: withSecurityRoles(["associate", "threepl", "manager"]),
+  putaway: withSecurityRoles(["associate", "threepl", "manager"]),
+  cube: withSecurityRoles(["associate", "threepl", "manager"]),
+  ship: withSecurityRoles(["associate", "threepl", "manager"]),
+  scanLookup: withSecurityRoles(["user", "associate", "threepl", "manager"]),
+  adjustInventory: withSecurityRoles(["manager"]),
+  reopenReceiving: withSecurityRoles(["manager"]),
+  manageLocations: withSecurityRoles(["manager"]),
+  manageUsers: withSecurityRoles(["manager"]),
+  uploadBuyerOrders: withSecurityRoles(["coordinator", "manager"]),
+  viewInboundForecast: withSecurityRoles([
     "coordinator",
     "project-manager",
     "associate",
     "threepl",
     "manager",
-  ],
-  assignJobId: ["project-manager", "manager"],
-  viewDriverLoad: ["driver", "manager"],
-  confirmDelivery: ["driver", "manager"],
+  ]),
+  assignJobId: withSecurityRoles(["project-manager", "manager"]),
+  viewDriverLoad: withSecurityRoles(["driver", "manager"]),
+  confirmDelivery: withSecurityRoles(["driver", "manager"]),
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -184,6 +206,8 @@ const ROLE_LABELS: Record<UserRole, string> = {
   threepl: "3PL",
   "project-manager": "Project Manager",
   driver: "Driver",
+  "security-associate": "Security Associate",
+  "security-manager": "Security Manager",
 };
 
 export function roleLabel(role: UserRole): string {

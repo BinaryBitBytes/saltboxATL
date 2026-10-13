@@ -46,6 +46,10 @@ export const NonEmptyStringSchema = SafeTextSchema;
 export const PositiveIntegerSchema = NonNegativeCountSchema;
 export const DateTimeSchema = z.iso.datetime();
 
+/** Division_1 Hyperscale and Division_2 Security keep separate inventory. */
+export const DivisionSchema = z.enum(["hyperscale", "security"]);
+export type Division = z.infer<typeof DivisionSchema>;
+
 export const ConnectionTypeSchema = z.enum([
   "LC",
   "SC",
@@ -237,6 +241,7 @@ export type PurchaseOrderSource = z.infer<typeof PurchaseOrderSourceSchema>;
 
 export const PurchaseOrderSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   purchaseOrderNumber: NonEmptyStringSchema,
   generatedAt: DateTimeSchema,
   createdAt: DateTimeSchema.optional(),
@@ -332,6 +337,7 @@ export type SaveBuyerPurchaseOrderInput = z.infer<
 
 export const ReceivingOrderSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   poNumber: NonEmptyStringSchema,
   receivedAt: DateTimeSchema,
   vendor: NonEmptyStringSchema,
@@ -429,6 +435,7 @@ export type DeliveryRecord = z.infer<typeof DeliveryRecordSchema>;
 
 export const ShippingOrderSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   shippedAt: DateTimeSchema,
   customer: NonEmptyStringSchema,
   shipmentNumber: NonEmptyStringSchema,
@@ -498,6 +505,7 @@ const OptionalColorSchema = z.preprocess(
 
 export const InventoryItemSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   sku: SkuSchema,
   upc: UpcSchema.optional(),
   batch: z.string().nullable().default(null),
@@ -528,6 +536,7 @@ export type InventoryTransactionType = z.infer<
 
 export const InventoryTransactionSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   type: InventoryTransactionTypeSchema,
   occurredAt: DateTimeSchema,
   sku: NonEmptyStringSchema,
@@ -596,6 +605,7 @@ export const PhotoFileNameSchema = z
 
 export const PhotoAttachmentSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   ownerType: PhotoOwnerTypeSchema,
   ownerId: UuidSchema,
   documentKind: PhotoDocumentKindSchema.default("freight-proof"),
@@ -639,6 +649,7 @@ export const STORAGE_CLASSES = StorageClassSchema.options;
 
 export const LocationSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
@@ -663,6 +674,7 @@ export type CreateLocationInput = z.infer<typeof CreateLocationInputSchema>;
 
 export const RoomSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   name: NonEmptyStringSchema,
   description: z.string().optional(),
 });
@@ -682,6 +694,8 @@ export const UserRoleSchema = z.enum([
   "threepl",
   "project-manager",
   "driver",
+  "security-associate",
+  "security-manager",
 ]);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export const USER_ROLES = UserRoleSchema.options;
@@ -693,6 +707,7 @@ export const UserSchema = z.object({
   email: EmailSchema,
   passwordHash: z.string().min(1).max(512),
   role: UserRoleSchema,
+  division: DivisionSchema.optional(),
   isActive: z.boolean().default(true),
   createdAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
@@ -796,6 +811,7 @@ export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;
 
 export const ItemCubeSchema = z.object({
   sku: SkuSchema,
+  division: DivisionSchema.optional(),
   description: z.string().trim().max(LIMITS.description).default(""),
   lengthInches: z.number().positive(),
   widthInches: z.number().positive(),
@@ -900,6 +916,7 @@ export type PickRequest = z.infer<typeof PickRequestSchema>;
 
 export const CustomerOrderSchema = z.object({
   id: UuidSchema,
+  division: DivisionSchema.optional(),
   orderNumber: NonEmptyStringSchema,
   customer: NonEmptyStringSchema,
   placedBy: PersonNameSchema,

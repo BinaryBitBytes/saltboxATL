@@ -242,7 +242,7 @@ export async function createManagedUser(
 ): Promise<UserActionResult> {
   try {
     const actor = await requireApiPermission("manageUsers");
-    const data = await createUserRecord(rawData, actor.name);
+    const data = await createUserRecord(rawData, actor);
     revalidatePath("/users");
     return { ok: true, data };
   } catch (error) {
@@ -259,7 +259,7 @@ export async function updateManagedUser(
 ): Promise<UserActionResult> {
   try {
     const actor = await requireApiPermission("manageUsers");
-    const data = await updateUserRecord(rawData, actor.id);
+    const data = await updateUserRecord(rawData, actor);
     revalidatePath("/users");
     return { ok: true, data };
   } catch (error) {

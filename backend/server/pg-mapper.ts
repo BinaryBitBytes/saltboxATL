@@ -24,6 +24,12 @@ import {
   defaultStorageClass,
   type StorageClass,
 } from "@/lib/cubing/measure";
+import { asDivision } from "@/lib/divisions";
+import type { Division } from "@/lib/inventory-schema";
+
+function storedDivision(value: string | null | undefined): Division {
+  return asDivision(value);
+}
 
 export function parseStoredPallets(raw: unknown): Pallet[] {
   const parsed = PalletSchema.array().safeParse(raw ?? []);
@@ -70,9 +76,11 @@ export function mapRoom(row: {
   id: string;
   name: string;
   description: string | null;
+  division?: string | null;
 }): Room {
   return {
     id: row.id,
+    division: storedDivision(row.division),
     name: row.name,
     description: row.description ?? undefined,
   };
@@ -101,11 +109,13 @@ export function mapLocation(row: {
   is_active: boolean;
   storage_class?: string | null;
   cube_capacity_cubic_inches?: number | string | null;
+  division?: string | null;
 }): Location {
   const storageClass = storageClassFrom(row.storage_class, row.code);
   const capacity = Number(row.cube_capacity_cubic_inches);
   return {
     id: row.id,
+    division: storedDivision(row.division),
     code: row.code,
     roomId: row.room_id,
     description: row.description ?? undefined,
@@ -128,9 +138,11 @@ export function mapItemCube(row: {
   units_per_case: number | string;
   cubed_at: Date | string;
   cubed_by: string | null;
+  division?: string | null;
 }): ItemCube {
   return {
     sku: row.sku,
+    division: storedDivision(row.division),
     description: row.description ?? "",
     lengthInches: Number(row.length_inches),
     widthInches: Number(row.width_inches),
@@ -153,6 +165,7 @@ export function mapUser(row: {
   created_at: Date | string | null;
   updated_at: Date | string | null;
   created_by: string | null;
+  division?: string | null;
 }): User {
   return {
     id: row.id,
@@ -161,6 +174,7 @@ export function mapUser(row: {
     email: row.email,
     passwordHash: row.password_hash,
     role: row.role,
+    division: storedDivision(row.division),
     isActive: row.is_active,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -184,6 +198,7 @@ export function mapItem(row: {
   length_meters?: number | string | null;
   last_moved_at: Date | string | null;
   updated_at: Date | string | null;
+  division?: string | null;
 }): InventoryItem {
   const strandCount =
     row.strand_count == null || row.strand_count === ""
@@ -200,6 +215,7 @@ export function mapItem(row: {
     lengthMeters != null;
   return {
     id: row.id,
+    division: storedDivision(row.division),
     sku: row.sku,
     upc: row.upc ?? undefined,
     batch: row.batch,
@@ -249,9 +265,11 @@ export function mapTransaction(row: {
   scanned_code: string | null;
   created_by: string | null;
   notes: string | null;
+  division?: string | null;
 }): InventoryTransaction {
   return {
     id: row.id,
+    division: storedDivision(row.division),
     type: row.type,
     occurredAt: isoRequired(row.occurred_at),
     sku: row.sku,
@@ -283,9 +301,11 @@ export function mapPhoto(row: {
   caption: string | null;
   created_at: Date | string;
   created_by: string | null;
+  division?: string | null;
 }): PhotoAttachment {
   return {
     id: row.id,
+    division: storedDivision(row.division),
     ownerType: row.owner_type,
     ownerId: row.owner_id,
     documentKind: row.document_kind,
@@ -327,6 +347,7 @@ export function mapPurchaseOrder(row: {
   lines?: unknown;
   uploaded_by?: string | null;
   source?: string | null;
+  division?: string | null;
 }): PurchaseOrder {
   const jobId = row.job_id_number?.trim();
   const projectId = row.project_id?.trim();
@@ -334,6 +355,7 @@ export function mapPurchaseOrder(row: {
   const source = PurchaseOrderSourceSchema.safeParse(row.source);
   return {
     id: row.id,
+    division: storedDivision(row.division),
     purchaseOrderNumber: row.purchase_order_number,
     generatedAt: isoRequired(row.generated_at),
     createdAt: iso(row.created_at),
@@ -373,9 +395,11 @@ export function mapReceivingOrder(row: {
   created_at: Date | string | null;
   updated_at: Date | string | null;
   created_by: string | null;
+  division?: string | null;
 }): ReceivingOrder {
   return {
     id: row.id,
+    division: storedDivision(row.division),
     poNumber: row.po_number,
     receivedAt: isoRequired(row.received_at),
     vendor: row.vendor,
@@ -415,9 +439,11 @@ export function mapShippingOrder(row: {
   created_at: Date | string | null;
   updated_at: Date | string | null;
   created_by: string | null;
+  division?: string | null;
 }): ShippingOrder {
   return {
     id: row.id,
+    division: storedDivision(row.division),
     shippedAt: isoRequired(row.shipped_at),
     customer: row.customer,
     shipmentNumber: row.shipment_number,
@@ -459,9 +485,11 @@ export function mapCustomerOrder(row: {
   created_at: Date | string | null;
   updated_at: Date | string | null;
   created_by: string | null;
+  division?: string | null;
 }): CustomerOrder {
   return CustomerOrderSchema.parse({
     id: row.id,
+    division: storedDivision(row.division),
     orderNumber: row.order_number,
     customer: row.customer,
     placedBy: row.placed_by,

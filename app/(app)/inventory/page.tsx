@@ -1,6 +1,8 @@
 import { getSystem } from "@/backend/server/store";
 import { enrichInventory } from "@/backend/server/inventory-service";
 import { requireUser } from "@/backend/server/dal";
+import { resolveActiveDivision } from "@/backend/server/division";
+import { divisionLabel } from "@/lib/divisions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { buildCubingLocations } from "@/lib/cubing/capacity";
 import { InventoryWorkspace } from "@/frontend/client/inventory-workspace";
@@ -8,6 +10,7 @@ import type { LocationCubeRow } from "@/frontend/client/location-cube-table";
 
 export default async function InventoryPage() {
   const user = await requireUser();
+  const division = await resolveActiveDivision();
   const system = await getSystem();
   const rows = enrichInventory(system);
   const canAdjust = hasPermission(user.role, "adjustInventory");
@@ -30,12 +33,13 @@ export default async function InventoryPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          On-hand quantities, spreadsheet import/export, barcode/QR labels, and
-          location label printing
+          {divisionLabel(division)} on-hand quantities, spreadsheet import/export,
+          barcode/QR labels, and location label printing
           {canAdjust ? ", plus overage / shortage / damage adjustments." : "."}
         </p>
       </div>
       <InventoryWorkspace
+        key={division}
         rows={rows}
         locations={system.locations}
         rooms={system.rooms}

@@ -54,8 +54,15 @@
                 
             }
         },
+        "Division":{
+            "Division_1":"Hyperscale",
+            "Division_2":"Security",
+            "Admin":"Existing manager can switch inventories from the navigation bar",
+            "OtherUsers":"Each login sees only its own division inventory"
+        },
         "Users":{
-            "Role":["user","associate","manager","coordinator","threepl","project-manager","driver"],
+            "Role":["user","associate","manager","coordinator","threepl","project-manager","driver","security-associate","security-manager"],
+            "Division":"hyperscale roles use Division_1; security-associate and security-manager use Division_2",
             "Login":"Email and password",
             "User":"View dashboard, inventory, and transaction log",
             "Associate":"Warehouse execution plus a read-only inbound forecast",
@@ -64,7 +71,9 @@
             "ProjectManager":"On-hand inventory and job IDs on coordinator purchase orders",
             "Driver":"Load manifest, pack list, delivery scans, proof photos, and notes",
             "Cubing":"Case length x width x height in inches, rounded up to the nearest quarter inch. Pallet cube above a full pallet location limit is broken down to the cases that fit. The remainder routes to a full pallet location or a racked location.",
-            "Manager":"Associate access plus adjustments, locations, and user admin",
+            "Manager":"Associate access plus adjustments, locations, user admin, and both division inventories",
+            "SecurityAssociate":"Hyperscale associate access against the Security inventory",
+            "SecurityManager":"Hyperscale manager access against the Security inventory",
             "LargeInputConfirmation":"Quantities at or above threshold require checkbox plus matching re-entry"
         },
         "Inventory_Transactions":{
