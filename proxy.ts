@@ -37,7 +37,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (!canAccessPath(session.role, pathname)) {
+  if (!canAccessPath(session.role, pathname, request.method)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { success: false, error: "You do not have permission to do that." },
