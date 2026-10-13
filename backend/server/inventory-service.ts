@@ -7,6 +7,9 @@ import {
   CreateCustomerOrderInputSchema,
   CreateShippingOrderInputSchema,
   CubeItemInputSchema,
+  RecordDeliveryScanInputSchema,
+  SaveBuyerPurchaseOrderInputSchema,
+  SaveDeliveryNotesInputSchema,
   SetPurchaseOrderJobIdInputSchema,
   PalletInputSchema,
   PutawayLocationInputSchema,
@@ -22,13 +25,19 @@ import {
   type InventoryTransactionRow,
   type Location,
   type Pallet,
+  type DeliveryRecord,
   type PurchaseOrder,
   type ReceivingOrder,
   type Room,
   type CustomerOrder,
   type ShippingOrder,
 } from "@/lib/inventory-schema";
-import { upsertPurchaseOrder } from "@/lib/purchase-orders";
+import { applyDeliveryNotes, applyDeliveryScan, DeliveryCheckInError } from "@/lib/delivery/check-in";
+import {
+  assignPurchaseOrderJobId,
+  saveBuyerPurchaseOrder,
+  upsertPurchaseOrder,
+} from "@/lib/purchase-orders";
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
@@ -503,20 +512,128 @@ export async function setPurchaseOrderJobIdRecord(
     throw new ServiceError(parsed.error);
   }
 
+  return updateSystem((system) => {
+    const updated = assignPurchaseOrderJobId(
+      system.purchaseOrders,
+      parsed.data.purchaseOrderNumber,
+      parsed.data.jobIdNumber,
+    );
+    if (!updated) {
+      throw new ServiceError(
+        "Upload the buyer purchase order before assigning a job ID.",
+      );
+    }
+    return updated;
+  });
+}
+
+export async function saveBuyerPurchaseOrderRecord(
+  rawData: unknown,
+): Promise<PurchaseOrder> {
+  const parsed = parseWithSchema(SaveBuyerPurchaseOrderInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+
+  assertLargeInputConfirmed(
+    sumQuantities(parsed.data.lines),
+    parsed.data,
+    LIMITS.largeQuantity,
+    "expected quantity",
+  );
+
   const now = nowIso();
   return updateSystem((system) =>
-    upsertPurchaseOrder(
-      system.purchaseOrders,
-      {
+    saveBuyerPurchaseOrder(system.purchaseOrders, {
+      id: createId(),
+      purchaseOrderNumber: parsed.data.purchaseOrderNumber,
+      generatedAt: parsed.data.expectedArrivalAt,
+      createdAt: now,
+      projectId: parsed.data.projectId,
+      vendor: parsed.data.vendor,
+      carrier: parsed.data.carrier,
+      expectedArrivalAt: parsed.data.expectedArrivalAt,
+      buyerName: parsed.data.buyerName,
+      notes: parsed.data.notes,
+      expectationStatus: parsed.data.expectationStatus,
+      expectedPalletCount: parsed.data.expectedPalletCount,
+      lines: parsed.data.lines.map((line) => ({
         id: createId(),
-        purchaseOrderNumber: parsed.data.purchaseOrderNumber,
-        generatedAt: now,
-        createdAt: now,
-        jobIdNumber: parsed.data.jobIdNumber,
-      },
-      { replaceJobId: true },
-    ),
+        sku: line.sku,
+        upc: line.upc,
+        description: line.description,
+        quantity: line.quantity,
+      })),
+      uploadedBy: parsed.data.createdBy,
+    }),
   );
+}
+
+function requireShipment(system: InventorySystem, shipmentId: string) {
+  const order = system.shippingOrders.find((entry) => entry.id === shipmentId);
+  if (!order) {
+    throw new ServiceError("Shipment was not found.");
+  }
+  return order;
+}
+
+export async function recordDeliveryScanRecord(
+  rawData: unknown,
+): Promise<DeliveryRecord> {
+  const parsed = parseWithSchema(RecordDeliveryScanInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  const scannedAt = nowIso();
+  return updateSystem((system) => {
+    const order = requireShipment(system, parsed.data.shipmentId);
+    try {
+      order.delivery = applyDeliveryScan(order, {
+        id: createId(),
+        code: parsed.data.code,
+        scannedAt,
+        scannedBy: parsed.data.scannedBy,
+        latitude: parsed.data.latitude,
+        longitude: parsed.data.longitude,
+        accuracyMeters: parsed.data.accuracyMeters,
+      });
+    } catch (error) {
+      if (error instanceof DeliveryCheckInError) {
+        throw new ServiceError(error.message);
+      }
+      throw error;
+    }
+    order.updatedAt = scannedAt;
+    return order.delivery;
+  });
+}
+
+export async function saveDeliveryNotesRecord(
+  rawData: unknown,
+): Promise<DeliveryRecord> {
+  const parsed = parseWithSchema(SaveDeliveryNotesInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  const updatedAt = nowIso();
+  return updateSystem((system) => {
+    const order = requireShipment(system, parsed.data.shipmentId);
+    try {
+      order.delivery = applyDeliveryNotes(
+        order,
+        parsed.data.notes,
+        updatedAt,
+        parsed.data.updatedBy,
+      );
+    } catch (error) {
+      if (error instanceof DeliveryCheckInError) {
+        throw new ServiceError(error.message);
+      }
+      throw error;
+    }
+    order.updatedAt = updatedAt;
+    return order.delivery;
+  });
 }
 
 export async function addPalletToOrder(

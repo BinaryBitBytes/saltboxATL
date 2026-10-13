@@ -29,7 +29,15 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT NOT NULL UNIQUE,
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('user', 'associate', 'manager')),
+  role TEXT NOT NULL CHECK (role IN (
+    'user',
+    'associate',
+    'manager',
+    'coordinator',
+    'threepl',
+    'project-manager',
+    'driver'
+  )),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
@@ -93,7 +101,21 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   purchase_order_number TEXT NOT NULL,
   generated_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ,
-  job_id_number TEXT
+  job_id_number TEXT,
+  project_id TEXT,
+  vendor TEXT,
+  carrier TEXT,
+  expected_arrival_at TIMESTAMPTZ,
+  buyer_name TEXT,
+  expectation_notes TEXT,
+  expectation_status TEXT CHECK (
+    expectation_status IS NULL
+    OR expectation_status IN ('expected', 'in-transit', 'cancelled')
+  ),
+  expected_pallet_count INTEGER,
+  lines JSONB NOT NULL DEFAULT '[]'::jsonb,
+  uploaded_by TEXT,
+  source TEXT CHECK (source IS NULL OR source IN ('coordinator', 'receipt'))
 );
 
 CREATE TABLE IF NOT EXISTS receiving_orders (
@@ -132,6 +154,7 @@ CREATE TABLE IF NOT EXISTS shipping_orders (
   status TEXT NOT NULL,
   pallets JSONB NOT NULL DEFAULT '[]'::jsonb,
   notes TEXT,
+  delivery JSONB,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
   created_by TEXT

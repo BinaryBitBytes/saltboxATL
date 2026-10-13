@@ -19,7 +19,7 @@ import {
   UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
-import { hasPermission, roleLabel, type Permission } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasPermission, roleLabel, type Permission } from "@/lib/auth/permissions";
 import type { PublicUser } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,16 +30,18 @@ const NAV: Array<{
   href: string;
   label: string;
   icon: typeof DashboardSquare01Icon;
-  permission: Permission;
+  permission: Permission | Permission[];
 }> = [
   { href: "/", label: "Dashboard", icon: DashboardSquare01Icon, permission: "viewDashboard" },
+  { href: "/inbound", label: "Inbound", icon: SearchList01Icon, permission: "viewInboundForecast" },
   { href: "/receiving", label: "Receiving", icon: PackageOpenIcon, permission: "receive" },
   { href: "/putaway", label: "Putaway", icon: PackageMovingIcon, permission: "putaway" },
   { href: "/inventory", label: "Inventory", icon: WarehouseIcon, permission: "viewInventory" },
-  { href: "/orders", label: "Orders", icon: ShoppingBag01Icon, permission: "placeOrder" },
+  { href: "/orders", label: "Orders", icon: ShoppingBag01Icon, permission: ["placeOrder", "fulfillOrder"] },
   { href: "/cubing", label: "Cubing", icon: CubeIcon, permission: "cube" },
   { href: "/reports", label: "Reports", icon: SearchList01Icon, permission: "viewInventory" },
   { href: "/shipping", label: "Shipping", icon: TruckDeliveryIcon, permission: "ship" },
+  { href: "/loads", label: "My loads", icon: TruckDeliveryIcon, permission: "viewDriverLoad" },
   { href: "/logbook", label: "Logbook", icon: BookOpen02Icon, permission: "viewTransactions" },
   { href: "/transactions", label: "Stock log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
   { href: "/locations", label: "Locations", icon: PinLocation01Icon, permission: "manageLocations" },
@@ -54,7 +56,11 @@ export function AppShell({
   user: PublicUser;
 }) {
   const pathname = usePathname();
-  const items = NAV.filter((item) => hasPermission(user.role, item.permission));
+  const items = NAV.filter((item) =>
+    Array.isArray(item.permission)
+      ? hasAnyPermission(user.role, item.permission)
+      : hasPermission(user.role, item.permission),
+  );
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">

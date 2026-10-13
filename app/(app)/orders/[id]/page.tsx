@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
-import { requirePermission } from "@/backend/server/dal";
+import { requireAnyPermission } from "@/backend/server/dal";
 import { hasPermission } from "@/lib/auth/permissions";
 import {
   buildOrderItemLabels,
@@ -27,7 +27,7 @@ export default async function CustomerOrderPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requirePermission("placeOrder");
+  const user = await requireAnyPermission(["placeOrder", "fulfillOrder"]);
   const { id } = await params;
   const system = await getSystem();
   const order = system.customerOrders.find((entry) => entry.id === id);
@@ -37,6 +37,7 @@ export default async function CustomerOrderPage({
     system.locations.map((location) => [location.id, location.code]),
   );
   const canFulfill = hasPermission(user.role, "fulfillOrder");
+  const canCancel = hasPermission(user.role, "placeOrder");
   const pickOpen = order.status === "picking" && order.pickRequest.status === "open";
   const printLabel =
     order.printBatch.status === "printed" ? "Printed at" : "Sent to";
@@ -83,7 +84,7 @@ export default async function CustomerOrderPage({
           {pickOpen ? (
             <OrderActions
               orderId={order.id}
-              canCancel
+              canCancel={canCancel}
               canFulfill={canFulfill}
             />
           ) : null}

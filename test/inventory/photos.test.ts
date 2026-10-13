@@ -124,6 +124,9 @@ describe("transaction proof photos", () => {
     );
     expect(permissionForPhotoWrite("receiving-order")).to.equal("receive");
     expect(permissionForPhotoWrite("shipping-order")).to.equal("ship");
+    expect(permissionForPhotoWrite("shipping-order", "proof-of-delivery")).to.equal(
+      "confirmDelivery",
+    );
     expect(permissionForPhotoWrite("adjustment")).to.equal("adjustInventory");
   });
 

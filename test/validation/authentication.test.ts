@@ -103,6 +103,36 @@ describe("user authentication safeguards", () => {
     expect(canAccessPath("user", "/logbook")).to.equal(true);
     expect(canAccessPath("user", "/reports")).to.equal(true);
     expect(canAccessPath("user", "/shipping")).to.equal(false);
+    expect(hasPermission("coordinator", "uploadBuyerOrders")).to.equal(true);
+    expect(hasPermission("coordinator", "receive")).to.equal(false);
+    expect(hasPermission("coordinator", "assignJobId")).to.equal(false);
+    expect(hasPermission("coordinator", "viewInventory")).to.equal(false);
+    expect(canAccessPath("coordinator", "/inbound")).to.equal(true);
+    expect(canAccessPath("coordinator", "/receiving")).to.equal(false);
+    expect(hasPermission("project-manager", "assignJobId")).to.equal(true);
+    expect(hasPermission("project-manager", "viewInventory")).to.equal(true);
+    expect(hasPermission("project-manager", "uploadBuyerOrders")).to.equal(false);
+    expect(hasPermission("project-manager", "receive")).to.equal(false);
+    expect(canAccessPath("project-manager", "/inventory")).to.equal(true);
+    expect(canAccessPath("project-manager", "/users")).to.equal(false);
+    expect(hasPermission("driver", "viewDriverLoad")).to.equal(true);
+    expect(hasPermission("driver", "confirmDelivery")).to.equal(true);
+    expect(hasPermission("driver", "ship")).to.equal(false);
+    expect(hasPermission("driver", "viewInventory")).to.equal(false);
+    expect(canAccessPath("driver", "/loads")).to.equal(true);
+    expect(canAccessPath("driver", "/shipping")).to.equal(false);
+    expect(hasPermission("threepl", "receive")).to.equal(true);
+    expect(hasPermission("threepl", "ship")).to.equal(true);
+    expect(hasPermission("threepl", "fulfillOrder")).to.equal(true);
+    expect(hasPermission("threepl", "placeOrder")).to.equal(false);
+    expect(hasPermission("threepl", "adjustInventory")).to.equal(false);
+    expect(hasPermission("threepl", "uploadBuyerOrders")).to.equal(false);
+    expect(hasPermission("threepl", "assignJobId")).to.equal(false);
+    expect(canAccessPath("threepl", "/orders")).to.equal(true);
+    expect(canAccessPath("threepl", "/orders/printer")).to.equal(true);
+    expect(hasPermission("associate", "assignJobId")).to.equal(false);
+    expect(hasPermission("manager", "confirmDelivery")).to.equal(true);
+    expect(hasPermission("manager", "uploadBuyerOrders")).to.equal(true);
   });
 
   it("blocks open redirects after login", () => {

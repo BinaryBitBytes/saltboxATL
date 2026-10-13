@@ -8,6 +8,7 @@ import {
   LoadManifestSheet,
   PackSlipSheet,
 } from "@/frontend/client/shipment-documents";
+import { DeliveryProgressView } from "@/frontend/client/delivery-progress";
 import { buildOutboundLabels } from "@/lib/labels/build-labels";
 import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
 import { photosForOwner } from "@/lib/photos/query";
@@ -57,6 +58,18 @@ export default async function ShippingOrderPage({
         </div>
         <ShippingStatusBadge status={order.status} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Delivery check-in</CardTitle>
+          <CardDescription>
+            Driver scans and proof of delivery. Warehouse shipping does not edit this log.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DeliveryProgressView order={order} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

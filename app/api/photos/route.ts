@@ -2,9 +2,10 @@ import {
   attachPhotoRecord,
   listPhotoRecords,
 } from "@/backend/server/photo-service";
-import { requireApiPermission, requireApiUser } from "@/backend/server/dal";
+import { requireApiUser } from "@/backend/server/dal";
 import { jsonError, jsonOk } from "@/backend/server/http";
-import { PhotoOwnerTypeSchema } from "@/lib/inventory-schema";
+import { hasPermission } from "@/lib/auth/permissions";
+import { PhotoDocumentKindSchema, PhotoOwnerTypeSchema } from "@/lib/inventory-schema";
 import { permissionForPhotoWrite } from "@/lib/photos/owner";
 import { LIMITS } from "@/lib/validation/limits";
 import { ServiceError } from "@/backend/server/inventory-service";
@@ -46,19 +47,32 @@ export async function POST(request: Request) {
       );
     }
 
+    const user = await requireApiUser();
     const ownerTypeParsed = PhotoOwnerTypeSchema.safeParse(ownerType);
     if (!ownerTypeParsed.success) {
       throw new ServiceError("Choose a receiving order, shipment, or adjustment.");
     }
-
-    const user = await requireApiPermission(
-      permissionForPhotoWrite(ownerTypeParsed.data),
+    const kindParsed = PhotoDocumentKindSchema.safeParse(
+      typeof documentKind === "string" && documentKind
+        ? documentKind
+        : "freight-proof",
     );
+    if (!kindParsed.success) {
+      throw new ServiceError("Choose a document type.");
+    }
+    if (
+      !hasPermission(
+        user.role,
+        permissionForPhotoWrite(ownerTypeParsed.data, kindParsed.data),
+      )
+    ) {
+      throw new ServiceError("You do not have permission to do that.", 403);
+    }
     const bytes = new Uint8Array(await file.arrayBuffer());
     const photo = await attachPhotoRecord({
       ownerType: ownerTypeParsed.data,
       ownerId,
-      documentKind: typeof documentKind === "string" ? documentKind : "freight-proof",
+      documentKind: kindParsed.data,
       originalName: file.name,
       caption: typeof caption === "string" ? caption : "",
       bytes,

@@ -8,6 +8,9 @@ import {
   reopenReceivingOrder,
   createLocationRecord,
   createReceivingOrderRecord,
+  recordDeliveryScanRecord,
+  saveBuyerPurchaseOrderRecord,
+  saveDeliveryNotesRecord,
   setPurchaseOrderJobIdRecord,
   createRoomRecord,
   acknowledgeWarehousePrintsRecord,
@@ -30,9 +33,11 @@ import {
   ServiceError,
 } from "@/backend/server/inventory-service";
 import { requireApiPermission, withCreatedBy } from "@/backend/server/dal";
+import { hasPermission } from "@/lib/auth/permissions";
 import type {
   ItemCube,
   Location,
+  DeliveryRecord,
   PurchaseOrder,
   CustomerOrder,
   ReceivingOrder,
@@ -76,6 +81,8 @@ function revalidateInventory() {
   revalidatePath("/orders");
   revalidatePath("/locations");
   revalidatePath("/transactions");
+  revalidatePath("/inbound");
+  revalidatePath("/loads");
 }
 
 export async function createReceivingOrder(
@@ -83,7 +90,11 @@ export async function createReceivingOrder(
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
     const user = await requireApiPermission("receive");
-    const data = await createReceivingOrderRecord(withCreatedBy(rawData, user));
+    const payload = withCreatedBy(rawData, user);
+    if (!hasPermission(user.role, "assignJobId")) {
+      delete payload.jobIdNumber;
+    }
+    const data = await createReceivingOrderRecord(payload);
     revalidateInventory();
     revalidatePath(`/receiving/${data.id}`);
     return { ok: true, data };
@@ -96,9 +107,59 @@ export async function setPurchaseOrderJobId(
   rawData: unknown,
 ): Promise<ActionResult<PurchaseOrder>> {
   try {
-    await requireApiPermission("receive");
+    await requireApiPermission("assignJobId");
     const data = await setPurchaseOrderJobIdRecord(rawData);
     revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function saveBuyerPurchaseOrder(
+  rawData: unknown,
+): Promise<ActionResult<PurchaseOrder>> {
+  try {
+    const user = await requireApiPermission("uploadBuyerOrders");
+    const data = await saveBuyerPurchaseOrderRecord(withCreatedBy(rawData, user));
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function recordDeliveryScan(
+  rawData: unknown,
+): Promise<ActionResult<DeliveryRecord>> {
+  try {
+    const user = await requireApiPermission("confirmDelivery");
+    const payload =
+      rawData && typeof rawData === "object" && !Array.isArray(rawData)
+        ? { ...(rawData as Record<string, unknown>), scannedBy: user.name }
+        : { scannedBy: user.name };
+    const data = await recordDeliveryScanRecord(payload);
+    revalidateInventory();
+    revalidatePath("/loads");
+    revalidatePath("/shipping");
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function saveDeliveryNotes(
+  rawData: unknown,
+): Promise<ActionResult<DeliveryRecord>> {
+  try {
+    const user = await requireApiPermission("confirmDelivery");
+    const payload =
+      rawData && typeof rawData === "object" && !Array.isArray(rawData)
+        ? { ...(rawData as Record<string, unknown>), updatedBy: user.name }
+        : { updatedBy: user.name };
+    const data = await saveDeliveryNotesRecord(payload);
+    revalidateInventory();
+    revalidatePath("/loads");
     return { ok: true, data };
   } catch (error) {
     return fail(error);

@@ -32,6 +32,10 @@ const LOC_PLT02 = "aaaa7777-7777-4777-8777-777777777777";
 const USER_MANAGER = "bbbb1111-1111-4111-8111-111111111111";
 const USER_ASSOCIATE = "bbbb2222-2222-4222-8222-222222222222";
 const USER_VIEWER = "bbbb3333-3333-4333-8333-333333333333";
+const USER_COORDINATOR = "bbbb4444-4444-4444-8444-444444444444";
+const USER_THREEPL = "bbbb5555-5555-4555-8555-555555555555";
+const USER_PROJECT = "bbbb6666-6666-4666-8666-666666666666";
+const USER_DRIVER = "bbbb7777-7777-4777-8777-777777777777";
 
 export const DEMO_PASSWORD = "saltbox123";
 
@@ -62,6 +66,34 @@ export const DEMO_ACCOUNTS: Array<{
     username: "user",
     email: "user@saltbox.local",
     role: "user",
+  },
+  {
+    id: USER_COORDINATOR,
+    name: "Morgan Coordinator",
+    username: "coordinator",
+    email: "coordinator@saltbox.local",
+    role: "coordinator",
+  },
+  {
+    id: USER_THREEPL,
+    name: "Casey Logistics",
+    username: "threepl",
+    email: "threepl@saltbox.local",
+    role: "threepl",
+  },
+  {
+    id: USER_PROJECT,
+    name: "Parker Project",
+    username: "project",
+    email: "project@saltbox.local",
+    role: "project-manager",
+  },
+  {
+    id: USER_DRIVER,
+    name: "Devon Driver",
+    username: "driver",
+    email: "driver@saltbox.local",
+    role: "driver",
   },
 ];
 
