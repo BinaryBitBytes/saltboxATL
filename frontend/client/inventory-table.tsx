@@ -47,6 +47,10 @@ const columns = columnHelper.columns([
     header: "Batch",
     cell: ({ getValue }) => getValue() || "—",
   }),
+  columnHelper.accessor("projectId", {
+    header: "Project ID",
+    cell: ({ getValue }) => getValue() || "—",
+  }),
   columnHelper.accessor("roomName", { header: "Room" }),
   columnHelper.accessor("locationCode", { header: "Location" }),
   columnHelper.accessor("quantity", { header: "Qty" }),
@@ -97,7 +101,7 @@ export function InventoryTable({
     if (!needle) return rows;
     return rows.filter((row) =>
       matchesScan(row, { raw: needle, sku: needle, upc: needle }) ||
-      [row.description, row.manufacturer, row.color, row.locationCode, row.roomName]
+      [row.description, row.manufacturer, row.color, row.locationCode, row.roomName, row.projectId]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()

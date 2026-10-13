@@ -11,7 +11,7 @@ import {
   type InventoryLineDetails,
 } from "@/lib/inventory/details";
 import { caseCubicInches, cubeExceeds, formatCubicInches } from "@/lib/cubing/measure";
-import { inventoryKey } from "@/lib/inventory/keys";
+import { inventoryKey, normalizeProjectId } from "@/lib/inventory/keys";
 import { parseCsv, serializeCsv } from "@/lib/spreadsheet/csv";
 import { LIMITS } from "@/lib/validation/limits";
 import { ValidationError } from "@/lib/validation/errors";
@@ -48,6 +48,7 @@ export const INVENTORY_SPREADSHEET_HEADERS = [
   "Connection",
   "Strand count",
   "Length (m)",
+  "Project ID",
   "Last moved",
 ] as const;
 
@@ -72,6 +73,7 @@ export type SpreadsheetImportChange = {
   manufacturer?: string;
   color?: string | null;
   fiber?: FiberItem | null;
+  projectId?: string | null;
   action: "create" | "update" | "unchanged";
 };
 
@@ -90,6 +92,7 @@ export type ParsedInventorySpreadsheetRow = {
   connection?: string;
   strandCount?: string;
   lengthMeters?: string;
+  projectId?: string | null;
 };
 
 export type SpreadsheetImportPlan = {
@@ -118,6 +121,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   connection: ["connection", "connection type", "connector"],
   strandCount: ["strand count", "strands", "strand"],
   lengthMeters: ["length (m)", "length m", "length meters", "length", "meters"],
+  projectId: ["project id", "project", "job id", "job id number", "job"],
 };
 
 function normalizeHeader(value: string): string {
@@ -150,6 +154,7 @@ export function inventoryRowsToSpreadsheet(rows: InventoryRow[]): string {
       row.fiber?.connectionType ?? "",
       row.fiber?.strandCount ?? "",
       row.fiber?.lengthMeters ?? "",
+      row.projectId ?? "",
       row.lastMovedAt ?? "",
     ]),
     { bom: true },
@@ -179,6 +184,7 @@ export function parseInventorySpreadsheet(
   const connectionIndex = columnIndex(headers, "connection");
   const strandIndex = columnIndex(headers, "strandCount");
   const lengthIndex = columnIndex(headers, "lengthMeters");
+  const projectIndex = columnIndex(headers, "projectId");
 
   if (rows.length > LIMITS.spreadsheetMaxRows) {
     throw new ValidationError(
@@ -201,6 +207,7 @@ export function parseInventorySpreadsheet(
     connection: columnText(cells, connectionIndex),
     strandCount: columnText(cells, strandIndex),
     lengthMeters: columnText(cells, lengthIndex),
+    projectId: optionalCell(cells, projectIndex) ?? null,
   }));
 }
 
@@ -235,7 +242,7 @@ export function planInventoryImport(input: {
   const seen = new Map<string, number>();
   const lines = new Map(
     input.items.map((item) => [
-      inventoryKey(item.sku, item.batch, item.locationId),
+      inventoryKey(item.sku, item.batch, item.locationId, item.projectId),
       item,
     ]),
   );
@@ -249,7 +256,12 @@ export function planInventoryImport(input: {
       continue;
     }
 
-    const key = inventoryKey(parsed.sku, parsed.batch, parsed.location.id);
+    const key = inventoryKey(
+      parsed.sku,
+      parsed.batch,
+      parsed.location.id,
+      parsed.projectId,
+    );
     const existing = lines.get(key);
     const quantityBefore = existing?.quantity ?? 0;
     const exists = existing != null;
@@ -301,6 +313,7 @@ export function planInventoryImport(input: {
           : (existing?.manufacturer ?? ""),
       color: parsed.color !== undefined ? parsed.color : (existing?.color ?? null),
       fiber: parsed.fiber !== undefined ? parsed.fiber : (existing?.fiber ?? null),
+      projectId: normalizeProjectId(parsed.projectId ?? existing?.projectId),
       lastMovedAt: existing?.lastMovedAt,
       updatedAt: existing?.updatedAt,
     });
@@ -326,6 +339,7 @@ export function planInventoryImport(input: {
       manufacturer: parsed.manufacturer,
       color: parsed.color,
       fiber: parsed.fiber,
+      projectId: normalizeProjectId(parsed.projectId ?? existing?.projectId),
       action,
     });
   }
@@ -414,6 +428,7 @@ function validateImportRow(
       batch: string | null;
       quantity: number;
       location: Location;
+      projectId: string | null;
     }
   | { error: string } {
   if (!row.sku) return { error: "SKU is required." };
@@ -501,11 +516,11 @@ function validateImportRow(
     }
   }
 
-  const key = inventoryKey(skuParsed.data, batch, location.id);
+  const key = inventoryKey(skuParsed.data, batch, location.id, row.projectId);
   const duplicateRow = seen.get(key);
   if (duplicateRow) {
     return {
-      error: `Duplicate SKU, batch, and location (already on row ${duplicateRow}).`,
+      error: `Duplicate SKU, batch, location, and project (already on row ${duplicateRow}).`,
     };
   }
   seen.set(key, row.row);
@@ -533,6 +548,7 @@ function validateImportRow(
     batch,
     quantity,
     location,
+    projectId: normalizeProjectId(row.projectId),
   };
 }
 

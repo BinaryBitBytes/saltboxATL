@@ -11,7 +11,10 @@ export const DEFAULT_HOLD_CUBE_CUBIC_INCHES = DEFAULT_PALLET_CUBE_CUBIC_INCHES;
 
 export const QUARTER_INCH = 0.25;
 
-export type StorageClass = "pallet" | "rack" | "staging" | "hold";
+/** A transfer trailer sized for 26 full pallet positions. */
+export const DEFAULT_CONTAINER_CUBE_CUBIC_INCHES = 26 * DEFAULT_PALLET_CUBE_CUBIC_INCHES;
+
+export type StorageClass = "pallet" | "rack" | "staging" | "hold" | "container";
 
 export type MeasuredCube = {
   lengthInches: number;
@@ -73,6 +76,13 @@ export function defaultStorageClass(code: string): StorageClass {
   if (normalized.startsWith("DOCK") || normalized.includes("STAGE")) return "staging";
   if (normalized.startsWith("DMG") || normalized.includes("HOLD")) return "hold";
   if (normalized.startsWith("PLT") || normalized.includes("PALLET")) return "pallet";
+  if (
+    normalized.startsWith("TRL") ||
+    normalized.includes("TRAILER") ||
+    normalized.includes("CONTAINER")
+  ) {
+    return "container";
+  }
   return "rack";
 }
 
@@ -80,6 +90,7 @@ export function defaultCubeCapacity(storageClass: StorageClass): number {
   if (storageClass === "pallet") return DEFAULT_PALLET_CUBE_CUBIC_INCHES;
   if (storageClass === "staging") return DEFAULT_STAGING_CUBE_CUBIC_INCHES;
   if (storageClass === "hold") return DEFAULT_HOLD_CUBE_CUBIC_INCHES;
+  if (storageClass === "container") return DEFAULT_CONTAINER_CUBE_CUBIC_INCHES;
   return DEFAULT_RACK_CUBE_CUBIC_INCHES;
 }
 
@@ -102,5 +113,6 @@ export function storageClassLabel(storageClass: StorageClass): string {
   if (storageClass === "pallet") return "Full pallet";
   if (storageClass === "rack") return "Racked";
   if (storageClass === "staging") return "Staging";
+  if (storageClass === "container") return "Transfer trailer";
   return "Hold";
 }

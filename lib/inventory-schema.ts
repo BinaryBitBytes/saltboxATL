@@ -355,6 +355,7 @@ export const InventoryItemSchema = z.object({
   manufacturer: OptionalSafeTextSchema,
   color: OptionalColorSchema.default(null),
   fiber: FiberItemSchema.nullable().default(null),
+  projectId: JobIdNumberSchema.optional().default(null),
   lastMovedAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
 });
@@ -365,6 +366,7 @@ export const InventoryTransactionTypeSchema = z.enum([
   "putaway",
   "shipping",
   "pick",
+  "move",
   "overage",
   "shortage",
   "damage",
@@ -393,6 +395,8 @@ export const InventoryTransactionSchema = z.object({
       "receiving-order",
       "shipping-order",
       "customer-order",
+      "site-transfer",
+      "inventory-move",
       "adjustment",
       "spreadsheet-import",
     ])
@@ -480,7 +484,13 @@ export const CreateAdjustmentInputSchema = z.object({
 });
 export type CreateAdjustmentInput = z.infer<typeof CreateAdjustmentInputSchema>;
 
-export const StorageClassSchema = z.enum(["pallet", "rack", "staging", "hold"]);
+export const StorageClassSchema = z.enum([
+  "pallet",
+  "rack",
+  "staging",
+  "hold",
+  "container",
+]);
 export type StorageClass = z.infer<typeof StorageClassSchema>;
 export const STORAGE_CLASSES = StorageClassSchema.options;
 
@@ -772,11 +782,123 @@ export type CreateCustomerOrderInput = z.infer<
   typeof CreateCustomerOrderInputSchema
 >;
 
+const MoveConfirmationFields = {
+  approveProjectCombine: z.boolean().optional().default(false),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
+};
+
+export const MoveInventoryInputSchema = z.object({
+  inventoryItemId: UuidSchema,
+  quantity: QuantitySchema,
+  destinationLocationId: UuidSchema,
+  ...MoveConfirmationFields,
+});
+export type MoveInventoryInput = z.infer<typeof MoveInventoryInputSchema>;
+
+export const ConsolidateInventoryInputSchema = z.object({
+  destinationLocationId: UuidSchema,
+  lines: z
+    .array(
+      z.object({
+        inventoryItemId: UuidSchema,
+        quantity: QuantitySchema,
+      }),
+    )
+    .min(2),
+  resultingProjectId: JobIdNumberSchema.optional(),
+  ...MoveConfirmationFields,
+});
+export type ConsolidateInventoryInput = z.infer<
+  typeof ConsolidateInventoryInputSchema
+>;
+
+export const SiteTransferStatusSchema = z.enum([
+  "loading",
+  "in-transit",
+  "arrived",
+  "unloaded",
+  "cancelled",
+]);
+export type SiteTransferStatus = z.infer<typeof SiteTransferStatusSchema>;
+
+export const SiteTransferLineSchema = z.object({
+  id: UuidSchema,
+  inventoryItemId: UuidSchema,
+  sourceInventoryItemId: UuidSchema,
+  sourceLocationId: UuidSchema,
+  sku: SkuSchema,
+  upc: z.string().default(""),
+  description: z.string().default(""),
+  batch: z.string().nullable().default(null),
+  projectId: JobIdNumberSchema.optional().default(null),
+  quantity: QuantitySchema,
+});
+export type SiteTransferLine = z.infer<typeof SiteTransferLineSchema>;
+
+export const SiteTransferPalletSchema = z.object({
+  id: UuidSchema,
+  palletNumber: NonEmptyStringSchema,
+  lines: z.array(SiteTransferLineSchema).default([]),
+});
+export type SiteTransferPallet = z.infer<typeof SiteTransferPalletSchema>;
+
+export const SiteTransferSchema = z.object({
+  id: UuidSchema,
+  transferNumber: NonEmptyStringSchema,
+  trailerLocationId: UuidSchema,
+  fromRoomId: UuidSchema,
+  toRoomId: UuidSchema,
+  status: SiteTransferStatusSchema,
+  pallets: z.array(SiteTransferPalletSchema).default([]),
+  notes: OptionalNotesSchema,
+  createdAt: DateTimeSchema.optional(),
+  updatedAt: DateTimeSchema.optional(),
+  departedAt: DateTimeSchema.nullable().optional().default(null),
+  arrivedAt: DateTimeSchema.nullable().optional().default(null),
+  createdBy: z.string().optional(),
+});
+export type SiteTransfer = z.infer<typeof SiteTransferSchema>;
+
+export const CreateSiteTransferInputSchema = z.object({
+  trailerLocationId: UuidSchema,
+  fromRoomId: UuidSchema,
+  toRoomId: UuidSchema,
+  notes: OptionalNotesSchema,
+  createdBy: z.string().optional(),
+});
+export type CreateSiteTransferInput = z.infer<typeof CreateSiteTransferInputSchema>;
+
+export const LoadSiteTransferInputSchema = z.object({
+  transferId: UuidSchema,
+  inventoryItemId: UuidSchema,
+  palletNumber: NonEmptyStringSchema,
+  quantity: QuantitySchema,
+  ...MoveConfirmationFields,
+});
+export type LoadSiteTransferInput = z.infer<typeof LoadSiteTransferInputSchema>;
+
+export const UnloadSiteTransferInputSchema = z.object({
+  transferId: UuidSchema,
+  lineId: UuidSchema,
+  destinationLocationId: UuidSchema,
+  quantity: QuantitySchema,
+  ...MoveConfirmationFields,
+});
+export type UnloadSiteTransferInput = z.infer<typeof UnloadSiteTransferInputSchema>;
+
+export const SiteTransferStateInputSchema = z.object({
+  transferId: UuidSchema,
+  approveProjectCombine: z.boolean().optional().default(false),
+});
+export type SiteTransferStateInput = z.infer<typeof SiteTransferStateInputSchema>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
   receivingOrders: z.array(ReceivingOrderSchema).default([]),
   shippingOrders: z.array(ShippingOrderSchema).default([]),
   customerOrders: z.array(CustomerOrderSchema).default([]),
+  siteTransfers: z.array(SiteTransferSchema).default([]),
   inventoryItems: z.array(InventoryItemSchema).default([]),
   locations: z.array(LocationSchema).default([]),
   rooms: z.array(RoomSchema).default([]),

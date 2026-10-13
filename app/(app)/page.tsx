@@ -24,6 +24,7 @@ export default async function Home() {
   const system = await getSystem();
   const canReceive = hasPermission(user.role, "receive");
   const canPutaway = hasPermission(user.role, "putaway");
+  const canMove = hasPermission(user.role, "moveInventory");
   const canShip = hasPermission(user.role, "ship");
   const inventory = enrichInventory(system);
   const transactions = enrichTransactions(system);
@@ -43,6 +44,9 @@ export default async function Home() {
   const openPicks = (system.customerOrders ?? []).filter(
     (order) => order.pickRequest.status === "open",
   ).length;
+  const openTransfers = (system.siteTransfers ?? []).filter(
+    (transfer) => transfer.status === "loading" || transfer.status === "in-transit" || transfer.status === "arrived",
+  ).length;
   const adjustments = transactions.filter((entry) =>
     entry.type === "overage" ||
     entry.type === "shortage" ||
@@ -55,7 +59,7 @@ export default async function Home() {
         <div className="min-w-0">
           <h1 className="font-heading text-lg font-semibold sm:text-xl">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Receive inbound pallets, put away staged cases, place remote orders, and ship from on-hand stock.
+            Receive inbound pallets, put away staged cases, move stock, place remote orders, and ship from on-hand stock.
           </p>
         </div>
           <div className="flex flex-wrap gap-2">
@@ -71,6 +75,15 @@ export default async function Home() {
                 render={<Link href="/putaway" />}
               >
                 Putaway
+              </Button>
+            ) : null}
+            {canMove ? (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/moves" />}
+              >
+                RF Moves
               </Button>
             ) : null}
             <Button
@@ -103,6 +116,7 @@ export default async function Home() {
         <StatCard label="Units on hand" value={unitsOnHand} />
         <StatCard label="Unique SKUs" value={uniqueSkuCount(inventory)} />
         <StatCard label="Open picks" value={openPicks} />
+        <StatCard label="Open transfers" value={openTransfers} />
         <StatCard label="Open receiving" value={openReceiving.length} />
         <StatCard label="Awaiting putaway" value={awaitingPutaway.length} />
         <StatCard label="Active locations" value={activeLocations.length} />

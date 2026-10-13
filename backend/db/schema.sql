@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS locations (
   description TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   storage_class TEXT NOT NULL DEFAULT 'rack'
-    CHECK (storage_class IN ('pallet', 'rack', 'staging', 'hold')),
+    CHECK (storage_class IN ('pallet', 'rack', 'staging', 'hold', 'container')),
   cube_capacity_cubic_inches DOUBLE PRECISION NOT NULL DEFAULT 18144
 );
 
@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   connection_type TEXT,
   strand_count INTEGER,
   length_meters DOUBLE PRECISION,
+  project_id TEXT,
   last_moved_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ
 );
@@ -153,6 +154,22 @@ CREATE TABLE IF NOT EXISTS customer_orders (
   created_by TEXT
 );
 
+CREATE TABLE IF NOT EXISTS site_transfers (
+  id UUID PRIMARY KEY,
+  transfer_number TEXT NOT NULL,
+  trailer_location_id UUID NOT NULL REFERENCES locations (id),
+  from_room_id UUID NOT NULL REFERENCES rooms (id),
+  to_room_id UUID NOT NULL REFERENCES rooms (id),
+  status TEXT NOT NULL CHECK (status IN ('loading', 'in-transit', 'arrived', 'unloaded', 'cancelled')),
+  pallets JSONB NOT NULL DEFAULT '[]'::jsonb,
+  notes TEXT,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ,
+  departed_at TIMESTAMPTZ,
+  arrived_at TIMESTAMPTZ,
+  created_by TEXT
+);
+
 CREATE TABLE IF NOT EXISTS item_cubes (
   sku TEXT PRIMARY KEY,
   description TEXT NOT NULL DEFAULT '',
@@ -171,3 +188,4 @@ CREATE INDEX IF NOT EXISTS inventory_transactions_occurred_idx ON inventory_tran
 CREATE INDEX IF NOT EXISTS photos_owner_idx ON photos (owner_type, owner_id);
 CREATE INDEX IF NOT EXISTS customer_orders_submitted_idx ON customer_orders (submitted_at DESC);
 CREATE INDEX IF NOT EXISTS customer_orders_status_idx ON customer_orders (status);
+CREATE INDEX IF NOT EXISTS site_transfers_status_idx ON site_transfers (status);

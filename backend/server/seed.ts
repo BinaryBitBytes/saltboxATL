@@ -9,6 +9,7 @@ import type {
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { hashPassword } from "@/lib/auth/password";
 import {
+  DEFAULT_CONTAINER_CUBE_CUBIC_INCHES,
   DEFAULT_HOLD_CUBE_CUBIC_INCHES,
   DEFAULT_PALLET_CUBE_CUBIC_INCHES,
   DEFAULT_RACK_CUBE_CUBIC_INCHES,
@@ -20,6 +21,7 @@ const ROOM_RECEIVING = "11111111-1111-4111-8111-111111111111";
 const ROOM_FIBER = "22222222-2222-4222-8222-222222222222";
 const ROOM_WAREHOUSE = "33333333-3333-4333-8333-333333333333";
 const ROOM_DAMAGED = "44444444-4444-4444-8444-444444444444";
+const ROOM_WAREHOUSE_B = "55555555-5555-4555-8555-555555555555";
 
 const LOC_DOCK = "aaaa1111-1111-4111-8111-111111111111";
 const LOC_FIBER = "aaaa2222-2222-4222-8222-222222222222";
@@ -28,6 +30,9 @@ const LOC_A0102 = "aaaa4444-4444-4444-8444-444444444444";
 export const LOC_DAMAGED = "aaaa5555-5555-4555-8555-555555555555";
 const LOC_PLT01 = "aaaa6666-6666-4666-8666-666666666666";
 const LOC_PLT02 = "aaaa7777-7777-4777-8777-777777777777";
+const LOC_TRL = "aaab1111-1111-4111-8111-111111111111";
+const LOC_B0101 = "aaab2222-2222-4222-8222-222222222222";
+const ITEM_PROJECT = "aaab3333-3333-4333-8333-333333333333";
 
 const USER_MANAGER = "bbbb1111-1111-4111-8111-111111111111";
 const USER_ASSOCIATE = "bbbb2222-2222-4222-8222-222222222222";
@@ -112,10 +117,12 @@ function sampleItem(
   quantity: number,
   description: string,
   batch: string | null = null,
+  projectId: string | null = null,
+  id = createId(),
 ): InventoryItem {
   const now = nowIso();
   return {
-    id: createId(),
+    id,
     sku,
     upc,
     batch,
@@ -125,6 +132,7 @@ function sampleItem(
     manufacturer: "",
     color: null,
     fiber: null,
+    projectId,
     lastMovedAt: now,
     updatedAt: now,
   };
@@ -136,6 +144,7 @@ export function createSeedSystem(): InventorySystem {
     receivingOrders: [],
     shippingOrders: [],
     customerOrders: [],
+    siteTransfers: [],
     rooms: [
       {
         id: ROOM_RECEIVING,
@@ -156,6 +165,11 @@ export function createSeedSystem(): InventorySystem {
         id: ROOM_DAMAGED,
         name: "Damaged Hold",
         description: "Quarantine for damaged product",
+      },
+      {
+        id: ROOM_WAREHOUSE_B,
+        name: "Warehouse B",
+        description: "Second building for site transfers",
       },
     ],
     locations: [
@@ -215,6 +229,22 @@ export function createSeedSystem(): InventorySystem {
         "hold",
         DEFAULT_HOLD_CUBE_CUBIC_INCHES,
       ),
+      sampleLocation(
+        LOC_TRL,
+        "TRL-01",
+        ROOM_WAREHOUSE,
+        "Transfer trailer",
+        "container",
+        DEFAULT_CONTAINER_CUBE_CUBIC_INCHES,
+      ),
+      sampleLocation(
+        LOC_B0101,
+        "B-01-01",
+        ROOM_WAREHOUSE_B,
+        "Warehouse B aisle 01",
+        "rack",
+        DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      ),
     ],
     inventoryItems: [
       sampleItem(
@@ -239,6 +269,16 @@ export function createSeedSystem(): InventorySystem {
         "24-strand MPO trunk, 50m",
         "B2026-08",
       ),
+      sampleItem(
+        "FBR-LC-12-100",
+        "010000000001",
+        LOC_A0102,
+        4,
+        "12-strand LC fiber, 100m",
+        null,
+        "JOB-100",
+        ITEM_PROJECT,
+      ),
     ],
     transactions: [],
     photos: [],
@@ -256,6 +296,7 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
   if (!system.photos) system.photos = [];
   if (!system.itemCubes) system.itemCubes = [];
   if (!system.customerOrders) system.customerOrders = [];
+  if (!system.siteTransfers) system.siteTransfers = [];
 
   for (const location of system.locations) {
     if (
@@ -309,6 +350,68 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
       id: ROOM_DAMAGED,
       name: "Damaged Hold",
       description: "Quarantine for damaged product",
+    });
+  }
+  if (!system.rooms.some((room) => room.id === ROOM_WAREHOUSE_B || room.name === "Warehouse B")) {
+    system.rooms.push({
+      id: ROOM_WAREHOUSE_B,
+      name: "Warehouse B",
+      description: "Second building for site transfers",
+    });
+  }
+  const warehouseB =
+    system.rooms.find((room) => room.id === ROOM_WAREHOUSE_B) ??
+    system.rooms.find((room) => room.name === "Warehouse B");
+  if (warehouseB && !system.locations.some((location) => location.code === "B-01-01")) {
+    system.locations.push(
+      sampleLocation(
+        LOC_B0101,
+        "B-01-01",
+        warehouseB.id,
+        "Warehouse B aisle 01",
+        "rack",
+        DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      ),
+    );
+  }
+  if (warehouse && !system.locations.some((location) => location.code === "TRL-01")) {
+    system.locations.push(
+      sampleLocation(
+        LOC_TRL,
+        "TRL-01",
+        warehouse.id,
+        "Transfer trailer",
+        "container",
+        DEFAULT_CONTAINER_CUBE_CUBIC_INCHES,
+      ),
+    );
+  }
+  const projectLocation = system.locations.find(
+    (location) => location.id === LOC_A0102 || location.code === "A-01-02",
+  );
+  if (
+    projectLocation &&
+    !system.inventoryItems.some(
+      (item) =>
+        item.id === ITEM_PROJECT ||
+        (item.sku === "FBR-LC-12-100" && item.projectId === "JOB-100"),
+    )
+  ) {
+    const now = nowIso();
+    system.inventoryItems.push({
+      id: ITEM_PROJECT,
+      sku: "FBR-LC-12-100",
+      upc: "010000000001",
+      batch: null,
+      locationId: projectLocation.id,
+      quantity: 4,
+      description: "12-strand LC fiber, 100m",
+      manufacturer: "",
+      color: null,
+      fiber: null,
+      projectId: "JOB-100",
+      lastMovedAt: now,
+      updatedAt: now,
     });
   }
   if (!system.locations.some((location) => location.code === "DMG-01")) {

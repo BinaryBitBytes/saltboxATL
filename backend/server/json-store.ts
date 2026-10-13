@@ -41,9 +41,12 @@ export async function readFromJson(): Promise<InventorySystem> {
     const hadPalletLane = existing.locations.some(
       (location) => location.code === "PLT-01",
     );
+    const hadTrailer = existing.locations.some(
+      (location) => location.code === "TRL-01",
+    );
     ensureSystemDefaults(existing);
     const seededUsers = await ensureDemoUsers(existing);
-    if (!hadDamagedHold || !hadPalletLane || seededUsers) {
+    if (!hadDamagedHold || !hadPalletLane || !hadTrailer || seededUsers) {
       await persistToJson(existing);
     }
     return existing;

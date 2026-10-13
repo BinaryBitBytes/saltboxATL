@@ -29,6 +29,7 @@ export function makeItem(overrides: Partial<InventoryItem> = {}): InventoryItem 
     manufacturer: "",
     color: null,
     fiber: null,
+    projectId: null,
     lastMovedAt: now,
     updatedAt: now,
     ...overrides,

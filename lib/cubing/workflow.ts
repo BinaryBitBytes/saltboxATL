@@ -316,5 +316,7 @@ export function inventoryQuantityCubeMessage(input: {
   const perUnit = input.cube.cubicInches / input.cube.unitsPerCase;
   const unitsThatFit = perUnit > 0 ? Math.max(0, Math.floor(open / perUnit)) : 0;
   const additional = Math.max(0, unitsThatFit - input.quantityBefore);
-  return `Location ${input.locationCode} can hold ${formatCubicInches(input.capacity)} and this change would put ${formatCubicInches(projected)} of ${input.sku} and other stock there. That quantity is too large for the location. It can take ${additional} more ${additional === 1 ? "unit" : "units"} of ${input.sku}.`;
+  const entered = input.quantityAfter - input.quantityBefore;
+  const unitLabel = additional === 1 ? "unit" : "units";
+  return `Location ${input.locationCode} can hold ${formatCubicInches(input.capacity)}. Entering ${entered} of ${input.sku} would put ${formatCubicInches(projected)} in that location, which is too large for the location. It can take ${additional} more ${unitLabel} of ${input.sku}.`;
 }

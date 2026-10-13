@@ -54,6 +54,13 @@ export function createSaltboxManifest(): MetadataRoute.Manifest {
         icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
       {
+        name: "RF Moves",
+        short_name: "Moves",
+        description: "Move, consolidate, and transfer inventory",
+        url: "/moves",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+      },
+      {
         name: "Shipping",
         short_name: "Shipping",
         description: "Pick and ship on-hand stock",

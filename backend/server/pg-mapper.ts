@@ -1,7 +1,9 @@
 import {
   PalletSchema,
   CustomerOrderSchema,
+  SiteTransferSchema,
   type CustomerOrder,
+  type SiteTransfer,
   type InventoryItem,
   type InventorySystem,
   type InventoryTransaction,
@@ -82,7 +84,8 @@ function storageClassFrom(
     value === "pallet" ||
     value === "rack" ||
     value === "staging" ||
-    value === "hold"
+    value === "hold" ||
+    value === "container"
   ) {
     return value;
   }
@@ -178,6 +181,7 @@ export function mapItem(row: {
   connection_type?: string | null;
   strand_count?: number | string | null;
   length_meters?: number | string | null;
+  project_id?: string | null;
   last_moved_at: Date | string | null;
   updated_at: Date | string | null;
 }): InventoryItem {
@@ -221,6 +225,7 @@ export function mapItem(row: {
           lengthMeters: Number.isFinite(lengthMeters) ? lengthMeters : null,
         }
       : null,
+    projectId: row.project_id?.trim() ? row.project_id.trim() : null,
     lastMovedAt: iso(row.last_moved_at),
     updatedAt: iso(row.updated_at),
   };
@@ -434,6 +439,38 @@ export function mapCustomerOrder(row: {
   });
 }
 
+export function mapSiteTransfer(row: {
+  id: string;
+  transfer_number: string;
+  trailer_location_id: string;
+  from_room_id: string;
+  to_room_id: string;
+  status: SiteTransfer["status"];
+  pallets: unknown;
+  notes: string | null;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+  departed_at: Date | string | null;
+  arrived_at: Date | string | null;
+  created_by: string | null;
+}): SiteTransfer {
+  return SiteTransferSchema.parse({
+    id: row.id,
+    transferNumber: row.transfer_number,
+    trailerLocationId: row.trailer_location_id,
+    fromRoomId: row.from_room_id,
+    toRoomId: row.to_room_id,
+    status: row.status,
+    pallets: parseStoredJson(row.pallets) ?? [],
+    notes: row.notes ?? undefined,
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+    departedAt: iso(row.departed_at) ?? null,
+    arrivedAt: iso(row.arrived_at) ?? null,
+    createdBy: row.created_by ?? undefined,
+  });
+}
+
 export function assembleSystem(parts: {
   rooms: Room[];
   locations: Location[];
@@ -445,6 +482,7 @@ export function assembleSystem(parts: {
   receivingOrders: ReceivingOrder[];
   shippingOrders: ShippingOrder[];
   customerOrders?: CustomerOrder[];
+  siteTransfers?: SiteTransfer[];
   itemCubes?: ItemCube[];
 }): InventorySystem {
   return {
@@ -458,6 +496,7 @@ export function assembleSystem(parts: {
     receivingOrders: parts.receivingOrders,
     shippingOrders: parts.shippingOrders,
     customerOrders: parts.customerOrders ?? [],
+    siteTransfers: parts.siteTransfers ?? [],
     itemCubes: parts.itemCubes ?? [],
   };
 }
