@@ -10,6 +10,7 @@ const MIGRATIONS = [
   { id: "005_customer_orders", file: "005_customer_orders.sql" },
   { id: "006_roles_inbound_delivery", file: "006_roles_inbound_delivery.sql" },
   { id: "007_user_roles", file: "007_user_roles.sql" },
+  { id: "008_divisions", file: "008_divisions.sql" },
 ] as const;
 
 let pool: Pool | undefined;

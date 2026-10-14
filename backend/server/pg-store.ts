@@ -7,6 +7,7 @@ import {
 } from "@/backend/server/seed";
 import { withInventoryLock } from "@/backend/server/db";
 import { readJsonFile } from "@/backend/server/json-store";
+import { asDivision, divisionForRole } from "@/lib/divisions";
 import {
   assembleSystem,
   mapItem,
@@ -80,15 +81,16 @@ export async function saveSystem(
 
   for (const room of system.rooms) {
     await client.query(
-      "INSERT INTO rooms (id, name, description) VALUES ($1, $2, $3)",
-      [room.id, room.name, room.description ?? null],
+      "INSERT INTO rooms (id, name, description, division) VALUES ($1, $2, $3, $4)",
+      [room.id, room.name, room.description ?? null, asDivision(room.division)],
     );
   }
   for (const location of system.locations) {
     await client.query(
       `INSERT INTO locations (
-         id, code, room_id, description, is_active, storage_class, cube_capacity_cubic_inches
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         id, code, room_id, description, is_active, storage_class, cube_capacity_cubic_inches,
+         division
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         location.id,
         location.code,
@@ -97,6 +99,7 @@ export async function saveSystem(
         location.isActive,
         location.storageClass,
         location.cubeCapacityCubicInches,
+        asDivision(location.division),
       ],
     );
   }
@@ -104,8 +107,8 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO users (
          id, name, username, email, password_hash, role, is_active,
-         created_at, updated_at, created_by
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         created_at, updated_at, created_by, division
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         user.id,
         user.name,
@@ -117,6 +120,9 @@ export async function saveSystem(
         user.createdAt ?? null,
         user.updatedAt ?? null,
         user.createdBy ?? null,
+        user.division === "security" || user.division === "hyperscale"
+          ? user.division
+          : divisionForRole(user.role),
       ],
     );
   }
@@ -125,8 +131,8 @@ export async function saveSystem(
       `INSERT INTO inventory_items (
          id, sku, upc, batch, location_id, quantity, description,
          manufacturer, color, is_fiber, connection_type, strand_count, length_meters,
-         last_moved_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+         last_moved_at, updated_at, division
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
       [
         item.id,
         item.sku,
@@ -143,6 +149,7 @@ export async function saveSystem(
         item.fiber?.lengthMeters ?? null,
         item.lastMovedAt ?? null,
         item.updatedAt ?? null,
+        asDivision(item.division),
       ],
     );
   }
@@ -151,9 +158,9 @@ export async function saveSystem(
       `INSERT INTO inventory_transactions (
          id, type, occurred_at, sku, upc, batch, inventory_item_id, location_id,
          destination_location_id, quantity_delta, quantity_before, quantity_after,
-         reason, reference_type, reference_id, scanned_code, created_by, notes
+         reason, reference_type, reference_id, scanned_code, created_by, notes, division
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
        )`,
       [
         txn.id,
@@ -174,6 +181,7 @@ export async function saveSystem(
         txn.scannedCode ?? null,
         txn.createdBy ?? null,
         txn.notes ?? null,
+        asDivision(txn.division),
       ],
     );
   }
@@ -181,8 +189,8 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO photos (
          id, owner_type, owner_id, document_kind, original_name, mime_type,
-         size, caption, created_at, created_by
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         size, caption, created_at, created_by, division
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         photo.id,
         photo.ownerType,
@@ -194,6 +202,7 @@ export async function saveSystem(
         photo.caption ?? null,
         photo.createdAt,
         photo.createdBy ?? null,
+        asDivision(photo.division),
       ],
     );
   }
@@ -203,9 +212,9 @@ export async function saveSystem(
          id, purchase_order_number, generated_at, created_at, job_id_number,
          project_id, vendor, carrier, expected_arrival_at, buyer_name,
          expectation_notes, expectation_status, expected_pallet_count, lines,
-         uploaded_by, source
+         uploaded_by, source, division
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
        )`,
       [
         order.id,
@@ -224,6 +233,7 @@ export async function saveSystem(
         JSON.stringify(order.lines ?? []),
         order.uploadedBy ?? null,
         order.source ?? null,
+        asDivision(order.division),
       ],
     );
   }
@@ -233,10 +243,10 @@ export async function saveSystem(
          id, po_number, received_at, vendor, order_number, carrier_inbound,
          receiver_name, load_pallet_count, status, is_partialed, partialed_at,
          partialed_by, reopened_at, reopened_by, working_pallet_id, pallets,
-         notes, created_at, updated_at, created_by
+         notes, created_at, updated_at, created_by, division
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-         $17, $18, $19, $20
+         $17, $18, $19, $20, $21
        )`,
       [
         order.id,
@@ -259,6 +269,7 @@ export async function saveSystem(
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,
+        asDivision(order.division),
       ],
     );
   }
@@ -267,9 +278,9 @@ export async function saveSystem(
       `INSERT INTO shipping_orders (
          id, shipped_at, customer, shipment_number, carrier_outbound, shipper_name,
          load_pallet_count, waiting_on_items, items_in_jeopardy, status, pallets,
-         notes, delivery, created_at, updated_at, created_by
+         notes, delivery, created_at, updated_at, created_by, division
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
        )`,
       [
         order.id,
@@ -288,6 +299,7 @@ export async function saveSystem(
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,
+        asDivision(order.division),
       ],
     );
   }
@@ -295,9 +307,9 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO customer_orders (
          id, order_number, customer, placed_by, notes, status, submitted_at,
-         lines, print_batch, pick_request, created_at, updated_at, created_by
+         lines, print_batch, pick_request, created_at, updated_at, created_by, division
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
        )`,
       [
         order.id,
@@ -313,6 +325,7 @@ export async function saveSystem(
         order.createdAt ?? null,
         order.updatedAt ?? null,
         order.createdBy ?? null,
+        asDivision(order.division),
       ],
     );
   }
@@ -320,8 +333,8 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO item_cubes (
          sku, description, length_inches, width_inches, height_inches,
-         cubic_inches, units_per_case, cubed_at, cubed_by
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         cubic_inches, units_per_case, cubed_at, cubed_by, division
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         cube.sku,
         cube.description,
@@ -332,6 +345,7 @@ export async function saveSystem(
         cube.unitsPerCase,
         cube.cubedAt,
         cube.cubedBy ?? null,
+        asDivision(cube.division),
       ],
     );
   }
@@ -357,9 +371,9 @@ async function loadSeededSystem(client: PoolClient): Promise<InventorySystem> {
   if (empty) {
     system = (await readJsonFile()) ?? createSeedSystem();
   }
-  ensureSystemDefaults(system);
+  const defaultsChanged = ensureSystemDefaults(system);
   const seededUsers = await ensureDemoUsers(system);
-  if (empty || seededUsers) {
+  if (empty || seededUsers || defaultsChanged) {
     await client.query("SAVEPOINT seed_users");
     try {
       await saveSystem(client, InventorySystemSchema.parse(system));

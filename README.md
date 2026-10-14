@@ -12,7 +12,18 @@ Saltbox uses credential login with httpOnly session cookies. Roles:
 | **Coordinator** | Upload buyer purchase orders (vendor, carrier, project, and expected lines) for inbound forecasting |
 | **Project Manager** | On-hand inventory and assigning job IDs to buyer purchase orders the coordinator uploaded |
 | **Driver** | Manifest and pack list for a load, delivery scans, proof photos, and delivery notes |
-| **Manager** | Every process, including adjustments, locations, and user admin |
+| **Manager** | Every process, including adjustments, locations, and user admin. This is the admin who can switch between both division inventories |
+| **Security Associate** | Same warehouse execution as an associate, limited to the Security division inventory |
+| **Security Manager** | Same processes as a manager, limited to the Security division inventory and Security logins |
+
+Divisions keep inventory in separate rows:
+
+| Division | Name | Who sees it |
+| --- | --- | --- |
+| **Division_1** | Hyperscale | Existing Hyperscale roles, and the admin manager when that division is selected |
+| **Division_2** | Security | Security associate, Security manager, and the admin manager when that division is selected |
+
+The manager uses the division menu at the top right of the navigation bar to change which inventory is on screen. Every other login stays in its own division, even if a division cookie is present.
 
 Demo accounts (password `saltbox123`) are seeded on first boot:
 
@@ -23,6 +34,8 @@ Demo accounts (password `saltbox123`) are seeded on first boot:
 - `threepl@saltbox.local`
 - `project@saltbox.local`
 - `driver@saltbox.local`
+- `security@saltbox.local`
+- `secmanager@saltbox.local`
 
 Set `SESSION_SECRET` in production. If it is missing, the app writes a generated secret to `data/.session-secret`.
 

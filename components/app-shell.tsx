@@ -20,11 +20,13 @@ import {
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { hasAnyPermission, hasPermission, roleLabel, type Permission } from "@/lib/auth/permissions";
-import type { PublicUser } from "@/lib/inventory-schema";
+import { divisionLabel } from "@/lib/divisions";
+import type { Division, PublicUser } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/frontend/client/theme-toggle";
 import { InstallAppButton } from "@/frontend/client/pwa-install";
+import { DivisionSwitcher } from "@/frontend/client/division-switcher";
 
 const NAV: Array<{
   href: string;
@@ -48,12 +50,29 @@ const NAV: Array<{
   { href: "/users", label: "Users", icon: UserMultipleIcon, permission: "manageUsers" },
 ];
 
+function DivisionControl({
+  division,
+  canSwitchDivision,
+}: {
+  division: Division;
+  canSwitchDivision: boolean;
+}) {
+  if (canSwitchDivision) {
+    return <DivisionSwitcher division={division} />;
+  }
+  return <Badge variant="outline">{divisionLabel(division)}</Badge>;
+}
+
 export function AppShell({
   children,
   user,
+  division,
+  canSwitchDivision,
 }: {
   children: ReactNode;
   user: PublicUser;
+  division: Division;
+  canSwitchDivision: boolean;
 }) {
   const pathname = usePathname();
   const items = NAV.filter((item) =>
@@ -65,24 +84,30 @@ export function AppShell({
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75 print:hidden">
-        <div className="page-container flex flex-col gap-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] short:py-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between landscape:short:flex-row landscape:short:items-center">
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight">
-                Saltbox Inventory
-              </Link>
-              <InstallAppButton />
-            </div>
-            <div className="flex items-center gap-1 sm:hidden">
-              <ThemeToggle />
-              <Badge variant="outline">{roleLabel(user.role)}</Badge>
-              <form action="/api/auth/logout" method="post">
-                <Button type="submit" variant="ghost" size="sm">
-                  Sign out
-                </Button>
-              </form>
-            </div>
+        <div className="page-container flex flex-wrap items-center justify-between gap-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] short:py-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight">
+              Saltbox Inventory
+            </Link>
+            <InstallAppButton />
           </div>
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-1 sm:gap-2">
+            <ThemeToggle className="hidden sm:inline-flex" />
+            <span className="hidden truncate text-xs text-muted-foreground md:inline">
+              {user.name}
+            </span>
+            <Badge variant="outline" className="hidden sm:inline-flex">
+              {roleLabel(user.role)}
+            </Badge>
+            <DivisionControl division={division} canSwitchDivision={canSwitchDivision} />
+            <form action="/api/auth/logout" method="post">
+              <Button type="submit" variant="ghost" size="sm">
+                Sign out
+              </Button>
+            </form>
+          </div>
+        </div>
+        <div className="page-container pb-2 short:pb-1">
           <nav
             aria-label="Main"
             className="scroll-touch -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1"
@@ -109,18 +134,6 @@ export function AppShell({
               );
             })}
           </nav>
-          <div className="hidden min-w-0 items-center gap-2 sm:flex">
-            <ThemeToggle />
-            <span className="hidden truncate text-xs text-muted-foreground md:inline">
-              {user.name}
-            </span>
-            <Badge variant="outline">{roleLabel(user.role)}</Badge>
-            <form action="/api/auth/logout" method="post">
-              <Button type="submit" variant="ghost" size="sm">
-                Sign out
-              </Button>
-            </form>
-          </div>
         </div>
       </header>
       <main className="page-container flex-1 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-6 short:py-3">

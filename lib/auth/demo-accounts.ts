@@ -58,4 +58,18 @@ export const DEMO_ACCOUNTS: Array<{
     email: "driver@saltbox.local",
     role: "driver",
   },
+  {
+    id: "bbbb8888-8888-4888-8888-888888888888",
+    name: "Quinn Security",
+    username: "security",
+    email: "security@saltbox.local",
+    role: "security-associate",
+  },
+  {
+    id: "bbbb9999-9999-4999-8999-999999999999",
+    name: "Reese Security",
+    username: "secmanager",
+    email: "secmanager@saltbox.local",
+    role: "security-manager",
+  },
 ];

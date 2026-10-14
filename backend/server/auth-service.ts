@@ -4,7 +4,12 @@ import { createId, nowIso } from "@/backend/server/helperUtils";
 import { toPublicUser } from "@/lib/validation/user-security";
 import { ServiceError } from "@/backend/server/inventory-service";
 import { parseWithSchema } from "@/backend/server/safeParsing";
-import { readSystem, updateSystem } from "@/backend/server/store";
+import { readFullSystem, updateSystem } from "@/backend/server/store";
+import {
+  canAssignRole,
+  canManageUser,
+  divisionForRole,
+} from "@/lib/divisions";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   accountLoginLockKeys,
@@ -29,6 +34,7 @@ import {
   ResetPasswordInputSchema,
   UpdateUserInputSchema,
   type PublicUser,
+  type UserRole,
 } from "@/lib/inventory-schema";
 
 let dummyPasswordHash: string | undefined;
@@ -69,7 +75,7 @@ export async function authenticateUser(
   const loginId = parsed.data.identifier;
   let system;
   try {
-    system = await readSystem();
+    system = await readFullSystem();
   } catch {
     throw new ServiceError(
       "Unable to load accounts right now. Try signing in again.",
@@ -123,6 +129,7 @@ export async function registerSelfServeUser(
       email: parsed.data.email,
       passwordHash: await hashPassword(parsed.data.password),
       role: "user" as const,
+      division: divisionForRole("user"),
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -145,7 +152,7 @@ export async function recoverUsername(
   const lockKey = usernameRecoveryLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "username recovery");
 
-  const system = await readSystem();
+  const system = await readFullSystem();
   const user = findUserForUsernameRecovery(
     system.users,
     parsed.data.name,
@@ -173,7 +180,7 @@ export async function resetPasswordWithIdentity(
   const lockKey = passwordResetLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "password reset");
 
-  const current = await readSystem();
+  const current = await readFullSystem();
   const matched = findUserForPasswordReset(current.users, parsed.data);
   if (!matched) {
     await consumePasswordCheck(parsed.data.password);
@@ -196,19 +203,25 @@ export async function resetPasswordWithIdentity(
   });
 }
 
-export async function listPublicUsers(): Promise<PublicUser[]> {
-  const system = await readSystem();
-  return system.users.map(toPublicUser);
+export async function listPublicUsers(actorRole: UserRole): Promise<PublicUser[]> {
+  const system = await readFullSystem();
+  return system.users
+    .filter((user) => canManageUser(actorRole, user.role))
+    .map(toPublicUser);
 }
 
 export async function createUserRecord(
   rawData: unknown,
-  actorName: string,
+  actor: { name: string; role: UserRole },
 ): Promise<PublicUser> {
   assertNoSensitiveUserFields(rawData);
   const parsed = parseWithSchema(CreateUserInputSchema, rawData);
   if (!parsed.success) {
     throw new ServiceError(parsed.error);
+  }
+
+  if (!canAssignRole(actor.role, parsed.data.role)) {
+    throw new ServiceError("You cannot assign that role.", 403);
   }
 
   return updateSystem(async (system) => {
@@ -222,10 +235,11 @@ export async function createUserRecord(
       email: parsed.data.email,
       passwordHash: await hashPassword(parsed.data.password),
       role: parsed.data.role,
+      division: divisionForRole(parsed.data.role),
       isActive: true,
       createdAt: now,
       updatedAt: now,
-      createdBy: actorName,
+      createdBy: actor.name,
     };
     system.users.push(user);
     return toPublicUser(user);
@@ -234,7 +248,7 @@ export async function createUserRecord(
 
 export async function updateUserRecord(
   rawData: unknown,
-  actorId: string,
+  actor: { id: string; role: UserRole },
 ): Promise<PublicUser> {
   assertNoSensitiveUserFields(rawData);
   const parsed = parseWithSchema(UpdateUserInputSchema, rawData);
@@ -246,6 +260,9 @@ export async function updateUserRecord(
     const user = system.users.find((entry) => entry.id === parsed.data.id);
     if (!user) {
       throw new ServiceError("User was not found.", 404);
+    }
+    if (!canManageUser(actor.role, user.role)) {
+      throw new ServiceError("You can only manage users in your division.", 403);
     }
 
     if (parsed.data.email && parsed.data.email !== user.email) {
@@ -267,14 +284,20 @@ export async function updateUserRecord(
     }
 
     if (parsed.data.name) user.name = parsed.data.name;
-    if (parsed.data.role) user.role = parsed.data.role;
+    if (parsed.data.role) {
+      if (!canAssignRole(actor.role, parsed.data.role)) {
+        throw new ServiceError("You cannot assign that role.", 403);
+      }
+      user.role = parsed.data.role;
+      user.division = divisionForRole(parsed.data.role);
+    }
 
     if (parsed.data.password) {
       user.passwordHash = await hashPassword(parsed.data.password);
     }
 
     if (parsed.data.isActive !== undefined) {
-      if (parsed.data.isActive === false && user.id === actorId) {
+      if (parsed.data.isActive === false && user.id === actor.id) {
         throw new ServiceError("You cannot deactivate your own account.");
       }
       if (parsed.data.isActive === false && user.role === "manager") {

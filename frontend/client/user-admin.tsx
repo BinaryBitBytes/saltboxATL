@@ -21,6 +21,7 @@ import {
   UsernameSchema,
 } from "@/lib/validation/fields";
 import { roleLabel } from "@/lib/auth/permissions";
+import { divisionForRole, divisionLabel } from "@/lib/divisions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,13 +55,18 @@ type CreateUserFormValues = z.infer<typeof CreateUserFormSchema>;
 export function UserAdmin({
   users,
   currentUserId,
+  assignableRoles,
 }: {
   users: PublicUser[];
   currentUserId: string;
+  assignableRoles: readonly UserRole[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const defaultRole = assignableRoles.includes("associate")
+    ? "associate"
+    : (assignableRoles[0] ?? "associate");
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(CreateUserFormSchema),
     defaultValues: {
@@ -68,7 +74,7 @@ export function UserAdmin({
       username: "",
       email: "",
       password: "",
-      role: "associate",
+      role: defaultRole,
     },
   });
 
@@ -80,7 +86,7 @@ export function UserAdmin({
         setError(result.error);
         return;
       }
-      form.reset({ name: "", username: "", email: "", password: "", role: "associate" });
+      form.reset({ name: "", username: "", email: "", password: "", role: defaultRole });
       router.refresh();
     });
   });
@@ -107,7 +113,7 @@ export function UserAdmin({
         <CardHeader>
           <CardTitle>Add teammate</CardTitle>
           <CardDescription>
-            Managers assign each person to the work they should touch: warehouse, coordinator, 3PL, project manager, or driver.
+            Assign Hyperscale or Security roles. Security associate and Security manager sign in to the Security inventory only.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -138,7 +144,7 @@ export function UserAdmin({
             </Field>
             <Field label="Role" htmlFor="role" error={form.formState.errors.role?.message}>
               <NativeSelect id="role" {...form.register("role")}>
-                {USER_ROLES.map((role) => (
+                {assignableRoles.map((role) => (
                   <option key={role} value={role}>
                     {roleLabel(role)}
                   </option>
@@ -162,6 +168,7 @@ export function UserAdmin({
             <TableHead>Username</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
+            <TableHead>Division</TableHead>
             <TableHead>Status</TableHead>
             <TableHead />
           </TableRow>
@@ -183,13 +190,14 @@ export function UserAdmin({
                     })
                   }
                 >
-                  {USER_ROLES.map((role) => (
+                  {assignableRoles.map((role) => (
                     <option key={role} value={role}>
                       {roleLabel(role)}
                     </option>
                   ))}
                 </NativeSelect>
               </TableCell>
+              <TableCell>{divisionLabel(divisionForRole(user.role))}</TableCell>
               <TableCell>
                 <Badge variant={user.isActive ? "secondary" : "destructive"}>
                   {user.isActive ? "Active" : "Inactive"}

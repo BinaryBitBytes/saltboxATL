@@ -1,4 +1,5 @@
 import type {
+  Division,
   InventoryItem,
   InventorySystem,
   ItemCube,
@@ -8,6 +9,7 @@ import type {
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { divisionForRole, divisionOf } from "@/lib/divisions";
 import {
   DEFAULT_HOLD_CUBE_CUBIC_INCHES,
   DEFAULT_PALLET_CUBE_CUBIC_INCHES,
@@ -28,6 +30,10 @@ const LOC_A0102 = "aaaa4444-4444-4444-8444-444444444444";
 export const LOC_DAMAGED = "aaaa5555-5555-4555-8555-555555555555";
 const LOC_PLT01 = "aaaa6666-6666-4666-8666-666666666666";
 const LOC_PLT02 = "aaaa7777-7777-4777-8777-777777777777";
+const ROOM_SECURITY = "55555555-5555-4555-8555-555555555555";
+const LOC_SECURITY = "aaaa8888-8888-4888-8888-888888888888";
+const LOC_SECURITY_HOLD = "aaaa9999-9999-4999-8999-999999999999";
+const ITEM_SECURITY = "cccc8888-8888-4888-8888-888888888888";
 
 export { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 
@@ -38,9 +44,11 @@ function sampleLocation(
   description: string,
   storageClass: StorageClass,
   cubeCapacityCubicInches: number,
+  division: Division = "hyperscale",
 ): Location {
   return {
     id,
+    division,
     code,
     roomId,
     description,
@@ -56,6 +64,7 @@ function sampleCube(
   widthInches: number,
   heightInches: number,
   description: string,
+  division: Division = "hyperscale",
 ): ItemCube {
   const cubicInches = Math.round(lengthInches * widthInches * heightInches * 1000) / 1000;
   return {
@@ -68,6 +77,7 @@ function sampleCube(
     unitsPerCase: 1,
     cubedAt: nowIso(),
     cubedBy: "system",
+    division,
   };
 }
 
@@ -78,10 +88,12 @@ function sampleItem(
   quantity: number,
   description: string,
   batch: string | null = null,
+  division: Division = "hyperscale",
 ): InventoryItem {
   const now = nowIso();
   return {
     id: createId(),
+    division,
     sku,
     upc,
     batch,
@@ -97,7 +109,7 @@ function sampleItem(
 }
 
 export function createSeedSystem(): InventorySystem {
-  return {
+  const system: InventorySystem = {
     purchaseOrders: [],
     receivingOrders: [],
     shippingOrders: [],
@@ -215,37 +227,155 @@ export function createSeedSystem(): InventorySystem {
       sampleCube("FBR-MPO-24-50", 10.25, 8.25, 4.25, "24-strand MPO trunk, 50m"),
     ],
   };
+  ensureSystemDefaults(system);
+  return system;
 }
 
-export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
-  if (!system.transactions) system.transactions = [];
-  if (!system.photos) system.photos = [];
-  if (!system.itemCubes) system.itemCubes = [];
-  if (!system.customerOrders) system.customerOrders = [];
+function stampDivision<T extends { division?: Division | null }>(
+  records: T[] | undefined,
+  division: Division,
+): boolean {
+  if (!records) return false;
+  let changed = false;
+  for (const record of records) {
+    if (record.division !== "hyperscale" && record.division !== "security") {
+      record.division = division;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function ensureSecurityWarehouse(system: InventorySystem): boolean {
+  let changed = false;
+  if (!system.rooms.some((room) => room.id === ROOM_SECURITY)) {
+    system.rooms.push({
+      id: ROOM_SECURITY,
+      division: "security",
+      name: "Security Cage",
+      description: "Security division stock",
+    });
+    changed = true;
+  }
+  if (!system.locations.some((location) => location.id === LOC_SECURITY)) {
+    system.locations.push(
+      sampleLocation(
+        LOC_SECURITY,
+        "SEC-A1",
+        ROOM_SECURITY,
+        "Security rack A1",
+        "rack",
+        DEFAULT_RACK_CUBE_CUBIC_INCHES,
+        "security",
+      ),
+    );
+    changed = true;
+  }
+  if (!system.locations.some((location) => location.id === LOC_SECURITY_HOLD)) {
+    system.locations.push(
+      sampleLocation(
+        LOC_SECURITY_HOLD,
+        "SEC-HOLD",
+        ROOM_SECURITY,
+        "Security quarantine",
+        "hold",
+        DEFAULT_HOLD_CUBE_CUBIC_INCHES,
+        "security",
+      ),
+    );
+    changed = true;
+  }
+  if (!system.inventoryItems.some((item) => item.id === ITEM_SECURITY)) {
+    const item = sampleItem(
+      "SEC-CAM-01",
+      "010000000101",
+      LOC_SECURITY,
+      6,
+      "Indoor dome camera",
+      null,
+      "security",
+    );
+    item.id = ITEM_SECURITY;
+    system.inventoryItems.push(item);
+    changed = true;
+  }
+  if (
+    !system.itemCubes.some(
+      (cube) => cube.sku === "SEC-CAM-01" && divisionOf(cube) === "security",
+    )
+  ) {
+    system.itemCubes.push(
+      sampleCube("SEC-CAM-01", 6, 6, 4, "Indoor dome camera", "security"),
+    );
+    changed = true;
+  }
+  return changed;
+}
+
+export function ensureSystemDefaults(system: InventorySystem): boolean {
+  let changed = false;
+  if (!system.transactions) {
+    system.transactions = [];
+    changed = true;
+  }
+  if (!system.photos) {
+    system.photos = [];
+    changed = true;
+  }
+  if (!system.itemCubes) {
+    system.itemCubes = [];
+    changed = true;
+  }
+  if (!system.customerOrders) {
+    system.customerOrders = [];
+    changed = true;
+  }
+
+  if (stampDivision(system.rooms, "hyperscale")) changed = true;
+  if (stampDivision(system.locations, "hyperscale")) changed = true;
+  if (stampDivision(system.inventoryItems, "hyperscale")) changed = true;
+  if (stampDivision(system.transactions, "hyperscale")) changed = true;
+  if (stampDivision(system.photos, "hyperscale")) changed = true;
+  if (stampDivision(system.purchaseOrders, "hyperscale")) changed = true;
+  if (stampDivision(system.receivingOrders, "hyperscale")) changed = true;
+  if (stampDivision(system.shippingOrders, "hyperscale")) changed = true;
+  if (stampDivision(system.customerOrders, "hyperscale")) changed = true;
+  if (stampDivision(system.itemCubes, "hyperscale")) changed = true;
 
   for (const location of system.locations) {
     if (
       location.code === "DOCK-01" &&
+      divisionOf(location) === "hyperscale" &&
       location.storageClass === "rack" &&
       location.cubeCapacityCubicInches === DEFAULT_RACK_CUBE_CUBIC_INCHES
     ) {
       location.storageClass = "staging";
       location.cubeCapacityCubicInches = DEFAULT_STAGING_CUBE_CUBIC_INCHES;
+      changed = true;
     }
     if (
       location.code === "DMG-01" &&
+      divisionOf(location) === "hyperscale" &&
       location.storageClass === "rack" &&
       location.cubeCapacityCubicInches === DEFAULT_RACK_CUBE_CUBIC_INCHES
     ) {
       location.storageClass = "hold";
       location.cubeCapacityCubicInches = DEFAULT_HOLD_CUBE_CUBIC_INCHES;
+      changed = true;
     }
   }
 
   const warehouse =
     system.rooms.find((room) => room.id === ROOM_WAREHOUSE) ??
-    system.rooms.find((room) => room.name === "Warehouse A");
-  if (warehouse && !system.locations.some((location) => location.code === "PLT-01")) {
+    system.rooms.find(
+      (room) => room.name === "Warehouse A" && divisionOf(room) === "hyperscale",
+    );
+  if (
+    warehouse &&
+    !system.locations.some(
+      (location) => location.code === "PLT-01" && divisionOf(location) === "hyperscale",
+    )
+  ) {
     system.locations.push(
       sampleLocation(
         LOC_PLT01,
@@ -254,10 +384,17 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
         "Full pallet location 1",
         "pallet",
         DEFAULT_PALLET_CUBE_CUBIC_INCHES,
+        "hyperscale",
       ),
     );
+    changed = true;
   }
-  if (warehouse && !system.locations.some((location) => location.code === "PLT-02")) {
+  if (
+    warehouse &&
+    !system.locations.some(
+      (location) => location.code === "PLT-02" && divisionOf(location) === "hyperscale",
+    )
+  ) {
     system.locations.push(
       sampleLocation(
         LOC_PLT02,
@@ -266,18 +403,26 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
         "Full pallet location 2",
         "pallet",
         DEFAULT_PALLET_CUBE_CUBIC_INCHES,
+        "hyperscale",
       ),
     );
+    changed = true;
   }
 
   if (!system.rooms.some((room) => room.id === ROOM_DAMAGED)) {
     system.rooms.push({
       id: ROOM_DAMAGED,
+      division: "hyperscale",
       name: "Damaged Hold",
       description: "Quarantine for damaged product",
     });
+    changed = true;
   }
-  if (!system.locations.some((location) => location.code === "DMG-01")) {
+  if (
+    !system.locations.some(
+      (location) => location.code === "DMG-01" && divisionOf(location) === "hyperscale",
+    )
+  ) {
     system.locations.push(
       sampleLocation(
         LOC_DAMAGED,
@@ -286,10 +431,23 @@ export function ensureSystemDefaults(system: InventorySystem): InventorySystem {
         "Damaged / quarantine cage",
         "hold",
         DEFAULT_HOLD_CUBE_CUBIC_INCHES,
+        "hyperscale",
       ),
     );
+    changed = true;
   }
-  return system;
+
+  if (ensureSecurityWarehouse(system)) changed = true;
+
+  for (const user of system.users) {
+    const division = divisionForRole(user.role);
+    if (user.division !== division) {
+      user.division = division;
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 let demoPasswordsChecked = false;
@@ -321,6 +479,7 @@ export async function ensureDemoUsers(
         email: account.email,
         passwordHash: await hashPassword(DEMO_PASSWORD),
         role: account.role,
+        division: divisionForRole(account.role),
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -333,6 +492,11 @@ export async function ensureDemoUsers(
 
     if (existing.role !== account.role) {
       existing.role = account.role;
+      changed = true;
+    }
+    const division = divisionForRole(account.role);
+    if (existing.division !== division) {
+      existing.division = division;
       changed = true;
     }
     if (!existing.isActive) {
