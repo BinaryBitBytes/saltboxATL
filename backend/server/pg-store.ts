@@ -14,6 +14,7 @@ import {
   mapItemCube,
   mapLocation,
   mapPhoto,
+  mapPurchaseDocument,
   mapPurchaseOrder,
   mapReceivingOrder,
   mapRoom,
@@ -35,6 +36,9 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
   const purchaseOrders = await client.query(
     "SELECT * FROM purchase_orders ORDER BY generated_at, id",
   );
+  const purchaseDocuments = await client.query(
+    "SELECT * FROM purchase_documents ORDER BY created_at, id",
+  );
   const receivingOrders = await client.query(
     "SELECT * FROM receiving_orders ORDER BY received_at, id",
   );
@@ -55,6 +59,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       transactions: transactions.rows.map(mapTransaction),
       photos: photos.rows.map(mapPhoto),
       purchaseOrders: purchaseOrders.rows.map(mapPurchaseOrder),
+      purchaseDocuments: purchaseDocuments.rows.map(mapPurchaseDocument),
       receivingOrders: receivingOrders.rows.map(mapReceivingOrder),
       shippingOrders: shippingOrders.rows.map(mapShippingOrder),
       customerOrders: customerOrders.rows.map(mapCustomerOrder),
@@ -73,6 +78,7 @@ export async function saveSystem(
   await client.query("DELETE FROM receiving_orders");
   await client.query("DELETE FROM customer_orders");
   await client.query("DELETE FROM shipping_orders");
+  await client.query("DELETE FROM purchase_documents");
   await client.query("DELETE FROM purchase_orders");
   await client.query("DELETE FROM item_cubes");
   await client.query("DELETE FROM locations");
@@ -243,10 +249,10 @@ export async function saveSystem(
          id, po_number, received_at, vendor, order_number, carrier_inbound,
          receiver_name, load_pallet_count, status, is_partialed, partialed_at,
          partialed_by, reopened_at, reopened_by, working_pallet_id, pallets,
-         notes, created_at, updated_at, created_by, division
+         notes, created_at, updated_at, created_by, division, intake
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-         $17, $18, $19, $20, $21
+         $17, $18, $19, $20, $21, $22
        )`,
       [
         order.id,
@@ -270,6 +276,35 @@ export async function saveSystem(
         order.updatedAt ?? null,
         order.createdBy ?? null,
         asDivision(order.division),
+        order.intake ?? null,
+      ],
+    );
+  }
+  for (const document of system.purchaseDocuments ?? []) {
+    await client.query(
+      `INSERT INTO purchase_documents (
+         id, purchase_order_number, kind, original_name, mime_type, size,
+         prices_redacted, recognition_source, recognition_note, job_id_number,
+         lines, inbound_load_id, created_at, created_by, division
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+       )`,
+      [
+        document.id,
+        document.purchaseOrderNumber,
+        document.kind,
+        document.originalName,
+        document.mimeType,
+        document.size,
+        document.pricesRedacted,
+        document.recognitionSource,
+        document.recognitionNote ?? null,
+        document.jobIdNumber ?? null,
+        JSON.stringify(document.lines ?? []),
+        document.inboundLoadId ?? null,
+        document.createdAt,
+        document.createdBy ?? null,
+        asDivision(document.division),
       ],
     );
   }

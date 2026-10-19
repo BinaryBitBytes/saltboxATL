@@ -43,6 +43,18 @@ export type InboundForecast = {
   byVendor: Array<{ vendor: string; orders: number; units: number }>;
 };
 
+/** Imported invoice loads stay expected until the dock checks them in. */
+export function isExpectedIntake(order: {
+  intake?: string | null;
+  status: string;
+}): boolean {
+  return order.intake === "expected" && order.status === "draft";
+}
+
+function countsAsReceived(order: ReceivingOrder): boolean {
+  return order.status !== "cancelled" && !isExpectedIntake(order);
+}
+
 function receivedQuantityForSku(
   receivingOrders: ReceivingOrder[],
   purchaseOrderNumber: string,
@@ -52,7 +64,7 @@ function receivedQuantityForSku(
   return receivingOrders
     .filter(
       (order) =>
-        order.poNumber === purchaseOrderNumber && order.status !== "cancelled",
+        order.poNumber === purchaseOrderNumber && countsAsReceived(order),
     )
     .flatMap((order) => order.pallets.flatMap((pallet) => pallet.cases))
     .filter((item) => item.sku === sku)
@@ -66,7 +78,7 @@ function receivedUnitsForPo(
   return receivingOrders
     .filter(
       (order) =>
-        order.poNumber === purchaseOrderNumber && order.status !== "cancelled",
+        order.poNumber === purchaseOrderNumber && countsAsReceived(order),
     )
     .flatMap((order) => order.pallets.flatMap((pallet) => pallet.cases))
     .reduce((sum, item) => sum + item.quantityInCase, 0);
@@ -91,7 +103,9 @@ export function derivedInboundStatus(
   }
   if (
     related.some(
-      (entry) => entry.status === "draft" || entry.status === "in-progress",
+      (entry) =>
+        entry.status === "in-progress" ||
+        (entry.status === "draft" && !isExpectedIntake(entry)),
     )
   ) {
     return "receiving";

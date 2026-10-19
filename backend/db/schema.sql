@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS receiving_orders (
   receiver_name TEXT NOT NULL,
   load_pallet_count INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL,
+  intake TEXT CHECK (intake IS NULL OR intake IN ('dock', 'expected')),
   is_partialed BOOLEAN NOT NULL DEFAULT FALSE,
   partialed_at TIMESTAMPTZ,
   partialed_by TEXT,
@@ -225,10 +226,30 @@ CREATE TABLE IF NOT EXISTS item_cubes (
   PRIMARY KEY (division, sku)
 );
 
+CREATE TABLE IF NOT EXISTS purchase_documents (
+  id UUID PRIMARY KEY,
+  purchase_order_number TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('purchase-order', 'invoice')),
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  prices_redacted BOOLEAN NOT NULL DEFAULT FALSE,
+  recognition_source TEXT NOT NULL CHECK (recognition_source IN ('composio', 'embedded-text')),
+  recognition_note TEXT,
+  job_id_number TEXT,
+  lines JSONB NOT NULL DEFAULT '[]'::jsonb,
+  inbound_load_id UUID,
+  created_at TIMESTAMPTZ NOT NULL,
+  created_by TEXT,
+  division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  CONSTRAINT purchase_documents_division_check CHECK (division IN ('hyperscale', 'security'))
+);
+
 CREATE INDEX IF NOT EXISTS inventory_items_sku_idx ON inventory_items (sku);
 CREATE INDEX IF NOT EXISTS inventory_items_location_idx ON inventory_items (location_id);
 CREATE INDEX IF NOT EXISTS inventory_transactions_occurred_idx ON inventory_transactions (occurred_at DESC);
 CREATE INDEX IF NOT EXISTS photos_owner_idx ON photos (owner_type, owner_id);
+CREATE INDEX IF NOT EXISTS purchase_documents_po_idx ON purchase_documents (purchase_order_number);
 CREATE INDEX IF NOT EXISTS customer_orders_submitted_idx ON customer_orders (submitted_at DESC);
 CREATE INDEX IF NOT EXISTS customer_orders_status_idx ON customer_orders (status);
 CREATE INDEX IF NOT EXISTS inventory_items_division_idx ON inventory_items (division, sku);

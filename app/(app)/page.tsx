@@ -289,6 +289,7 @@ export default async function Home() {
                       <ReceivingStatusBadge
                         status={order.status}
                         isPartialed={order.isPartialed}
+                        intake={order.intake}
                       />
                     </Link>
                   ))
@@ -319,6 +320,7 @@ export default async function Home() {
                       <ReceivingStatusBadge
                         status={order.status}
                         isPartialed={order.isPartialed}
+                        intake={order.intake}
                       />
                     </Link>
                   ))

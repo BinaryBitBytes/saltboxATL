@@ -220,6 +220,7 @@ export function createSeedSystem(): InventorySystem {
     ],
     transactions: [],
     photos: [],
+    purchaseDocuments: [],
     users: [],
     itemCubes: [
       sampleCube("FBR-LC-12-100", 12.25, 8.25, 3.25, "12-strand LC fiber, 100m"),
@@ -330,6 +331,10 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
     system.customerOrders = [];
     changed = true;
   }
+  if (!system.purchaseDocuments) {
+    system.purchaseDocuments = [];
+    changed = true;
+  }
 
   if (stampDivision(system.rooms, "hyperscale")) changed = true;
   if (stampDivision(system.locations, "hyperscale")) changed = true;
@@ -337,6 +342,7 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
   if (stampDivision(system.transactions, "hyperscale")) changed = true;
   if (stampDivision(system.photos, "hyperscale")) changed = true;
   if (stampDivision(system.purchaseOrders, "hyperscale")) changed = true;
+  if (stampDivision(system.purchaseDocuments, "hyperscale")) changed = true;
   if (stampDivision(system.receivingOrders, "hyperscale")) changed = true;
   if (stampDivision(system.shippingOrders, "hyperscale")) changed = true;
   if (stampDivision(system.customerOrders, "hyperscale")) changed = true;

@@ -38,6 +38,7 @@ yarn-error.log*
 /data/inventory.json
 /data/.session-secret
 /data/photos/
+/data/purchase-documents/
 
 # vercel
 .vercel
