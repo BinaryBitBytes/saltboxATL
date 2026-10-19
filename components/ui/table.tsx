@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { translateNode, useLocale } from "@/frontend/client/language"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
@@ -65,7 +66,8 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+function TableHead({ className, children, ...props }: React.ComponentProps<"th">) {
+  const locale = useLocale()
   return (
     <th
       data-slot="table-head"
@@ -74,7 +76,9 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
         className
       )}
       {...props}
-    />
+    >
+      {translateNode(children, locale)}
+    </th>
   )
 }
 

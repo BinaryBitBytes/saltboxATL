@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ItemCube, Location } from "@/lib/inventory-schema";
@@ -37,16 +38,12 @@ export function CubingWorkspace({
       <CubeItemForm cubes={cubes} />
       <Card>
         <CardHeader>
-          <CardTitle>Cubed items</CardTitle>
-          <CardDescription>
-            Case dimensions already rounded up to the nearest quarter inch.
-          </CardDescription>
+          <CardTitle><T>Cubed items</T></CardTitle>
+          <CardDescription><T>Case dimensions already rounded up to the nearest quarter inch.</T></CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2">
           {cubes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No items have been cubed yet.
-            </p>
+            <p className="text-sm text-muted-foreground"><T>No items have been cubed yet.</T></p>
           ) : (
             cubes.map((cube) => (
               <div key={cube.sku} className="rounded-lg border border-border px-3 py-2 text-xs">
@@ -65,11 +62,8 @@ export function CubingWorkspace({
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Location capacities</CardTitle>
-          <CardDescription>
-            Committed cube is on-hand stock plus cases already assigned to putaway.
-            A quantity that would exceed the open cube is not directed to that location.
-          </CardDescription>
+          <CardTitle><T>Location capacities</T></CardTitle>
+          <CardDescription><T>Committed cube is on-hand stock plus cases already assigned to putaway. A quantity that would exceed the open cube is not directed to that location.</T></CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <LocationCubeTable locations={locationRows} />
@@ -114,11 +108,8 @@ function CubeItemForm({ cubes }: { cubes: ItemCube[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Cube an item</CardTitle>
-        <CardDescription>
-          Measure the case. Length, width, and height are inches and round up to the
-          nearest quarter inch before the cube is saved.
-        </CardDescription>
+        <CardTitle><T>Cube an item</T></CardTitle>
+        <CardDescription><T>Measure the case. Length, width, and height are inches and round up to the nearest quarter inch before the cube is saved.</T></CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -227,7 +218,7 @@ function CubeItemForm({ cubes }: { cubes: ItemCube[] }) {
                   if (cube) loadCube(cube);
                 }}
               >
-                <option value="">Select a SKU</option>
+                <option value=""><T>Select a SKU</T></option>
                 {cubes.map((cube) => (
                   <option key={cube.sku} value={cube.sku}>
                     {cube.sku}
@@ -236,7 +227,7 @@ function CubeItemForm({ cubes }: { cubes: ItemCube[] }) {
               </NativeSelect>
             </Field>
           ) : null}
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
           <Button type="submit" disabled={pending}>
             {pending ? "Saving…" : "Save cube"}
           </Button>
@@ -279,7 +270,7 @@ function LocationCapacityForm({ locations }: { locations: Location[] }) {
         });
       }}
     >
-      <p className="text-sm font-medium">Update a location cube limit</p>
+      <p className="text-sm font-medium"><T>Update a location cube limit</T></p>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Location">
           <NativeSelect
@@ -306,7 +297,7 @@ function LocationCapacityForm({ locations }: { locations: Location[] }) {
           >
             {STORAGE_CLASSES.map((value) => (
               <option key={value} value={value}>
-                {storageClassLabel(value)}
+                <T>{storageClassLabel(value)}</T>
               </option>
             ))}
           </NativeSelect>
@@ -323,7 +314,7 @@ function LocationCapacityForm({ locations }: { locations: Location[] }) {
           />
         </Field>
       </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
       <Button type="submit" disabled={pending || !locationId}>
         {pending ? "Saving…" : "Save location capacity"}
       </Button>

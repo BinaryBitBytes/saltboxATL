@@ -1,3 +1,4 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
 import { requireAnyPermission } from "@/backend/server/dal";
@@ -13,7 +14,7 @@ import {
   CustomerOrderStatusBadge,
   PickRequestStatusBadge,
 } from "@/frontend/client/status-badge";
-import { formatDateTime } from "@/lib/format";
+
 import {
   Card,
   CardContent,
@@ -47,11 +48,11 @@ export default async function CustomerOrderPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-xl font-semibold">
-            Order {order.orderNumber}
+            <T>Order</T> {order.orderNumber}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {order.customer} · placed by {order.placedBy} ·{" "}
-            {formatDateTime(order.submittedAt)}
+            {order.customer} · <T>placed by</T> {order.placedBy} ·{" "}
+            <FormattedDate value={order.submittedAt} />
           </p>
         </div>
         <CustomerOrderStatusBadge status={order.status} />
@@ -59,7 +60,7 @@ export default async function CustomerOrderPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Warehouse print and pick</CardTitle>
+          <CardTitle><T>Warehouse print and pick</T></CardTitle>
           <CardDescription>
             {printLabel} {order.printBatch.printerName}: {order.printBatch.itemLabelCount}{" "}
             item label{order.printBatch.itemLabelCount === 1 ? "" : "s"}, a pack slip,
@@ -93,11 +94,8 @@ export default async function CustomerOrderPage({
 
       <Card className="print:border-0 print:shadow-none print:ring-0">
         <CardHeader className="print:hidden">
-          <CardTitle>Print batch</CardTitle>
-          <CardDescription>
-            Item labels, pack slip, and loading sheet released to the warehouse
-            label printer.
-          </CardDescription>
+          <CardTitle><T>Print batch</T></CardTitle>
+          <CardDescription><T>Item labels, pack slip, and loading sheet released to the warehouse label printer.</T></CardDescription>
         </CardHeader>
         <CardContent>
           <OrderPrintBatch

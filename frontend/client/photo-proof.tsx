@@ -1,5 +1,6 @@
 "use client";
 
+import { FormattedDate, T } from "@/frontend/client/language";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -20,7 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LIMITS } from "@/lib/validation/limits";
-import { formatDateTime } from "@/lib/format";
+
 import { cn } from "@/lib/utils";
 import {
   deleteProofPhoto,
@@ -93,18 +94,14 @@ function PhotoAddControls({
               event.target.value = "";
             }}
           />
-          <HugeiconsIcon icon={Image01Icon} strokeWidth={2} data-icon="inline-start" />
-          Add photos
-        </label>
+          <HugeiconsIcon icon={Image01Icon} strokeWidth={2} data-icon="inline-start" /><T>Add photos</T></label>
         <Button
           type="button"
           variant="outline"
           disabled={blocked || cameraStream !== null}
           onClick={() => setCameraStream(openCameraStream())}
         >
-          <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} data-icon="inline-start" />
-          Take photo
-        </Button>
+          <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} data-icon="inline-start" /><T>Take photo</T></Button>
       </div>
       {cameraStream ? (
         <ProofCamera
@@ -145,12 +142,10 @@ function PhotoLightbox({
           className="max-h-[min(80dvh,40rem)] w-full rounded-md object-contain"
         />
         <p className="text-sm text-white">
-          {photo.caption || photo.originalName} · {formatDateTime(photo.createdAt)}
+          {photo.caption || photo.originalName} · <FormattedDate value={photo.createdAt} />
           {photo.createdBy ? ` · ${photo.createdBy}` : ""}
         </p>
-        <Button type="button" variant="secondary" onClick={onClose}>
-          Close
-        </Button>
+        <Button type="button" variant="secondary" onClick={onClose}><T>Close</T></Button>
       </div>
     </div>
   );
@@ -233,7 +228,7 @@ export function PhotoThumbnails({
             onClick={() => addRef.current?.click()}
           >
             <HugeiconsIcon icon={Image01Icon} strokeWidth={2} />
-            <span className="sr-only">Add proof photo</span>
+            <span className="sr-only"><T>Add proof photo</T></span>
           </Button>
         </>
       ) : null}
@@ -285,10 +280,7 @@ export function PhotoDraftCollector({
         onFiles={addFiles}
       />
       {drafts.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No photos yet. Add packing, pallet, or damage photos for this
-          transaction.
-        </p>
+        <p className="text-xs text-muted-foreground"><T>No photos yet. Add packing, pallet, or damage photos for this transaction.</T></p>
       ) : (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {drafts.map((draft) => (
@@ -445,7 +437,7 @@ export function PhotoProofCollector({
                       onClick={() => void remove(photo.id)}
                     >
                       <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                      <span className="sr-only">Remove photo</span>
+                      <span className="sr-only"><T>Remove photo</T></span>
                     </Button>
                   ) : null}
                 </div>
@@ -453,7 +445,7 @@ export function PhotoProofCollector({
             ))}
           </ul>
         )}
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
         {active ? (
           <PhotoLightbox photo={active} onClose={() => setActive(null)} />
         ) : null}

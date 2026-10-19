@@ -1,8 +1,10 @@
-export function formatDateTime(value: string | undefined): string {
+import type { Locale } from "@/lib/i18n/locale";
+
+export function formatDateTime(value: string | undefined, locale: Locale = "en"): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale === "es" ? "es-MX" : "en-US", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);

@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState } from "react";
 import type { InventoryRow, ItemCube, Location, Room } from "@/lib/inventory-schema";
 import { InventoryTable } from "@/frontend/client/inventory-table";
@@ -57,7 +58,7 @@ export function InventoryWorkspace({
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Location cube</CardTitle>
+          <CardTitle><T>Location cube</T></CardTitle>
           <CardDescription>
             On-hand quantities stay inside each location&apos;s cube. An overage that
             would exceed the open cube is rejected.

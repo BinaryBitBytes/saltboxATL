@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useEffect, useState } from "react";
 import { useActionState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -67,14 +68,8 @@ export function InventorySpreadsheetCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Spreadsheet import & export</CardTitle>
-        <CardDescription>
-          Download on-hand inventory as a CSV spreadsheet for Excel or Google
-          Sheets. The file and template include SKU, UPC, description,
-          manufacturer, color, batch, quantity, location, room, fiber details,
-          and last moved. Managers can import the same file to load or update
-          existing stock. Location codes must already exist.
-        </CardDescription>
+        <CardTitle><T>Spreadsheet import & export</T></CardTitle>
+        <CardDescription><T>Download on-hand inventory as a CSV spreadsheet for Excel or Google Sheets. The file and template include SKU, UPC, description, manufacturer, color, batch, quantity, location, room, fiber details, and last moved. Managers can import the same file to load or update existing stock. Location codes must already exist.</T></CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="flex flex-wrap gap-2">
@@ -83,9 +78,7 @@ export function InventorySpreadsheetCard({
             render={<a href="/api/inventory/export" />}
             variant="outline"
           >
-            <HugeiconsIcon icon={FileExportIcon} strokeWidth={2} />
-            Export on-hand CSV
-          </Button>
+            <HugeiconsIcon icon={FileExportIcon} strokeWidth={2} /><T>Export on-hand CSV</T></Button>
           <Button
             nativeButton={false}
             render={<a href="/api/inventory/export?template=1" />}
@@ -96,10 +89,7 @@ export function InventorySpreadsheetCard({
         </div>
         {canImport ? (
           <form action={formAction} className="grid gap-3 border-t border-border pt-3">
-            <p className="text-xs text-muted-foreground">
-              Save workbooks as CSV UTF-8, or paste rows copied from Excel.
-              Format SKU, UPC, and Location as text so leading zeros are kept.
-            </p>
+            <p className="text-xs text-muted-foreground"><T>Save workbooks as CSV UTF-8, or paste rows copied from Excel. Format SKU, UPC, and Location as text so leading zeros are kept.</T></p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="CSV file" htmlFor="inventory-spreadsheet">
                 <input
@@ -115,8 +105,8 @@ export function InventorySpreadsheetCard({
               </Field>
               <Field label="Import mode" htmlFor="inventory-import-mode">
                 <NativeSelect id="inventory-import-mode" name="mode" defaultValue="set">
-                  <option value="set">Set on-hand quantities</option>
-                  <option value="add">Add to existing quantities</option>
+                  <option value="set"><T>Set on-hand quantities</T></option>
+                  <option value="add"><T>Add to existing quantities</T></option>
                 </NativeSelect>
               </Field>
             </div>
@@ -158,18 +148,13 @@ export function InventorySpreadsheetCard({
                 {pending ? "Working…" : "Preview import"}
               </Button>
               <Button type="submit" name="intent" value="apply" disabled={pending}>
-                <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />
-                Import spreadsheet
-              </Button>
+                <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} /><T>Import spreadsheet</T></Button>
             </div>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive"><T>{error}</T></p> : null}
             {result ? <ImportSummary result={result} /> : null}
           </form>
         ) : (
-          <p className="text-xs text-muted-foreground">
-            Anyone who can view inventory can export. Managers import
-            spreadsheets to integrate existing stock.
-          </p>
+          <p className="text-xs text-muted-foreground"><T>Anyone who can view inventory can export. Managers import spreadsheets to integrate existing stock.</T></p>
         )}
       </CardContent>
     </Card>

@@ -7,6 +7,7 @@ import { Providers } from "@/frontend/client/providers";
 import { PwaRegister } from "@/frontend/client/pwa-register";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { PWA_THEME_COLOR } from "@/lib/pwa/manifest";
+import { getTranslator } from "@/lib/i18n/server";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -20,19 +21,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Saltbox Inventory",
-  applicationName: "Saltbox Inventory",
-  description: "Receive, put away, and ship warehouse inventory.",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Saltbox",
-  },
-  formatDetection: {
-    telephone: false,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getTranslator();
+  return {
+    title: "Saltbox Inventory",
+    applicationName: "Saltbox Inventory",
+    description: t("Receive, put away, and ship warehouse inventory."),
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: "Saltbox",
+    },
+    formatDetection: {
+      telephone: false,
+    },
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -45,10 +49,11 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const { locale } = await getTranslator();
   return (
     <html
-      lang="en"
+      lang={locale}
       suppressHydrationWarning
       className={cn(
         "h-full",
@@ -63,7 +68,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
         />
-        <Providers>
+        <Providers locale={locale}>
           <PwaRegister />
           {children}
         </Providers>

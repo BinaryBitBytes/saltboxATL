@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -162,7 +163,7 @@ export function ShippingForm({
       />
 
       <div className="grid gap-2">
-        <h2 className="text-sm font-medium">Pick from on-hand inventory</h2>
+        <h2 className="text-sm font-medium"><T>Pick from on-hand inventory</T></h2>
         <ScanInput
           onScan={(payload) => {
             const matches = inventory.filter(
@@ -186,17 +187,15 @@ export function ShippingForm({
             <thead className="border-b text-left">
               <tr>
                 <th className="px-2 py-2 font-medium">SKU</th>
-                <th className="px-2 py-2 font-medium">Location</th>
-                <th className="px-2 py-2 font-medium">On hand</th>
-                <th className="px-2 py-2 font-medium">Ship qty</th>
+                <th className="px-2 py-2 font-medium"><T>Location</T></th>
+                <th className="px-2 py-2 font-medium"><T>On hand</T></th>
+                <th className="px-2 py-2 font-medium"><T>Ship qty</T></th>
               </tr>
             </thead>
             <tbody>
               {inventory.filter((row) => row.quantity > 0).length === 0 ? (
                 <tr>
-                  <td className="px-2 py-3 text-muted-foreground" colSpan={4}>
-                    Nothing on hand. Complete a receiving order first.
-                  </td>
+                  <td className="px-2 py-3 text-muted-foreground" colSpan={4}><T>Nothing on hand. Complete a receiving order first.</T></td>
                 </tr>
               ) : (
                 inventory
@@ -234,7 +233,7 @@ export function ShippingForm({
         </div>
       </div>
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
       <LargeInputConfirm
         total={pickTotal}
         threshold={LIMITS.largePickTotal}

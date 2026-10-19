@@ -1,3 +1,4 @@
+import { T } from "@/frontend/client/language";
 import {
   formatCubicInches,
   roundCube,
@@ -22,20 +23,18 @@ export function LocationCubeTable({ locations }: { locations: LocationCubeRow[] 
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Location</TableHead>
-          <TableHead>Room</TableHead>
-          <TableHead>Class</TableHead>
-          <TableHead>Capacity</TableHead>
-          <TableHead>Committed</TableHead>
-          <TableHead>Open</TableHead>
+          <TableHead><T>Location</T></TableHead>
+          <TableHead><T>Room</T></TableHead>
+          <TableHead><T>Class</T></TableHead>
+          <TableHead><T>Capacity</T></TableHead>
+          <TableHead><T>Committed</T></TableHead>
+          <TableHead><T>Open cube</T></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-muted-foreground">
-              Add a location before cube can be reserved.
-            </TableCell>
+            <TableCell colSpan={6} className="text-muted-foreground"><T>Add a location before cube can be reserved.</T></TableCell>
           </TableRow>
         ) : (
           rows.map((location) => {
@@ -46,7 +45,9 @@ export function LocationCubeTable({ locations }: { locations: LocationCubeRow[] 
               <TableRow key={location.id}>
                 <TableCell>{location.code}</TableCell>
                 <TableCell>{location.roomName}</TableCell>
-                <TableCell>{storageClassLabel(location.storageClass)}</TableCell>
+                <TableCell>
+                  <T>{storageClassLabel(location.storageClass)}</T>
+                </TableCell>
                 <TableCell>{formatCubicInches(location.cubeCapacityCubicInches)}</TableCell>
                 <TableCell>{formatCubicInches(location.committedCubicInches)}</TableCell>
                 <TableCell className={open < 0 ? "text-destructive" : undefined}>

@@ -1,3 +1,4 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -5,7 +6,7 @@ import {
   buildInboundForecast,
   inboundStatusLabel,
 } from "@/lib/inbound/forecast";
-import { formatDateTime } from "@/lib/format";
+
 import { formatJobId } from "@/lib/purchase-orders";
 import { BuyerPoForm } from "@/frontend/client/buyer-po-form";
 import { JobIdEditor } from "@/frontend/client/job-id-editor";
@@ -31,12 +32,8 @@ export default async function InboundPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Inbound forecast</h1>
-        <p className="text-sm text-muted-foreground">
-          Buyer purchase orders describe the carrier, vendor, and lines expected
-          before the dock receives them. Project managers assign the internal job
-          ID. Warehouse roles can read this board and cannot change it.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Inbound forecast</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Buyer purchase orders describe the carrier, vendor, and lines expected before the dock receives them. Project managers assign the internal job ID. Warehouse roles can read this board and cannot change it.</T></p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -70,11 +67,8 @@ export default async function InboundPage() {
       {canUpload ? (
         <Card>
           <CardHeader>
-            <CardTitle>Upload buyer PO</CardTitle>
-            <CardDescription>
-              Saving the same PO number updates the expected details and leaves
-              the job ID assigned by the project manager in place.
-            </CardDescription>
+            <CardTitle><T>Upload buyer PO</T></CardTitle>
+            <CardDescription><T>Saving the same PO number updates the expected details and leaves the job ID assigned by the project manager in place.</T></CardDescription>
           </CardHeader>
           <CardContent>
             <BuyerPoForm />
@@ -84,9 +78,7 @@ export default async function InboundPage() {
 
       <div className="grid gap-3">
         {forecast.rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No buyer purchase orders have been uploaded yet.
-          </p>
+          <p className="text-sm text-muted-foreground"><T>No buyer purchase orders have been uploaded yet.</T></p>
         ) : (
           forecast.rows.map((row) => (
             <Card key={row.id}>
@@ -106,7 +98,7 @@ export default async function InboundPage() {
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <Detail
                     label="Expected arrival"
-                    value={formatDateTime(row.expectedArrivalAt ?? undefined)}
+                    value={<FormattedDate value={row.expectedArrivalAt ?? undefined} />}
                   />
                   <Detail label="Buyer" value={row.buyerName || "—"} />
                   <Detail
@@ -159,10 +151,12 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({ label, value }: { label: string; value: import("react").ReactNode }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">
+        <T>{label}</T>
+      </p>
       <p>{value}</p>
     </div>
   );
@@ -184,7 +178,9 @@ function GroupCard({
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
         {rows.length === 0 ? (
-          <p className="text-muted-foreground">{empty}</p>
+          <p className="text-muted-foreground">
+            <T>{empty}</T>
+          </p>
         ) : (
           rows.map((row) => (
             <div

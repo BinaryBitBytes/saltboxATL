@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -170,7 +171,7 @@ export function ProofCamera({
       />
       {error ? (
         <div className="grid gap-2">
-          <p className="text-xs text-destructive">{error}</p>
+          <p className="text-xs text-destructive"><T>{error}</T></p>
           <label className={cn(buttonVariants({ variant: "outline" }), "relative w-fit")}>
             <input
               type="file"
@@ -188,9 +189,7 @@ export function ProofCamera({
           </label>
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          Point the camera at the freight or document, then capture the photo.
-        </p>
+        <p className="text-xs text-muted-foreground"><T>Point the camera at the freight or document, then capture the photo.</T></p>
       )}
       <div className="flex flex-wrap gap-2">
         <Button
@@ -200,9 +199,7 @@ export function ProofCamera({
         >
           {capturing ? "Saving…" : "Capture photo"}
         </Button>
-        <Button type="button" variant="outline" onClick={onClose}>
-          Close camera
-        </Button>
+        <Button type="button" variant="outline" onClick={onClose}><T>Close camera</T></Button>
       </div>
     </div>
   );

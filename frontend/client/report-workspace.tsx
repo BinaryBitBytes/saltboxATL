@@ -1,5 +1,6 @@
 "use client";
 
+import { T, useLocale, useT } from "@/frontend/client/language";
 import { useMemo, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FileExportIcon } from "@hugeicons/core-free-icons";
@@ -45,12 +46,14 @@ const EMPTY_FILTERS: ItemReportFilters = {
 };
 
 function SourceBadge({ source }: { source: ItemReportRow["source"] }) {
-  if (source === "on-hand") return <Badge>on hand</Badge>;
-  if (source === "inbound") return <Badge variant="secondary">inbound</Badge>;
-  return <Badge variant="outline">outbound</Badge>;
+  if (source === "on-hand") return <Badge><T>on hand</T></Badge>;
+  if (source === "inbound") return <Badge variant="secondary"><T>inbound</T></Badge>;
+  return <Badge variant="outline"><T>outbound</T></Badge>;
 }
 
 export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
+  const locale = useLocale();
+  const t = useT();
   const [filters, setFilters] = useState<ItemReportFilters>(EMPTY_FILTERS);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const report = useMemo(
@@ -95,11 +98,8 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
     <div className="grid gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Query items</CardTitle>
-          <CardDescription>
-            Search SKU, UPC, PO, job ID, location, or description. Combined
-            filters narrow the report.
-          </CardDescription>
+          <CardTitle><T>Query items</T></CardTitle>
+          <CardDescription><T>Search SKU, UPC, PO, job ID, location, or description. Combined filters narrow the report.</T></CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
           <ScanInput
@@ -178,9 +178,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
       </Card>
 
       {!ready ? (
-        <p className="text-sm text-muted-foreground">
-          Enter at least one query to generate an item report.
-        </p>
+        <p className="text-sm text-muted-foreground"><T>Enter at least one query to generate an item report.</T></p>
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
@@ -195,9 +193,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
               disabled={report.rows.length === 0}
               onClick={downloadCsv}
             >
-              <HugeiconsIcon icon={FileExportIcon} strokeWidth={2} />
-              Download CSV
-            </Button>
+              <HugeiconsIcon icon={FileExportIcon} strokeWidth={2} /><T>Download CSV</T></Button>
           </div>
 
           <PrintDocument
@@ -205,21 +201,19 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
             title="Item report"
             description="Print the current query as a warehouse item report."
             buttonLabel={
-              report.rows.length === 0
-                ? "Print report"
-                : `Print ${report.rows.length} line${report.rows.length === 1 ? "" : "s"}`
+              report.rows.length === 1
+                ? t("Print {{count}} line", { count: report.rows.length })
+                : report.rows.length === 0
+                  ? t("Print report")
+                  : t("Print {{count}} lines", { count: report.rows.length })
             }
           >
             <article className="grid gap-4 text-sm text-black">
               <header className="border-b border-black pb-3">
-                <p className="text-[0.65rem] font-semibold tracking-[0.16em] uppercase">
-                  Saltbox · Item report
-                </p>
-                <h2 className="mt-1 font-heading text-xl font-semibold">
-                  Queried inventory
-                </h2>
+                <p className="text-[0.65rem] font-semibold tracking-[0.16em] uppercase"><T>Saltbox · Item report</T></p>
+                <h2 className="mt-1 font-heading text-xl font-semibold"><T>Queried inventory</T></h2>
                 <p className="mt-1 text-xs text-neutral-600">
-                  {generatedAt ? formatDateTime(generatedAt) : formatDateTime(new Date().toISOString())}
+                  {generatedAt ? formatDateTime(generatedAt, locale) : formatDateTime(new Date().toISOString(), locale)}
                   {" · "}
                   {filterSummary(report.filters)}
                 </p>
@@ -234,21 +228,19 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                   <tr className="border-b border-black text-left">
                     <th className="py-1 font-semibold">SKU</th>
                     <th className="py-1 font-semibold">UPC</th>
-                    <th className="py-1 font-semibold">Description</th>
-                    <th className="py-1 font-semibold">Manufacturer</th>
-                    <th className="py-1 font-semibold">Color</th>
-                    <th className="py-1 font-semibold">Location</th>
-                    <th className="py-1 font-semibold">Source</th>
-                    <th className="py-1 font-semibold">Job ID</th>
-                    <th className="py-1 text-right font-semibold">Qty</th>
+                    <th className="py-1 font-semibold"><T>Description</T></th>
+                    <th className="py-1 font-semibold"><T>Manufacturer</T></th>
+                    <th className="py-1 font-semibold"><T>Color</T></th>
+                    <th className="py-1 font-semibold"><T>Location</T></th>
+                    <th className="py-1 font-semibold"><T>Source</T></th>
+                    <th className="py-1 font-semibold"><T>Job ID</T></th>
+                    <th className="py-1 text-right font-semibold"><T>Qty</T></th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.rows.length === 0 ? (
                     <tr>
-                      <td className="py-3 text-neutral-600" colSpan={9}>
-                        No items matched that query.
-                      </td>
+                      <td className="py-3 text-neutral-600" colSpan={9}><T>No items matched that query.</T></td>
                     </tr>
                   ) : (
                     report.rows.map((row) => (
@@ -278,21 +270,19 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                 <TableRow>
                   <TableHead>SKU</TableHead>
                   <TableHead>UPC</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Manufacturer</TableHead>
-                  <TableHead>Color</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Job ID</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead><T>Description</T></TableHead>
+                  <TableHead><T>Manufacturer</T></TableHead>
+                  <TableHead><T>Color</T></TableHead>
+                  <TableHead><T>Location</T></TableHead>
+                  <TableHead><T>Source</T></TableHead>
+                  <TableHead><T>Job ID</T></TableHead>
+                  <TableHead className="text-right"><T>Qty</T></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {report.rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-muted-foreground">
-                      No items matched that query.
-                    </TableCell>
+                    <TableCell colSpan={9} className="text-muted-foreground"><T>No items matched that query.</T></TableCell>
                   </TableRow>
                 ) : (
                   report.rows.map((row) => (

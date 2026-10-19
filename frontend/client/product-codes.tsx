@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useEffect, useRef, useState } from "react";
 import { encodeScanPayload } from "@/lib/scan-code";
 
@@ -48,11 +49,11 @@ export function ProductCodes({
   return (
     <div className="flex flex-wrap items-end gap-4 rounded-md border border-border bg-background p-3">
       <div className="grid gap-1">
-        <p className="text-[0.625rem] text-muted-foreground">Barcode (Code 128)</p>
+        <p className="text-[0.625rem] text-muted-foreground"><T>Barcode (Code 128)</T></p>
         <svg ref={barcodeRef} role="img" aria-label={`Barcode for ${barcodeValue}`} />
       </div>
       <div className="grid gap-1">
-        <p className="text-[0.625rem] text-muted-foreground">QR (SKU / UPC)</p>
+        <p className="text-[0.625rem] text-muted-foreground"><T>QR (SKU / UPC)</T></p>
         {qrSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={qrSrc} alt={`QR code for ${sku}`} className="size-24" />

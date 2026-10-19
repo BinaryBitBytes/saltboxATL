@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -54,9 +55,7 @@ export function PalletCubeDirective({
       </p>
       <p className="text-xs text-muted-foreground">{plan.directive}</p>
       {plan.status === "missing-cube" ? (
-        <Link href="/cubing" className="text-xs underline">
-          Open the Cubing tab
-        </Link>
+        <Link href="/cubing" className="text-xs underline"><T>Open the Cubing tab</T></Link>
       ) : null}
       {canBreakDown && plan.status === "break-down" ? (
         <div>
@@ -82,7 +81,7 @@ export function PalletCubeDirective({
           </Button>
         </div>
       ) : null}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
     </div>
   );
 }

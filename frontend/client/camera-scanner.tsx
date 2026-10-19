@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { parseScanCode, type ScanPayload } from "@/lib/scan-code";
@@ -74,10 +75,8 @@ export function CameraScanner({
   return (
     <div className="grid gap-2 rounded-lg border border-border p-3">
       <div id={elementId} className="min-h-32 max-h-[min(20rem,50dvh)] overflow-hidden rounded-md bg-black short:min-h-24" />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      <Button type="button" variant="outline" onClick={onClose}>
-        Close camera
-      </Button>
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
+      <Button type="button" variant="outline" onClick={onClose}><T>Close camera</T></Button>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useEffect, useId, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PrinterIcon } from "@hugeicons/core-free-icons";
@@ -95,7 +96,7 @@ export function LabelCard({
       )}
     >
       <p className="text-[0.65rem] font-semibold tracking-[0.14em] uppercase">
-        {label.heading}
+        <T>{label.heading}</T>
       </p>
       <h3 className="mt-1 font-heading text-base font-semibold leading-tight">
         {label.title}
@@ -104,7 +105,7 @@ export function LabelCard({
         {label.fields.map((field) => (
           <div key={field.label} className="min-w-0">
             <dt className="text-[0.6rem] uppercase tracking-wide text-neutral-600">
-              {field.label}
+              <T>{field.label}</T>
             </dt>
             <dd className="truncate">{field.value}</dd>
           </div>
@@ -134,9 +135,7 @@ export function LabelPrintSheet({
 }) {
   if (labels.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No labels to print yet.
-      </p>
+      <p className="text-sm text-muted-foreground"><T>No labels to print yet.</T></p>
     );
   }
 

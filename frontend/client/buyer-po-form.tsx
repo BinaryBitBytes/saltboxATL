@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveBuyerPurchaseOrder } from "@/backend/server/serverAction";
@@ -187,16 +188,16 @@ export function BuyerPoForm() {
               setStatus(event.target.value as typeof status)
             }
           >
-            <option value="expected">Expected</option>
-            <option value="in-transit">In transit</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="expected"><T>Expected</T></option>
+            <option value="in-transit"><T>In transit</T></option>
+            <option value="cancelled"><T>Cancelled</T></option>
           </NativeSelect>
         </Field>
       </div>
 
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium">Expected contents</p>
+          <p className="text-sm font-medium"><T>Expected contents</T></p>
           <Button
             type="button"
             variant="outline"
@@ -285,7 +286,7 @@ export function BuyerPoForm() {
         onConfirmationQuantityChange={setConfirmationQuantity}
       />
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
       <div>
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Save buyer PO"}

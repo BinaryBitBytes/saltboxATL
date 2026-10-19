@@ -1,3 +1,4 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
@@ -11,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
-import { formatDateTime } from "@/lib/format";
+
 import { isAwaitingPutaway } from "@/lib/inventory-schema";
 
 export default async function PutawayPage() {
@@ -27,11 +28,8 @@ export default async function PutawayPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Putaway</h1>
-        <p className="text-sm text-muted-foreground">
-          Assign bin locations to received cases, then post them to on-hand
-          inventory. Receiving stays a separate dock check-in.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Putaway</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Assign bin locations to received cases, then post them to on-hand inventory. Receiving stays a separate dock check-in.</T></p>
       </div>
 
       <PutawayTable
@@ -63,11 +61,11 @@ function PutawayTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Order</TableHead>
-            <TableHead>Vendor</TableHead>
-            <TableHead>Received</TableHead>
-            <TableHead>Cases</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead><T>Order</T></TableHead>
+            <TableHead><T>Vendor</T></TableHead>
+            <TableHead><T>Received</T></TableHead>
+            <TableHead><T>Cases</T></TableHead>
+            <TableHead><T>Status</T></TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
@@ -86,7 +84,7 @@ function PutawayTable({
                 <TableRow key={order.id}>
                   <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>{order.vendor}</TableCell>
-                  <TableCell>{formatDateTime(order.receivedAt)}</TableCell>
+                  <TableCell><FormattedDate value={order.receivedAt} /></TableCell>
                   <TableCell>
                     {cases.length}
                     {missing > 0 ? ` · ${missing} need locations` : ""}

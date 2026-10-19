@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useSyncExternalStore } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Download01Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
@@ -167,9 +168,7 @@ export function InstallAppButton() {
 
   return (
     <Button type="button" variant="outline" size="sm" onClick={() => void install()}>
-      <HugeiconsIcon icon={Download01Icon} strokeWidth={2} />
-      Install app
-    </Button>
+      <HugeiconsIcon icon={Download01Icon} strokeWidth={2} /><T>Install app</T></Button>
   );
 }
 
@@ -181,29 +180,17 @@ export function InstallAppCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <HugeiconsIcon icon={SmartPhone01Icon} strokeWidth={2} className="size-4" />
-          Install on this device
-        </CardTitle>
-        <CardDescription>
-          Add Saltbox to a phone home screen or desktop so receiving and shipping
-          open like a local app.
-        </CardDescription>
+          <HugeiconsIcon icon={SmartPhone01Icon} strokeWidth={2} className="size-4" /><T>Install on this device</T></CardTitle>
+        <CardDescription><T>Add Saltbox to a phone home screen or desktop so receiving and shipping open like a local app.</T></CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {canPrompt ? (
           <Button type="button" onClick={() => void install()}>
-            <HugeiconsIcon icon={Download01Icon} strokeWidth={2} />
-            Install Saltbox
-          </Button>
+            <HugeiconsIcon icon={Download01Icon} strokeWidth={2} /><T>Install Saltbox</T></Button>
         ) : ios ? (
-          <p className="text-sm text-muted-foreground">
-            On iPhone or iPad, tap Share, then Add to Home Screen.
-          </p>
+          <p className="text-sm text-muted-foreground"><T>On iPhone or iPad, tap Share, then Add to Home Screen.</T></p>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            In Chrome, Edge, or Safari, use Install app, Add to Dock, or Add to
-            Home Screen from the browser menu.
-          </p>
+          <p className="text-sm text-muted-foreground"><T>In Chrome, Edge, or Safari, use Install app, Add to Dock, or Add to Home Screen from the browser menu.</T></p>
         )}
       </CardContent>
     </Card>

@@ -1,3 +1,4 @@
+import { T } from "@/frontend/client/language";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { LocationForms } from "@/frontend/client/location-forms";
@@ -19,10 +20,8 @@ export default async function LocationsPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Rooms & locations</h1>
-        <p className="text-sm text-muted-foreground">
-          Putaway rooms and bin locations used when receiving cases.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Rooms & locations</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Putaway rooms and bin locations used when receiving cases.</T></p>
       </div>
 
       <LocationForms rooms={system.rooms} />
@@ -30,30 +29,32 @@ export default async function LocationsPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Room</TableHead>
-            <TableHead>Class</TableHead>
-            <TableHead>Cube capacity</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Active</TableHead>
+            <TableHead><T>Code</T></TableHead>
+            <TableHead><T>Room</T></TableHead>
+            <TableHead><T>Class</T></TableHead>
+            <TableHead><T>Cube capacity</T></TableHead>
+            <TableHead><T>Description</T></TableHead>
+            <TableHead><T>Active</T></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {system.locations.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-muted-foreground">
-                Add a room, then a location code.
-              </TableCell>
+              <TableCell colSpan={6} className="text-muted-foreground"><T>Add a room, then a location code.</T></TableCell>
             </TableRow>
           ) : (
             system.locations.map((location) => (
               <TableRow key={location.id}>
                 <TableCell>{location.code}</TableCell>
                 <TableCell>{rooms.get(location.roomId) ?? "—"}</TableCell>
-                <TableCell>{storageClassLabel(location.storageClass)}</TableCell>
+                <TableCell>
+                  <T>{storageClassLabel(location.storageClass)}</T>
+                </TableCell>
                 <TableCell>{formatCubicInches(location.cubeCapacityCubicInches)}</TableCell>
                 <TableCell>{location.description || "—"}</TableCell>
-                <TableCell>{location.isActive ? "Yes" : "No"}</TableCell>
+                <TableCell>
+                  <T>{location.isActive ? "Yes" : "No"}</T>
+                </TableCell>
               </TableRow>
             ))
           )}

@@ -3,6 +3,7 @@
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/frontend/client/language";
 
 export function Field({
   label,
@@ -17,12 +18,13 @@ export function Field({
   className?: string;
   children: ReactNode;
 }) {
+  const t = useT();
   return (
     <div className={cn("grid gap-1", className)}>
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label htmlFor={htmlFor}>{t(label)}</Label>
       {children}
       {error ? (
-        <p className="text-[0.625rem] text-destructive">{error}</p>
+        <p className="text-[0.625rem] text-destructive">{t(error)}</p>
       ) : null}
     </div>
   );
@@ -30,8 +32,10 @@ export function Field({
 
 export function NativeSelect({
   className,
+  "aria-label": ariaLabel,
   ...props
 }: ComponentProps<"select">) {
+  const t = useT();
   return (
     <select
       className={cn(
@@ -39,6 +43,7 @@ export function NativeSelect({
         className,
       )}
       {...props}
+      aria-label={typeof ariaLabel === "string" ? t(ariaLabel) : ariaLabel}
     />
   );
 }

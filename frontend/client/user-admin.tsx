@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -111,10 +112,8 @@ export function UserAdmin({
     <div className="grid gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Add teammate</CardTitle>
-          <CardDescription>
-            Assign Hyperscale or Security roles. Security associate and Security manager sign in to the Security inventory only.
-          </CardDescription>
+          <CardTitle><T>Add teammate</T></CardTitle>
+          <CardDescription><T>Assign Hyperscale or Security roles. Security associate and Security manager sign in to the Security inventory only.</T></CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
@@ -146,13 +145,17 @@ export function UserAdmin({
               <NativeSelect id="role" {...form.register("role")}>
                 {assignableRoles.map((role) => (
                   <option key={role} value={role}>
-                    {roleLabel(role)}
+                    <T>{roleLabel(role)}</T>
                   </option>
                 ))}
               </NativeSelect>
             </Field>
             <div className="sm:col-span-2">
-              {error ? <p className="mb-2 text-xs text-destructive">{error}</p> : null}
+              {error ? (
+                <p className="mb-2 text-xs text-destructive">
+                  <T>{error}</T>
+                </p>
+              ) : null}
               <Button type="submit" disabled={pending}>
                 {pending ? "Saving…" : "Create user"}
               </Button>
@@ -164,12 +167,12 @@ export function UserAdmin({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Username</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Division</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead><T>Name</T></TableHead>
+            <TableHead><T>Username</T></TableHead>
+            <TableHead><T>Email</T></TableHead>
+            <TableHead><T>Role</T></TableHead>
+            <TableHead><T>Division</T></TableHead>
+            <TableHead><T>Status</T></TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
@@ -192,12 +195,14 @@ export function UserAdmin({
                 >
                   {assignableRoles.map((role) => (
                     <option key={role} value={role}>
-                      {roleLabel(role)}
+                      <T>{roleLabel(role)}</T>
                     </option>
                   ))}
                 </NativeSelect>
               </TableCell>
-              <TableCell>{divisionLabel(divisionForRole(user.role))}</TableCell>
+              <TableCell>
+                <T>{divisionLabel(divisionForRole(user.role))}</T>
+              </TableCell>
               <TableCell>
                 <Badge variant={user.isActive ? "secondary" : "destructive"}>
                   {user.isActive ? "Active" : "Inactive"}

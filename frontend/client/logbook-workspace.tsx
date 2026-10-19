@@ -1,5 +1,6 @@
 "use client";
 
+import { FormattedDate, T } from "@/frontend/client/language";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,7 @@ import {
 } from "@/frontend/client/status-badge";
 import type { LogbookEntry, LogbookKind } from "@/lib/logbook/entries";
 import type { ReceivingOrderStatus, ShippingOrderStatus } from "@/lib/inventory-schema";
-import { formatDateTime } from "@/lib/format";
+
 
 const FILTERS: Array<{ id: "all" | LogbookKind; label: string }> = [
   { id: "all", label: "All" },
@@ -33,9 +34,9 @@ const FILTERS: Array<{ id: "all" | LogbookKind; label: string }> = [
 ];
 
 function KindBadge({ kind }: { kind: LogbookKind }) {
-  if (kind === "shipment") return <Badge>shipment</Badge>;
-  if (kind === "delivery") return <Badge variant="secondary">delivery</Badge>;
-  return <Badge variant="destructive">damage</Badge>;
+  if (kind === "shipment") return <Badge><T>shipment</T></Badge>;
+  if (kind === "delivery") return <Badge variant="secondary"><T>delivery</T></Badge>;
+  return <Badge variant="destructive"><T>damage</T></Badge>;
 }
 
 function StatusMark({ entry }: { entry: LogbookEntry }) {
@@ -120,9 +121,7 @@ export function LogbookWorkspace({
         className="max-w-lg"
       />
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No logbook entries match that filter.
-        </p>
+        <p className="text-sm text-muted-foreground"><T>No logbook entries match that filter.</T></p>
       ) : (
         filtered.map((entry) => {
           const open = openId === entry.id;
@@ -148,7 +147,7 @@ export function LogbookWorkspace({
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {formatDateTime(entry.occurredAt)}
+                  <FormattedDate value={entry.occurredAt} />
                   {entry.actor ? ` · ${entry.actor}` : ""}
                   {entry.carrier ? ` · ${entry.carrier}` : ""}
                   {` · ${entry.totals.units} unit${entry.totals.units === 1 ? "" : "s"}`}
@@ -191,9 +190,9 @@ export function LogbookWorkspace({
                         <thead className="border-b text-left">
                           <tr>
                             <th className="px-2 py-2 font-medium">SKU</th>
-                            <th className="px-2 py-2 font-medium">Detail</th>
-                            <th className="px-2 py-2 font-medium">Location</th>
-                            <th className="px-2 py-2 text-right font-medium">Qty</th>
+                            <th className="px-2 py-2 font-medium"><T>Detail</T></th>
+                            <th className="px-2 py-2 font-medium"><T>Location</T></th>
+                            <th className="px-2 py-2 text-right font-medium"><T>Qty</T></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -202,9 +201,7 @@ export function LogbookWorkspace({
                               <td
                                 className="px-2 py-3 text-muted-foreground"
                                 colSpan={4}
-                              >
-                                No line items recorded.
-                              </td>
+                              ><T>No line items recorded.</T></td>
                             </tr>
                           ) : (
                             entry.lines.map((line, index) => (
@@ -234,7 +231,7 @@ export function LogbookWorkspace({
                       </table>
                     </div>
                     <div>
-                      <p className="mb-1 text-xs font-medium">Proof photos</p>
+                      <p className="mb-1 text-xs font-medium"><T>Proof photos</T></p>
                       <PhotoThumbnails photos={entry.photos} />
                     </div>
                     {entry.packSlip ? <PackSlipSheet doc={entry.packSlip} /> : null}

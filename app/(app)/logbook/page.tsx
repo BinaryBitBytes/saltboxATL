@@ -1,3 +1,4 @@
+import { T } from "@/frontend/client/language";
 import { getSystem } from "@/backend/server/store";
 import { requireUser } from "@/backend/server/dal";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -22,11 +23,8 @@ export default async function LogbookPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Logbook</h1>
-        <p className="text-sm text-muted-foreground">
-          Review outbound shipments, inbound deliveries, and damage write-offs,
-          including packing documents and proof photos.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Logbook</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Review outbound shipments, inbound deliveries, and damage write-offs, including packing documents and proof photos.</T></p>
       </div>
       <LogbookWorkspace
         entries={entries}

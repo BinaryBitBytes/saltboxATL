@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createSaltboxManifest } from "@/lib/pwa/manifest";
+import { getLocale } from "@/lib/i18n/server";
 
-export default function manifest(): MetadataRoute.Manifest {
-  return createSaltboxManifest();
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  return createSaltboxManifest(await getLocale());
 }

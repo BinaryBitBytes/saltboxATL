@@ -1,3 +1,4 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import ReceivingForm from "@/frontend/client/reactHookForm";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
-import { formatDateTime } from "@/lib/format";
+
 import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import {
   Card,
@@ -30,20 +31,14 @@ export default async function ReceivingPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Receiving</h1>
-        <p className="text-sm text-muted-foreground">
-          Create an inbound order from a purchase order, then work pallets and
-          cases. Putaway is a separate step after receiving is complete.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Receiving</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Create an inbound order from a purchase order, then work pallets and cases. Putaway is a separate step after receiving is complete.</T></p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>New inbound order</CardTitle>
-          <CardDescription>
-            Matches PO #, vendor, carrier, receiver, and pallet count. Job IDs
-            are assigned by a project manager on the inbound board.
-          </CardDescription>
+          <CardTitle><T>New inbound order</T></CardTitle>
+          <CardDescription><T>Matches PO #, vendor, carrier, receiver, and pallet count. Job IDs are assigned by a project manager on the inbound board.</T></CardDescription>
         </CardHeader>
         <CardContent>
           <ReceivingForm
@@ -54,26 +49,24 @@ export default async function ReceivingPage() {
       </Card>
 
       <div className="grid gap-2">
-        <h2 className="text-sm font-medium">Receiving orders</h2>
+        <h2 className="text-sm font-medium"><T>Receiving orders</T></h2>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Order</TableHead>
+              <TableHead><T>Order</T></TableHead>
               <TableHead>PO</TableHead>
-              <TableHead>Job ID</TableHead>
-              <TableHead>Vendor</TableHead>
-              <TableHead>Received</TableHead>
-              <TableHead>Pallets</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead><T>Job ID</T></TableHead>
+              <TableHead><T>Vendor</T></TableHead>
+              <TableHead><T>Received</T></TableHead>
+              <TableHead><T>Pallets</T></TableHead>
+              <TableHead><T>Status</T></TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {system.receivingOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground">
-                  No receiving orders yet.
-                </TableCell>
+                <TableCell colSpan={8} className="text-muted-foreground"><T>No receiving orders yet.</T></TableCell>
               </TableRow>
             ) : (
               system.receivingOrders.map((order) => (
@@ -86,7 +79,7 @@ export default async function ReceivingPage() {
                     )}
                   </TableCell>
                   <TableCell>{order.vendor}</TableCell>
-                  <TableCell>{formatDateTime(order.receivedAt)}</TableCell>
+                  <TableCell><FormattedDate value={order.receivedAt} /></TableCell>
                   <TableCell>
                     {order.pallets.length}/{order.loadPalletCount}
                   </TableCell>

@@ -1,5 +1,6 @@
 "use client";
 
+import { FormattedDate, T } from "@/frontend/client/language";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime, formatFiberSummary } from "@/lib/format";
+import { formatFiberSummary } from "@/lib/format";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { ProductCodes } from "@/frontend/client/product-codes";
 import { matchesScan } from "@/lib/scan-code";
@@ -30,29 +31,29 @@ const EMPTY_ROWS: InventoryRow[] = [];
 const columns = columnHelper.columns([
   columnHelper.accessor("sku", { header: "SKU" }),
   columnHelper.accessor("upc", { header: "UPC" }),
-  columnHelper.accessor("description", { header: "Description" }),
+  columnHelper.accessor("description", { header: () => <T>Description</T> }),
   columnHelper.accessor("manufacturer", {
-    header: "Manufacturer",
+    header: () => <T>Manufacturer</T>,
     cell: ({ getValue }) => getValue() || "—",
   }),
   columnHelper.accessor("color", {
-    header: "Color",
+    header: () => <T>Color</T>,
     cell: ({ getValue }) => getValue() || "—",
   }),
   columnHelper.accessor("fiber", {
-    header: "Fiber",
+    header: () => <T>Fiber</T>,
     cell: ({ getValue }) => formatFiberSummary(getValue()),
   }),
   columnHelper.accessor("batch", {
-    header: "Batch",
+    header: () => <T>Batch</T>,
     cell: ({ getValue }) => getValue() || "—",
   }),
-  columnHelper.accessor("roomName", { header: "Room" }),
-  columnHelper.accessor("locationCode", { header: "Location" }),
-  columnHelper.accessor("quantity", { header: "Qty" }),
+  columnHelper.accessor("roomName", { header: () => <T>Room</T> }),
+  columnHelper.accessor("locationCode", { header: () => <T>Location</T> }),
+  columnHelper.accessor("quantity", { header: () => <T>Qty</T> }),
   columnHelper.accessor("lastMovedAt", {
-    header: "Last moved",
-    cell: ({ getValue }) => formatDateTime(getValue()),
+    header: () => <T>Last moved</T>,
+    cell: ({ getValue }) => <FormattedDate value={getValue() || undefined} />,
   }),
 ]);
 
@@ -146,16 +147,14 @@ export function InventoryTable({
                   )}
                 </TableHead>
               ))}
-              <TableHead>Codes</TableHead>
+              <TableHead><T>Codes</T></TableHead>
             </TableRow>
           ))}
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length + 1} className="text-muted-foreground">
-                No inventory matches.
-              </TableCell>
+              <TableCell colSpan={columns.length + 1} className="text-muted-foreground"><T>No inventory matches.</T></TableCell>
             </TableRow>
           ) : (
             rows.map((row) => (

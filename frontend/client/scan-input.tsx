@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { QrCodeScanIcon } from "@hugeicons/core-free-icons";
@@ -52,9 +53,7 @@ export function ScanInput({
           variant="outline"
           onClick={() => setCameraOpen((open) => !open)}
         >
-          <HugeiconsIcon icon={QrCodeScanIcon} strokeWidth={2} />
-          Camera
-        </Button>
+          <HugeiconsIcon icon={QrCodeScanIcon} strokeWidth={2} /><T>Camera</T></Button>
       </div>
       {cameraOpen ? (
         <CameraScanner

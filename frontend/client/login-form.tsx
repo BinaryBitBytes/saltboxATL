@@ -1,5 +1,6 @@
 "use client";
 
+import { T, useT } from "@/frontend/client/language";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -52,6 +53,7 @@ function AuthTextInput({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useT();
   return (
     <input
       id={id}
@@ -61,7 +63,7 @@ function AuthTextInput({
       required={required}
       minLength={minLength}
       maxLength={maxLength}
-      placeholder={placeholder}
+      placeholder={placeholder ? t(placeholder) : undefined}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onInput={(event) => onChange(event.currentTarget.value)}
@@ -114,7 +116,7 @@ function PanelTab({
 }: {
   href: string;
   active: boolean;
-  children: string;
+  children: ReactNode;
 }) {
   return (
     <a
@@ -147,15 +149,11 @@ export function LoginForm({
     <Card>
       <CardHeader>
         <div className="flex flex-wrap gap-1">
-          <PanelTab href={authPageHref("signin", from)} active={initialPanel === "signin"}>
-            Sign in
-          </PanelTab>
+          <PanelTab href={authPageHref("signin", from)} active={initialPanel === "signin"}><T>Sign in</T></PanelTab>
           <PanelTab
             href={authPageHref("register", from)}
             active={initialPanel === "register"}
-          >
-            Register
-          </PanelTab>
+          ><T>Register</T></PanelTab>
         </div>
         <CardTitle>{copy.title}</CardTitle>
         <CardDescription>{copy.description}</CardDescription>
@@ -230,9 +228,7 @@ function SignInForm({
     >
       <input type="hidden" name="from" value={from} />
       {passwordReset ? (
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-          Your password was updated. Sign in with the new password.
-        </p>
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"><T>Your password was updated. Sign in with the new password.</T></p>
       ) : null}
       <Field
         label="Username or email"
@@ -263,19 +259,15 @@ function SignInForm({
           onChange={setPassword}
         />
       </Field>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      <Button type="submit">Sign in</Button>
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
+      <Button type="submit"><T>Sign in</T></Button>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem]">
-        <ModeLink href={authPageHref("recover-username", from)}>
-          Forgot username?
-        </ModeLink>
-        <ModeLink href={authPageHref("reset-password", from)}>
-          Forgot password?
-        </ModeLink>
+        <ModeLink href={authPageHref("recover-username", from)}><T>Forgot username?</T></ModeLink>
+        <ModeLink href={authPageHref("reset-password", from)}><T>Forgot password?</T></ModeLink>
       </div>
       <div className="grid gap-1">
         <p className="text-[0.625rem] text-muted-foreground">
-          Demo accounts · password {DEMO_PASSWORD}
+          <T>Demo accounts · password</T> {DEMO_PASSWORD}
         </p>
         <ul className="grid gap-1 text-[0.625rem] text-muted-foreground">
           {DEMO_ACCOUNTS.map((account) => (
@@ -294,7 +286,7 @@ function SignInForm({
                   form?.requestSubmit();
                 }}
               >
-                {roleLabel(account.role)} · {account.username} · {account.email}
+                <T>{roleLabel(account.role)}</T> · {account.username} · {account.email}
               </button>
             </li>
           ))}
@@ -432,17 +424,14 @@ function RegisterForm({
           onChange={setConfirmPassword}
         />
       </Field>
-      <p className="text-[0.625rem] text-muted-foreground">
-        Username: 3–32 characters, start with a letter. Password: at least 8 characters,
-        with a letter and a number.
-      </p>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <p className="text-[0.625rem] text-muted-foreground"><T>Username: 3–32 characters, start with a letter. Password: at least 8 characters, with a letter and a number.</T></p>
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Creating account…" : "Create account"}
       </Button>
       <p className="text-[0.625rem] text-muted-foreground">
-        Already have an account?{" "}
-        <ModeLink href={authPageHref("signin", from)}>Sign in</ModeLink>
+        <T>Already have an account?</T>{" "}
+        <ModeLink href={authPageHref("signin", from)}><T>Sign in</T></ModeLink>
       </p>
     </form>
   );
@@ -522,17 +511,16 @@ function RecoverUsernameForm({
         />
       </Field>
       {username ? (
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-          Your username is <span className="font-medium">{username}</span>.
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"><T>Your username is</T><span className="font-medium">{username}</span>.
         </p>
       ) : null}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Looking up…" : "Recover username"}
       </Button>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem]">
-        <ModeLink href={authPageHref("signin", from)}>Back to sign in</ModeLink>
-        <ModeLink href={authPageHref("reset-password", from)}>Reset password</ModeLink>
+        <ModeLink href={authPageHref("signin", from)}><T>Back to sign in</T></ModeLink>
+        <ModeLink href={authPageHref("reset-password", from)}><T>Reset password</T></ModeLink>
       </div>
     </form>
   );
@@ -591,15 +579,11 @@ function ResetPasswordForm({
   if (success) {
     return (
       <div className="grid gap-4">
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-          Your password was updated. Sign in with the new password.
-        </p>
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"><T>Your password was updated. Sign in with the new password.</T></p>
         <a
           href={authPageHref("signin", from)}
           className={cn(buttonVariants({ variant: "default" }))}
-        >
-          Return to sign in
-        </a>
+        ><T>Return to sign in</T></a>
       </div>
     );
   }
@@ -677,15 +661,13 @@ function ResetPasswordForm({
           onChange={setConfirmPassword}
         />
       </Field>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Updating password…" : "Reset password"}
       </Button>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem]">
-        <ModeLink href={authPageHref("signin", from)}>Back to sign in</ModeLink>
-        <ModeLink href={authPageHref("recover-username", from)}>
-          Forgot username?
-        </ModeLink>
+        <ModeLink href={authPageHref("signin", from)}><T>Back to sign in</T></ModeLink>
+        <ModeLink href={authPageHref("recover-username", from)}><T>Forgot username?</T></ModeLink>
       </div>
     </form>
   );
