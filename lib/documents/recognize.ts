@@ -30,10 +30,15 @@ export type RecognizedPurchase = {
   note: string;
 };
 
+export type VisionReadResult = {
+  text: string | null;
+  failure?: { message: string } | null;
+};
+
 export type VisionReader = (
   bytes: Uint8Array,
   fileName: string,
-) => Promise<string | null>;
+) => Promise<string | null | VisionReadResult>;
 
 const LINE_PATTERN =
   /SKU:\s*([A-Za-z0-9._/-]+)\s+UPC:\s*([A-Za-z0-9-]+)\s+Description:\s*(.+?)\s+Qty:\s*(\d+)(?:\s+Unit Price:\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?(?:\s+(?:Amount|Extended):\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?/gi;
@@ -116,11 +121,17 @@ export async function recognizePurchasePdf(
 ): Promise<RecognizedPurchase> {
   const embedded = parsePurchaseFields(extractPdfText(bytes));
   let visionText: string | null = null;
+  let failureMessage: string | null = null;
   if (options?.vision) {
     try {
-      visionText = await options.vision(bytes, options.fileName ?? "document.pdf");
-    } catch {
+      const read = await options.vision(bytes, options.fileName ?? "document.pdf");
+      const parsed = readVisionResult(read);
+      visionText = parsed.text;
+      failureMessage = parsed.failureMessage;
+    } catch (error) {
       visionText = null;
+      failureMessage = error instanceof Error ? error.message : "Composio request failed.";
+      console.log("[composio]", { step: "recognize-threw", message: failureMessage });
     }
   }
   const fromVision = visionText?.trim()
@@ -136,8 +147,30 @@ export async function recognizePurchasePdf(
   return {
     ...merged,
     source: usedVision ? "composio" : "embedded-text",
-    note: usedVision ? COMPOSIO_NOTE : EMBEDDED_NOTE,
+    note: recognitionNote(usedVision, failureMessage),
   };
+}
+
+function readVisionResult(value: string | null | VisionReadResult): {
+  text: string | null;
+  failureMessage: string | null;
+} {
+  if (value && typeof value === "object") {
+    return {
+      text: value.text,
+      failureMessage: value.failure?.message ?? null,
+    };
+  }
+  return { text: value, failureMessage: null };
+}
+
+function recognitionNote(usedVision: boolean, failureMessage: string | null): string {
+  if (usedVision) return COMPOSIO_NOTE;
+  if (!failureMessage) return EMBEDDED_NOTE;
+  return `${EMBEDDED_NOTE} ${failureMessage}`
+    .replace(/[<>]/g, "")
+    .replace(/[\u0000-\u001F]/g, " ")
+    .slice(0, 1800);
 }
 
 function mergeFields(

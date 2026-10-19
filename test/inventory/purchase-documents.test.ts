@@ -331,7 +331,8 @@ describe("purchase document recognition", () => {
     expect(calls[0]).to.include(
       "/api/v3.1/tools/execute/GOOGLE_CLOUD_VISION_ANNOTATE_FILES",
     );
-    expect(text).to.include("PO Number: PO-9");
+    expect(text.text).to.include("PO Number: PO-9");
+    expect(text.failure).to.equal(null);
     expect(
       textFromVisionPayload({
         data: JSON.stringify({
@@ -343,6 +344,9 @@ describe("purchase document recognition", () => {
       await executeComposioVision(bytes, "po.pdf", {}, async () => {
         throw new Error("should not call");
       }),
-    ).to.equal(null);
+    ).to.deep.include({
+      text: null,
+      failure: { kind: "missing-api-key", status: null, message: "COMPOSIO_API_KEY is missing." },
+    });
   });
 });

@@ -26,7 +26,7 @@ import {
 } from "@/backend/server/document-store";
 import { isPdf, redactPdfBytes } from "@/lib/documents/pdf-text";
 import { recognizePurchasePdf } from "@/lib/documents/recognize";
-import { composioVisionClient } from "@/lib/documents/composio-vision";
+import { assessComposioSetup, composioVisionClient } from "@/lib/documents/composio-vision";
 import { applyRecognizedPurchase } from "@/lib/documents/apply";
 import {
   INVOICE_ONLY,
@@ -65,6 +65,7 @@ export async function uploadPurchaseDocumentRecord(
     input.originalName?.trim() || "document.pdf",
   );
   const originalName = nameParsed.success ? nameParsed.data : "document.pdf";
+  console.log("[composio] setup", assessComposioSetup());
   const recognized = await recognizePurchasePdf(input.bytes, {
     fileName: originalName,
     vision: composioVisionClient(),

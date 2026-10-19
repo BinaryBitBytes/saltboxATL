@@ -30,8 +30,23 @@ export async function POST(request: Request) {
         typeof purchaseOrderNumber === "string" ? purchaseOrderNumber : null,
       createdBy: user.name,
     });
+    console.log("[purchase-documents] saved", {
+      purchaseOrderNumber: saved.purchaseOrder.purchaseOrderNumber,
+      source: saved.document.recognitionSource,
+      note: saved.document.recognitionNote,
+    });
     return jsonOk(saved, 201);
   } catch (error) {
+    if (error instanceof ServiceError) {
+      console.log("[purchase-documents] request failed", {
+        status: error.status,
+        message: error.message,
+      });
+    } else {
+      console.log("[purchase-documents] request failed", {
+        message: error instanceof Error ? error.message : "Unexpected server error",
+      });
+    }
     return jsonError(error);
   }
 }

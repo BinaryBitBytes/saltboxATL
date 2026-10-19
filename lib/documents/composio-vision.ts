@@ -18,6 +18,43 @@ export type ComposioVisionEnv = {
   connectedAccountId?: string;
 };
 
+export type ComposioFailureKind =
+  | "missing-api-key"
+  | "invalid-api-key"
+  | "privileges"
+  | "missing-connection"
+  | "bad-request"
+  | "unavailable";
+
+export type ComposioFailure = {
+  kind: ComposioFailureKind;
+  status: number | null;
+  message: string;
+};
+
+export type ComposioVisionResult = {
+  text: string | null;
+  failure: ComposioFailure | null;
+};
+
+export type ComposioSetupReport = {
+  apiKey: "missing" | "present";
+  apiKeyHint: string;
+  userId: string;
+  parent: string;
+  parentIsPlaceholder: boolean;
+  toolSlug: string;
+  connectedAccountId: "missing" | "present";
+  problems: string[];
+  warnings: string[];
+};
+
+const PLACEHOLDER_PARENTS = new Set([
+  "projects/saltbox/locations/us",
+  "projects/your-project/locations/us",
+  "projects/your-gcp-project/locations/us",
+]);
+
 export function composioVisionEnvFromProcess(
   env: NodeJS.ProcessEnv = process.env,
 ): ComposioVisionEnv {
@@ -65,6 +102,136 @@ export function composioVisionArguments(
   };
 }
 
+export function maskApiKey(apiKey: string | undefined): string {
+  if (!apiKey) return "missing";
+  if (apiKey.length <= 8) return `set (${apiKey.length} chars)`;
+  return `${apiKey.slice(0, 4)}…${apiKey.slice(-4)} (${apiKey.length} chars)`;
+}
+
+export function composioErrorText(body: unknown): string {
+  if (typeof body === "string") return body.slice(0, 500);
+  if (!body || typeof body !== "object") return "";
+  const record = body as Record<string, unknown>;
+  const error = record.error;
+  if (typeof error === "string") return error.slice(0, 500);
+  if (error && typeof error === "object") {
+    const details = error as Record<string, unknown>;
+    const parts = [details.message, details.slug, details.suggested_fix].filter(
+      (part): part is string => typeof part === "string" && part.trim().length > 0,
+    );
+    if (parts.length > 0) return parts.join(" — ").slice(0, 500);
+  }
+  if (typeof record.message === "string") return record.message.slice(0, 500);
+  try {
+    return JSON.stringify(body).slice(0, 500);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * HTTP 401 is an invalid API key. HTTP 403 is a privileges refusal.
+ * HTTP 400 is a bad request or a missing Vision connection, not a bad key.
+ */
+export function classifyComposioFailure(
+  status: number,
+  body: unknown,
+): ComposioFailure {
+  const detail = composioErrorText(body).replace(/\s+/g, " ").trim();
+  const haystack = detail.toLowerCase();
+  if (
+    status === 401 ||
+    haystack.includes("invalid api key") ||
+    haystack.includes("invalid x-api-key") ||
+    haystack.includes("unauthorized")
+  ) {
+    return {
+      kind: "invalid-api-key",
+      status,
+      message: detail
+        ? `Composio rejected the API key (HTTP ${status}): ${detail}`
+        : `Composio rejected the API key (HTTP ${status}).`,
+    };
+  }
+  if (
+    status === 403 ||
+    haystack.includes("forbidden") ||
+    haystack.includes("permission") ||
+    haystack.includes("not authorized") ||
+    haystack.includes("insufficient")
+  ) {
+    return {
+      kind: "privileges",
+      status,
+      message: detail
+        ? `Composio refused this key's privileges (HTTP ${status}): ${detail}`
+        : `Composio refused this key's privileges (HTTP ${status}).`,
+    };
+  }
+  if (
+    status === 400 &&
+    (haystack.includes("connected account") ||
+      haystack.includes("no active connection") ||
+      haystack.includes("not connected") ||
+      haystack.includes("connection"))
+  ) {
+    return {
+      kind: "missing-connection",
+      status,
+      message:
+        `HTTP 400 is a missing Google Cloud Vision connection, not an invalid API key. ${detail}`.trim(),
+    };
+  }
+  if (status === 400) {
+    return {
+      kind: "bad-request",
+      status,
+      message:
+        `HTTP 400 is a bad request, not an invalid API key. Check COMPOSIO_VISION_PARENT and the Vision tool arguments. ${detail}`.trim(),
+    };
+  }
+  return {
+    kind: "unavailable",
+    status,
+    message: detail
+      ? `Composio image recognition was unavailable (HTTP ${status}): ${detail}`
+      : `Composio image recognition was unavailable (HTTP ${status}).`,
+  };
+}
+
+export function assessComposioSetup(
+  env: Record<string, string | undefined> = process.env,
+): ComposioSetupReport {
+  const config = composioVisionEnvFromProcess(env as NodeJS.ProcessEnv);
+  const parent = config.parent || DEFAULT_PARENT;
+  const parentIsPlaceholder =
+    PLACEHOLDER_PARENTS.has(parent) ||
+    parent.includes("your-project") ||
+    parent.includes("your-gcp-project");
+  const problems: string[] = [];
+  const warnings: string[] = [];
+  if (!config.apiKey) problems.push("COMPOSIO_API_KEY is missing.");
+  if (parentIsPlaceholder) {
+    problems.push("COMPOSIO_VISION_PARENT is still the example project.");
+  }
+  if (!config.connectedAccountId) {
+    warnings.push(
+      "COMPOSIO_CONNECTED_ACCOUNT_ID is empty. Set it when more than one Google Cloud Vision account is connected.",
+    );
+  }
+  return {
+    apiKey: config.apiKey ? "present" : "missing",
+    apiKeyHint: maskApiKey(config.apiKey),
+    userId: config.userId || DEFAULT_USER,
+    parent,
+    parentIsPlaceholder,
+    toolSlug: config.toolSlug || DEFAULT_SLUG,
+    connectedAccountId: config.connectedAccountId ? "present" : "missing",
+    problems,
+    warnings,
+  };
+}
+
 export function textFromVisionPayload(payload: unknown): string {
   const full: string[] = [];
   const paragraphs: string[] = [];
@@ -80,9 +247,37 @@ export async function executeComposioVision(
   fileName: string,
   env: ComposioVisionEnv = composioVisionEnvFromProcess(),
   fetchImpl: typeof fetch = fetch,
-): Promise<string | null> {
-  if (!env.apiKey) return null;
+): Promise<ComposioVisionResult> {
+  const setup = assessComposioSetup({
+    COMPOSIO_API_KEY: env.apiKey,
+    COMPOSIO_USER_ID: env.userId,
+    COMPOSIO_VISION_PARENT: env.parent,
+    COMPOSIO_VISION_TOOL_SLUG: env.toolSlug,
+    COMPOSIO_CONNECTED_ACCOUNT_ID: env.connectedAccountId,
+  });
+  if (!env.apiKey) {
+    const failure: ComposioFailure = {
+      kind: "missing-api-key",
+      status: null,
+      message: "COMPOSIO_API_KEY is missing.",
+    };
+    console.log("[composio]", { step: "skipped", ...failure, setup });
+    return { text: null, failure };
+  }
   const slug = env.toolSlug || DEFAULT_SLUG;
+  const args = composioVisionArguments(bytes, fileName, env);
+  console.log("[composio]", {
+    step: "request",
+    url: `${EXECUTE_URL}/${slug}`,
+    userId: env.userId || DEFAULT_USER,
+    parent: env.parent || DEFAULT_PARENT,
+    toolSlug: slug,
+    apiKey: setup.apiKeyHint,
+    connectedAccount: setup.connectedAccountId,
+    argumentKeys: Object.keys(args),
+    problems: setup.problems,
+    warnings: setup.warnings,
+  });
   const response = await fetchImpl(`${EXECUTE_URL}/${slug}`, {
     method: "POST",
     headers: {
@@ -94,30 +289,86 @@ export async function executeComposioVision(
       ...(env.connectedAccountId
         ? { connected_account_id: env.connectedAccountId }
         : {}),
-      arguments: composioVisionArguments(bytes, fileName, env),
+      arguments: args,
     }),
     signal: AbortSignal.timeout(20_000),
   });
-  if (!response.ok) return null;
-  const payload: unknown = await response.json();
+  const raw = await response.text();
+  let payload: unknown = raw;
+  if (raw) {
+    try {
+      payload = JSON.parse(raw) as unknown;
+    } catch {
+      payload = raw;
+    }
+  } else {
+    payload = null;
+  }
+  if (!response.ok) {
+    const failure = classifyComposioFailure(response.status, payload);
+    console.log("[composio]", {
+      step: "response",
+      status: response.status,
+      kind: failure.kind,
+      message: failure.message,
+      apiKey: setup.apiKeyHint,
+    });
+    return { text: null, failure };
+  }
   if (
     payload &&
     typeof payload === "object" &&
     "successful" in payload &&
     (payload as { successful?: unknown }).successful === false
   ) {
-    return null;
+    const reported = statusFromBody(payload, 400);
+    const failure = classifyComposioFailure(reported, payload);
+    console.log("[composio]", {
+      step: "response",
+      status: response.status,
+      kind: failure.kind,
+      message: failure.message,
+      apiKey: setup.apiKeyHint,
+    });
+    return { text: null, failure };
   }
   const text = textFromVisionPayload(payload).trim();
-  return text || null;
+  console.log("[composio]", {
+    step: "response",
+    status: response.status,
+    kind: text ? "ok" : "empty-text",
+    characters: text.length,
+    apiKey: setup.apiKeyHint,
+  });
+  return { text: text || null, failure: null };
 }
 
 export function composioVisionClient(): (
   bytes: Uint8Array,
   fileName: string,
-) => Promise<string | null> {
+) => Promise<ComposioVisionResult> {
   return (bytes, fileName) =>
-    executeComposioVision(bytes, fileName).catch(() => null);
+    executeComposioVision(bytes, fileName).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : "Composio request failed.";
+      console.log("[composio]", { step: "threw", message });
+      return {
+        text: null,
+        failure: {
+          kind: "unavailable" as const,
+          status: null,
+          message,
+        },
+      };
+    });
+}
+
+function statusFromBody(body: unknown, fallback: number): number {
+  if (!body || typeof body !== "object") return fallback;
+  const error = (body as { error?: { status?: unknown; code?: unknown } }).error;
+  if (!error || typeof error !== "object") return fallback;
+  if (typeof error.status === "number") return error.status;
+  if (typeof error.code === "number") return error.code;
+  return fallback;
 }
 
 function walkVision(
