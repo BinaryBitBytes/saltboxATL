@@ -6,9 +6,12 @@
  */
 
 const EXECUTE_URL = "https://backend.composio.dev/api/v3.1/tools/execute";
+const CONSUMER_MCP_URL = "https://connect.composio.dev/mcp";
 const DEFAULT_SLUG = "GOOGLE_CLOUD_VISION_ANNOTATE_FILES";
 const DEFAULT_PARENT = "projects/saltbox/locations/us";
 const DEFAULT_USER = "saltbox-inbound";
+const COMPOSIO_PROJECT_PARENT =
+  /^projects\/project-[0-9a-f-]+\/locations\//i;
 
 export type ComposioVisionEnv = {
   apiKey?: string;
@@ -37,9 +40,12 @@ export type ComposioVisionResult = {
   failure: ComposioFailure | null;
 };
 
+export type ComposioKeyKind = "missing" | "consumer" | "user" | "project";
+
 export type ComposioSetupReport = {
   apiKey: "missing" | "present";
   apiKeyHint: string;
+  apiKeyKind: ComposioKeyKind;
   userId: string;
   parent: string;
   parentIsPlaceholder: boolean;
@@ -102,6 +108,20 @@ export function composioVisionArguments(
   };
 }
 
+export function composioKeyKind(apiKey: string | undefined): ComposioKeyKind {
+  if (!apiKey) return "missing";
+  if (apiKey.startsWith("ck_")) return "consumer";
+  if (apiKey.startsWith("uak_")) return "user";
+  return "project";
+}
+
+export function composioAuthHeaders(apiKey: string): Record<string, string> {
+  const kind = composioKeyKind(apiKey);
+  if (kind === "consumer") return { "x-consumer-api-key": apiKey };
+  if (kind === "user") return { "x-user-api-key": apiKey };
+  return { "x-api-key": apiKey };
+}
+
 export function maskApiKey(apiKey: string | undefined): string {
   if (!apiKey) return "missing";
   if (apiKey.length <= 8) return `set (${apiKey.length} chars)`;
@@ -145,6 +165,14 @@ export function classifyComposioFailure(
     haystack.includes("invalid x-api-key") ||
     haystack.includes("unauthorized")
   ) {
+    if (haystack.includes("ck_") || haystack.includes("consumer")) {
+      return {
+        kind: "invalid-api-key",
+        status,
+        message:
+          "Composio rejected this Connect consumer key (ck_). Copy the current key from For You, Settings, Sessions and API Key. A project API key starts with ak_ and is a different credential.",
+      };
+    }
     return {
       kind: "invalid-api-key",
       status,
@@ -214,6 +242,11 @@ export function assessComposioSetup(
   if (parentIsPlaceholder) {
     problems.push("COMPOSIO_VISION_PARENT is still the example project.");
   }
+  if (COMPOSIO_PROJECT_PARENT.test(parent)) {
+    problems.push(
+      "COMPOSIO_VISION_PARENT looks like a Composio project id. Use your Google Cloud project id: projects/<gcp-project-id>/locations/us.",
+    );
+  }
   if (!config.connectedAccountId) {
     warnings.push(
       "COMPOSIO_CONNECTED_ACCOUNT_ID is empty. Set it when more than one Google Cloud Vision account is connected.",
@@ -222,6 +255,7 @@ export function assessComposioSetup(
   return {
     apiKey: config.apiKey ? "present" : "missing",
     apiKeyHint: maskApiKey(config.apiKey),
+    apiKeyKind: composioKeyKind(config.apiKey),
     userId: config.userId || DEFAULT_USER,
     parent,
     parentIsPlaceholder,
@@ -264,15 +298,22 @@ export async function executeComposioVision(
     console.log("[composio]", { step: "skipped", ...failure, setup });
     return { text: null, failure };
   }
+  if (composioKeyKind(env.apiKey) === "consumer") {
+    return executeConsumerVision(bytes, fileName, env, fetchImpl, setup);
+  }
   const slug = env.toolSlug || DEFAULT_SLUG;
   const args = composioVisionArguments(bytes, fileName, env);
+  const authHeaders = composioAuthHeaders(env.apiKey);
   console.log("[composio]", {
     step: "request",
     url: `${EXECUTE_URL}/${slug}`,
+    transport: "project-api",
+    authHeader: Object.keys(authHeaders)[0],
     userId: env.userId || DEFAULT_USER,
     parent: env.parent || DEFAULT_PARENT,
     toolSlug: slug,
     apiKey: setup.apiKeyHint,
+    apiKeyKind: setup.apiKeyKind,
     connectedAccount: setup.connectedAccountId,
     argumentKeys: Object.keys(args),
     problems: setup.problems,
@@ -282,7 +323,7 @@ export async function executeComposioVision(
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": env.apiKey,
+      ...authHeaders,
     },
     body: JSON.stringify({
       user_id: env.userId || DEFAULT_USER,
@@ -341,6 +382,178 @@ export async function executeComposioVision(
     apiKey: setup.apiKeyHint,
   });
   return { text: text || null, failure: null };
+}
+
+async function executeConsumerVision(
+  bytes: Uint8Array,
+  fileName: string,
+  env: ComposioVisionEnv,
+  fetchImpl: typeof fetch,
+  setup: ComposioSetupReport,
+): Promise<ComposioVisionResult> {
+  const slug = env.toolSlug || DEFAULT_SLUG;
+  const args = composioVisionArguments(bytes, fileName, env);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    ...composioAuthHeaders(env.apiKey ?? ""),
+  };
+  console.log("[composio]", {
+    step: "request",
+    url: CONSUMER_MCP_URL,
+    transport: "consumer-mcp",
+    authHeader: "x-consumer-api-key",
+    userId: env.userId || DEFAULT_USER,
+    parent: env.parent || DEFAULT_PARENT,
+    toolSlug: slug,
+    apiKey: setup.apiKeyHint,
+    apiKeyKind: setup.apiKeyKind,
+    connectedAccount: setup.connectedAccountId,
+    argumentKeys: Object.keys(args),
+    problems: setup.problems,
+    warnings: setup.warnings,
+  });
+  const initialized = await fetchImpl(CONSUMER_MCP_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "saltbox", version: "0.1.0" },
+      },
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const initPayload = await readMcpPayload(initialized);
+  if (!initialized.ok) {
+    const failure = classifyComposioFailure(initialized.status, initPayload);
+    if (initialized.status === 401) {
+      failure.kind = "invalid-api-key";
+      failure.message =
+        "Composio rejected this Connect consumer key (ck_). Copy the current key from For You, Settings, Sessions and API Key. A project API key starts with ak_ and is a different credential.";
+    }
+    console.log("[composio]", {
+      step: "response",
+      status: initialized.status,
+      kind: failure.kind,
+      message: failure.message,
+      apiKey: setup.apiKeyHint,
+      transport: "consumer-mcp",
+    });
+    return { text: null, failure };
+  }
+  const sessionId = initialized.headers.get("mcp-session-id");
+  const sessionHeaders = sessionId
+    ? { ...headers, "mcp-session-id": sessionId }
+    : headers;
+  await fetchImpl(CONSUMER_MCP_URL, {
+    method: "POST",
+    headers: sessionHeaders,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const called = await fetchImpl(CONSUMER_MCP_URL, {
+    method: "POST",
+    headers: sessionHeaders,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "COMPOSIO_MULTI_EXECUTE_TOOL",
+        arguments: {
+          tools: [{ tool_slug: slug, arguments: args }],
+          sync_response_to_workbench: false,
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const payload = await readMcpPayload(called);
+  if (!called.ok) {
+    const failure = classifyComposioFailure(called.status, payload);
+    console.log("[composio]", {
+      step: "response",
+      status: called.status,
+      kind: failure.kind,
+      message: failure.message,
+      apiKey: setup.apiKeyHint,
+      transport: "consumer-mcp",
+    });
+    return { text: null, failure };
+  }
+  const mcpError = mcpErrorMessage(payload);
+  if (mcpError) {
+    const failure = classifyComposioFailure(400, { error: { message: mcpError } });
+    console.log("[composio]", {
+      step: "response",
+      status: called.status,
+      kind: failure.kind,
+      message: failure.message,
+      apiKey: setup.apiKeyHint,
+      transport: "consumer-mcp",
+    });
+    return { text: null, failure };
+  }
+  const text = textFromVisionPayload(payload).trim();
+  console.log("[composio]", {
+    step: "response",
+    status: called.status,
+    kind: text ? "ok" : "empty-text",
+    characters: text.length,
+    apiKey: setup.apiKeyHint,
+    transport: "consumer-mcp",
+  });
+  return { text: text || null, failure: null };
+}
+
+async function readMcpPayload(response: Response): Promise<unknown> {
+  const raw = await response.text();
+  const type = response.headers.get("content-type") ?? "";
+  if (type.includes("text/event-stream")) {
+    const data = raw
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim())
+      .filter(Boolean);
+    const last = data.at(-1);
+    if (!last) return raw;
+    try {
+      return JSON.parse(last) as unknown;
+    } catch {
+      return last;
+    }
+  }
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+}
+
+function mcpErrorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as {
+    error?: { message?: unknown };
+    result?: { isError?: unknown; content?: Array<{ text?: unknown }> };
+  };
+  if (typeof record.error?.message === "string") return record.error.message;
+  if (record.result?.isError) {
+    const text = (record.result.content ?? [])
+      .map((entry) => (typeof entry.text === "string" ? entry.text : ""))
+      .filter(Boolean)
+      .join(" ");
+    return text || "Composio tool call failed.";
+  }
+  return null;
 }
 
 export function composioVisionClient(): (

@@ -65,6 +65,80 @@ describe("Composio connection checks", () => {
     expect(maskApiKey(SECRET)).to.equal("ak_t…1234 (18 chars)");
   });
 
+  it("sends a ck_ consumer key to the Connect MCP, not as a project API key", async () => {
+    const consumerKey = "ck_examplekeyvalueblNH";
+    const calls: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
+    const result = await executeComposioVision(
+      PDF,
+      "po.pdf",
+      {
+        apiKey: consumerKey,
+        parent: "projects/warehouse-prod/locations/us",
+        userId: "saltbox-inbound",
+      },
+      async (url, init) => {
+        const headers = Object.fromEntries(
+          Object.entries((init?.headers ?? {}) as Record<string, string>),
+        );
+        calls.push({ url: String(url), headers, body: String(init?.body ?? "") });
+        const body = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+        if (body.method === "initialize") {
+          return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: {} }), {
+            status: 200,
+            headers: { "content-type": "application/json", "mcp-session-id": "sess-1" },
+          });
+        }
+        if (body.method === "notifications/initialized") {
+          return new Response(null, { status: 202 });
+        }
+        return jsonResponse(200, {
+          jsonrpc: "2.0",
+          id: 2,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  fullTextAnnotation: { text: "PO Number: PO-100\nVendor: Corning" },
+                }),
+              },
+            ],
+          },
+        });
+      },
+    );
+    expect(calls.every((call) => call.url === "https://connect.composio.dev/mcp")).to.equal(
+      true,
+    );
+    expect(calls[0]?.headers["x-consumer-api-key"]).to.equal(consumerKey);
+    expect(calls[0]?.headers["x-api-key"]).to.equal(undefined);
+    expect(calls[2]?.headers["mcp-session-id"]).to.equal("sess-1");
+    expect(result.failure).to.equal(null);
+    expect(result.text).to.include("PO Number: PO-100");
+  });
+
+  it("flags a Composio project id used as the Google Cloud Vision parent", () => {
+    const setup = assessComposioSetup({
+      COMPOSIO_API_KEY: "ck_examplekeyvalueblNH",
+      COMPOSIO_VISION_PARENT: "projects/project-74a3df87-030f-4256-8f0/locations/us",
+    });
+    expect(setup.apiKeyKind).to.equal("consumer");
+    expect(setup.problems.join(" ")).to.include("Google Cloud project id");
+  });
+
+  it("explains a 401 on a ck_ key instead of calling the key corrupt", () => {
+    const failure = classifyComposioFailure(401, {
+      error: {
+        message: "Invalid API key: ck_**blNH",
+        slug: "APIKey_InvalidAPIKey",
+        suggested_fix: "Please check you are using a valid API key.",
+      },
+    });
+    expect(failure.kind).to.equal("invalid-api-key");
+    expect(failure.message).to.include("Connect consumer key");
+    expect(failure.message).to.include("ak_");
+  });
+
   it("treats HTTP 401 as an invalid API key", () => {
     const failure = classifyComposioFailure(401, {
       error: { message: "Invalid API key", status: 401 },
