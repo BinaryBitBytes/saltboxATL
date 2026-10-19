@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { useForm, useWatch } from "react-hook-form";
@@ -102,7 +103,7 @@ type EditingLine = { palletId: string; caseId: string };
 
 function ErrorText({ error }: { error: string | null }) {
   if (!error) return null;
-  return <p className="text-xs text-destructive">{error}</p>;
+  return <p className="text-xs text-destructive"><T>{error}</T></p>;
 }
 
 function emptyCaseValues(): CaseFormValues {
@@ -213,14 +214,11 @@ export function ReceivingWorkspace({
 
       <Card>
         <CardHeader>
-          <CardTitle>Pallets</CardTitle>
+          <CardTitle><T>Pallets</T></CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
           {order.pallets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No pallets yet. Add the pallet you are working on to start
-              scanning cases.
-            </p>
+            <p className="text-sm text-muted-foreground"><T>No pallets yet. Add the pallet you are working on to start scanning cases.</T></p>
           ) : (
             order.pallets.map((pallet) => (
               <PalletCard
@@ -248,7 +246,7 @@ export function ReceivingWorkspace({
       {order.status === "received" || order.status === "completed" ? (
         <Card className="print:border-0 print:shadow-none print:ring-0">
           <CardHeader className="print:hidden">
-            <CardTitle>Inbound freight labels</CardTitle>
+            <CardTitle><T>Inbound freight labels</T></CardTitle>
           </CardHeader>
           <CardContent>
             <LabelPrintSheet
@@ -404,9 +402,7 @@ function PalletCard({
                   </Button>
                 </div>
               ) : isCasePutawayPosted(item) ? (
-                <p className="shrink-0 text-[0.65rem] text-muted-foreground">
-                  On-hand
-                </p>
+                <p className="shrink-0 text-[0.65rem] text-muted-foreground"><T>On-hand</T></p>
               ) : null}
             </li>
           ))}
@@ -445,7 +441,7 @@ function AddPalletForm({ orderId }: { orderId: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Current pallet</CardTitle>
+        <CardTitle><T>Current pallet</T></CardTitle>
       </CardHeader>
       <CardContent>
         <form
@@ -518,9 +514,7 @@ function AddPalletForm({ orderId }: { orderId: string }) {
             </Field>
           </div>
           <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" {...form.register("isPartial")} />
-            Partial pallet
-          </label>
+            <input type="checkbox" {...form.register("isPartial")} /><T>Partial pallet</T></label>
           {isPartial ? (
             <Field
               label="Partialed by"
@@ -654,12 +648,10 @@ function WorkingCaseForm({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Pallet contents</CardTitle>
+          <CardTitle><T>Pallet contents</T></CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Add or select a pallet to record case items, including fiber details.
-          </p>
+          <p className="text-sm text-muted-foreground"><T>Add or select a pallet to record case items, including fiber details.</T></p>
         </CardContent>
       </Card>
     );
@@ -737,11 +729,7 @@ function WorkingCaseForm({
           >
             <Input id="description" {...form.register("description")} />
           </Field>
-          <p className="text-xs text-muted-foreground">
-            If the vendor did not provide a UPC or SKU, enter the description
-            first, then auto-generate unique codes. Duplicate UPCs and SKUs are
-            not allowed.
-          </p>
+          <p className="text-xs text-muted-foreground"><T>If the vendor did not provide a UPC or SKU, enter the description first, then auto-generate unique codes. Duplicate UPCs and SKUs are not allowed.</T></p>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -823,14 +811,12 @@ function WorkingCaseForm({
             </Field>
           </div>
           <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" {...form.register("isFiber")} />
-            Fiber item
-          </label>
+            <input type="checkbox" {...form.register("isFiber")} /><T>Fiber item</T></label>
           {isFiber ? (
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Connection">
                 <NativeSelect {...form.register("connectionType")}>
-                  <option value="">Select</option>
+                  <option value=""><T>Select</T></option>
                   {CONNECTION_TYPES.map((type) => (
                     <option key={type} value={type}>
                       {type}
@@ -840,7 +826,7 @@ function WorkingCaseForm({
               </Field>
               <Field label="Strand count">
                 <NativeSelect {...form.register("strandCount", { valueAsNumber: true })}>
-                  <option value="">Select</option>
+                  <option value=""><T>Select</T></option>
                   {STRAND_COUNTS.map((count) => (
                     <option key={count} value={count}>
                       {count}
@@ -981,7 +967,7 @@ function CompletedOrderActions({
   return (
     <Card className="print:hidden">
       <CardHeader>
-        <CardTitle>Completed</CardTitle>
+        <CardTitle><T>Completed</T></CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         <p className="text-sm text-muted-foreground">
@@ -1015,13 +1001,10 @@ function ReceivedOrderActions({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Receiving complete</CardTitle>
+        <CardTitle><T>Receiving complete</T></CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
-        <p className="text-sm text-muted-foreground">
-          Cases are checked in. Assign bin locations in putaway to add this
-          stock to on-hand inventory.
-        </p>
+        <p className="text-sm text-muted-foreground"><T>Cases are checked in. Assign bin locations in putaway to add this stock to on-hand inventory.</T></p>
         <div className="flex flex-wrap items-center gap-2">
           <Button nativeButton={false} render={<Link href={`/putaway/${order.id}`} />}>
             Open putaway

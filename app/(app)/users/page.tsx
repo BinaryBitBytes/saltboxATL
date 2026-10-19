@@ -1,3 +1,4 @@
+import { T } from "@/frontend/client/language";
 import { requirePermission } from "@/backend/server/dal";
 import { listPublicUsers } from "@/backend/server/auth-service";
 import { UserAdmin } from "@/frontend/client/user-admin";
@@ -11,11 +12,8 @@ export default async function UsersPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Users</h1>
-        <p className="text-sm text-muted-foreground">
-          Managers create and deactivate warehouse logins. The admin manager can
-          open both divisions. A Security manager only administers Security logins.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Users</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Managers create and deactivate warehouse logins. The admin manager can open both divisions. A Security manager only administers Security logins.</T></p>
       </div>
       <UserAdmin
         users={users}

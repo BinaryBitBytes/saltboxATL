@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useEffect, useState, useTransition } from "react";
 import { setActiveDivision } from "@/backend/server/division-actions";
 import { NativeSelect } from "@/frontend/client/field";
@@ -17,9 +18,7 @@ export function DivisionSwitcher({ division }: { division: Division }) {
 
   return (
     <div className="grid gap-0.5">
-      <label htmlFor="active-division" className="sr-only">
-        Division
-      </label>
+      <label htmlFor="active-division" className="sr-only"><T>Division</T></label>
       <NativeSelect
         id="active-division"
         aria-label="Division"
@@ -41,11 +40,11 @@ export function DivisionSwitcher({ division }: { division: Division }) {
       >
         {DIVISION_CATALOG.map((entry) => (
           <option key={entry.id} value={entry.id}>
-            {divisionLabel(entry.id)}
+            <T>{divisionLabel(entry.id)}</T>
           </option>
         ))}
       </NativeSelect>
-      {error ? <p className="text-[0.625rem] text-destructive">{error}</p> : null}
+      {error ? <p className="text-[0.625rem] text-destructive"><T>{error}</T></p> : null}
     </div>
   );
 }

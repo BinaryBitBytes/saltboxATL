@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -119,7 +120,7 @@ export function AdjustmentForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Inventory adjustment</CardTitle>
+        <CardTitle><T>Inventory adjustment</T></CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         <ScanInput
@@ -186,9 +187,9 @@ export function AdjustmentForm({
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Type" error={form.formState.errors.type?.message}>
               <NativeSelect {...form.register("type")}>
-                <option value="overage">Overage (+)</option>
-                <option value="shortage">Shortage (−)</option>
-                <option value="damage">Damage</option>
+                <option value="overage"><T>Overage (+)</T></option>
+                <option value="shortage"><T>Shortage (−)</T></option>
+                <option value="damage"><T>Damage</T></option>
               </NativeSelect>
             </Field>
             <Field
@@ -212,7 +213,7 @@ export function AdjustmentForm({
                 onSelectedItemIdChange?.(event.target.value || undefined);
               }}
             >
-              <option value="">Select a line</option>
+              <option value=""><T>Select a line</T></option>
               {inventory.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.sku} · {item.locationCode} · qty {item.quantity}
@@ -256,9 +257,7 @@ export function AdjustmentForm({
           ) : null}
           {type === "damage" ? (
             <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" {...form.register("moveDamaged")} />
-              Move damaged units to DMG-01 instead of writing them off
-            </label>
+              <input type="checkbox" {...form.register("moveDamaged")} /><T>Move damaged units to DMG-01 instead of writing them off</T></label>
           ) : null}
           <LargeInputConfirm
             total={Number(quantity) || 0}
@@ -269,7 +268,7 @@ export function AdjustmentForm({
             confirmationQuantity={confirmationQuantity}
             onConfirmationQuantityChange={setConfirmationQuantity}
           />
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
           <Button type="submit" disabled={pending}>
             {pending ? "Saving…" : "Post adjustment"}
           </Button>

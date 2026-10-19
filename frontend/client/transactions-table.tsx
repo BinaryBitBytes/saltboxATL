@@ -1,5 +1,6 @@
 "use client";
 
+import { FormattedDate, T } from "@/frontend/client/language";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { NativeSelect } from "@/frontend/client/field";
 import { TransactionTypeBadge } from "@/frontend/client/status-badge";
-import { formatDateTime, formatSignedInt } from "@/lib/format";
+import { formatSignedInt } from "@/lib/format";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { PhotoThumbnails } from "@/frontend/client/photo-proof";
 import { matchesScan } from "@/lib/scan-code";
@@ -31,29 +32,29 @@ const EMPTY: InventoryTransactionRow[] = [];
 
 const columns = columnHelper.columns([
   columnHelper.accessor("occurredAt", {
-    header: "When",
-    cell: ({ getValue }) => formatDateTime(getValue()),
+    header: () => <T>When</T>,
+    cell: ({ getValue }) => <FormattedDate value={getValue() || undefined} />,
   }),
   columnHelper.accessor("type", {
-    header: "Type",
+    header: () => <T>Type</T>,
     cell: ({ getValue }) => <TransactionTypeBadge type={getValue()} />,
   }),
   columnHelper.accessor("sku", { header: "SKU" }),
-  columnHelper.accessor("locationCode", { header: "Location" }),
+  columnHelper.accessor("locationCode", { header: () => <T>Location</T> }),
   columnHelper.accessor("quantityDelta", {
-    header: "Delta",
+    header: () => <T>Delta</T>,
     cell: ({ getValue }) => formatSignedInt(getValue()),
   }),
   columnHelper.accessor("quantityAfter", {
-    header: "After",
+    header: () => <T>After</T>,
     cell: ({ getValue }) => getValue() ?? "—",
   }),
   columnHelper.accessor("reason", {
-    header: "Reason",
+    header: () => <T>Reason</T>,
     cell: ({ getValue }) => getValue() || "—",
   }),
   columnHelper.accessor("photos", {
-    header: "Photos",
+    header: () => <T>Photos</T>,
     cell: ({ getValue }) => <PhotoThumbnails photos={getValue() ?? []} />,
   }),
 ]);
@@ -124,15 +125,15 @@ export function TransactionsTable({
           value={type}
           onChange={(event) => setType(event.target.value)}
         >
-          <option value="all">All types</option>
-          <option value="receiving">Receiving</option>
-          <option value="putaway">Putaway</option>
-          <option value="shipping">Shipping</option>
-          <option value="pick">Pick</option>
-          <option value="overage">Overage</option>
-          <option value="shortage">Shortage</option>
-          <option value="damage">Damage</option>
-          <option value="import">Import</option>
+          <option value="all"><T>All types</T></option>
+          <option value="receiving"><T>Receiving</T></option>
+          <option value="putaway"><T>Putaway</T></option>
+          <option value="shipping"><T>Shipping</T></option>
+          <option value="pick"><T>Pick</T></option>
+          <option value="overage"><T>Overage</T></option>
+          <option value="shortage"><T>Shortage</T></option>
+          <option value="damage"><T>Damage</T></option>
+          <option value="import"><T>Import</T></option>
         </NativeSelect>
       </div>
       <Table>
@@ -152,9 +153,7 @@ export function TransactionsTable({
         <TableBody>
           {table.getRowModel().rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length} className="text-muted-foreground">
-                No transactions yet.
-              </TableCell>
+              <TableCell colSpan={columns.length} className="text-muted-foreground"><T>No transactions yet.</T></TableCell>
             </TableRow>
           ) : (
             table.getRowModel().rows.map((row) => (

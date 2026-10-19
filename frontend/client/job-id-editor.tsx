@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setPurchaseOrderJobId } from "@/backend/server/serverAction";
@@ -39,7 +40,7 @@ export function JobIdEditor({
 
   return (
     <div className="grid gap-1">
-      <p className="text-xs text-muted-foreground">Job ID</p>
+      <p className="text-xs text-muted-foreground"><T>Job ID</T></p>
       <div className="flex items-center gap-2">
         <Input
           value={value}
@@ -55,13 +56,11 @@ export function JobIdEditor({
           {pending ? "Saving…" : "Save"}
         </Button>
       </div>
-      <p className="text-[0.625rem] text-muted-foreground">
-        Internal job ID for this buyer purchase order.
-      </p>
+      <p className="text-[0.625rem] text-muted-foreground"><T>Internal job ID for this buyer purchase order.</T></p>
       {saved ? (
-        <p className="text-[0.625rem] text-muted-foreground">Job ID saved.</p>
+        <p className="text-[0.625rem] text-muted-foreground"><T>Job ID saved.</T></p>
       ) : null}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
     </div>
   );
 }

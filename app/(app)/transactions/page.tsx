@@ -1,3 +1,4 @@
+import { T } from "@/frontend/client/language";
 import { getSystem } from "@/backend/server/store";
 import { requireUser } from "@/backend/server/dal";
 import { enrichTransactions } from "@/backend/server/inventory-service";
@@ -11,12 +12,8 @@ export default async function TransactionsPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Transaction log</h1>
-        <p className="text-sm text-muted-foreground">
-          Every putaway, shipment, spreadsheet import, overage, shortage, and
-          damage adjustment. Use the logbook to review whole shipments,
-          deliveries, and damage events.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Transaction log</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Every putaway, shipment, spreadsheet import, overage, shortage, and damage adjustment. Use the logbook to review whole shipments, deliveries, and damage events.</T></p>
       </div>
       <TransactionsTable initialRows={rows} />
     </div>

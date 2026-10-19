@@ -1,10 +1,11 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { PutawayWorkspace } from "@/frontend/client/putaway-workspace";
 import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
-import { formatDateTime } from "@/lib/format";
+
 import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import { buildCubingLocations } from "@/lib/cubing/capacity";
 import { Button } from "@/components/ui/button";
@@ -36,10 +37,10 @@ export default async function PutawayOrderPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-xl font-semibold">
-            Putaway {order.orderNumber}
+            <T>Putaway</T> {order.orderNumber}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {order.vendor} · received {formatDateTime(order.receivedAt)}
+            {order.vendor} · <T>received</T> <FormattedDate value={order.receivedAt} />
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -60,7 +61,7 @@ export default async function PutawayOrderPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Staged receipt</CardTitle>
+          <CardTitle><T>Staged receipt</T></CardTitle>
           <CardDescription>
             PO {order.poNumber}
             {jobIdNumber ? ` · Job ${jobIdNumber}` : ""}

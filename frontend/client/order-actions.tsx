@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -67,11 +68,9 @@ export function OrderActions({
         ) : null}
       </div>
       {canFulfill ? (
-        <p className="text-xs text-muted-foreground">
-          Completing the pick removes the ordered quantity from on-hand inventory.
-        </p>
+        <p className="text-xs text-muted-foreground"><T>Completing the pick removes the ordered quantity from on-hand inventory.</T></p>
       ) : null}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
     </div>
   );
 }

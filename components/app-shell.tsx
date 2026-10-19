@@ -24,6 +24,7 @@ import { divisionLabel } from "@/lib/divisions";
 import type { Division, PublicUser } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { LanguageRadio, T, useT } from "@/frontend/client/language";
 import { ThemeToggle } from "@/frontend/client/theme-toggle";
 import { InstallAppButton } from "@/frontend/client/pwa-install";
 import { DivisionSwitcher } from "@/frontend/client/division-switcher";
@@ -60,7 +61,11 @@ function DivisionControl({
   if (canSwitchDivision) {
     return <DivisionSwitcher division={division} />;
   }
-  return <Badge variant="outline">{divisionLabel(division)}</Badge>;
+  return (
+    <Badge variant="outline">
+      <T>{divisionLabel(division)}</T>
+    </Badge>
+  );
 }
 
 export function AppShell({
@@ -75,6 +80,7 @@ export function AppShell({
   canSwitchDivision: boolean;
 }) {
   const pathname = usePathname();
+  const t = useT();
   const items = NAV.filter((item) =>
     Array.isArray(item.permission)
       ? hasAnyPermission(user.role, item.permission)
@@ -97,19 +103,18 @@ export function AppShell({
               {user.name}
             </span>
             <Badge variant="outline" className="hidden sm:inline-flex">
-              {roleLabel(user.role)}
+              <T>{roleLabel(user.role)}</T>
             </Badge>
             <DivisionControl division={division} canSwitchDivision={canSwitchDivision} />
             <form action="/api/auth/logout" method="post">
-              <Button type="submit" variant="ghost" size="sm">
-                Sign out
-              </Button>
+              <Button type="submit" variant="ghost" size="sm"><T>Sign out</T></Button>
             </form>
+            <LanguageRadio />
           </div>
         </div>
         <div className="page-container pb-2 short:pb-1">
           <nav
-            aria-label="Main"
+            aria-label={t("Main")}
             className="scroll-touch -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1"
           >
             {items.map((item) => {
@@ -129,7 +134,7 @@ export function AppShell({
                   )}
                 >
                   <HugeiconsIcon icon={item.icon} strokeWidth={2} className="size-3.5" />
-                  {item.label}
+                  <T>{item.label}</T>
                 </Link>
               );
             })}

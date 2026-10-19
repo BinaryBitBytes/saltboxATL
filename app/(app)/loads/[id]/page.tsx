@@ -1,10 +1,11 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { hasPermission } from "@/lib/auth/permissions";
 import { photosForOwnerKind } from "@/lib/photos/query";
 import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
-import { formatDateTime } from "@/lib/format";
+
 import { DeliveryCheckIn } from "@/frontend/client/delivery-check-in";
 import { DeliveryProgressView } from "@/frontend/client/delivery-progress";
 import { PhotoProofCollector } from "@/frontend/client/photo-proof";
@@ -48,11 +49,11 @@ export default async function LoadDetailPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-xl font-semibold">
-            Load {order.shipmentNumber}
+            <T>Load</T> {order.shipmentNumber}
           </h1>
           <p className="text-sm text-muted-foreground">
             {order.customer} · {order.carrierOutbound} ·{" "}
-            {formatDateTime(order.shippedAt)}
+            <FormattedDate value={order.shippedAt} />
           </p>
         </div>
         <Badge variant="outline">{order.shipperName}</Badge>
@@ -60,12 +61,8 @@ export default async function LoadDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Check-in</CardTitle>
-          <CardDescription>
-            Scan a pallet label to check in that pallet, or a case label to
-            check in one case. Each scan stores the server time and the
-            device location when it is available.
-          </CardDescription>
+          <CardTitle><T>Check-in</T></CardTitle>
+          <CardDescription><T>Scan a pallet label to check in that pallet, or a case label to check in one case. Each scan stores the server time and the device location when it is available.</T></CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <DeliveryProgressView order={order} />
@@ -91,10 +88,8 @@ export default async function LoadDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Manifest and pack list</CardTitle>
-          <CardDescription>
-            Read-only documents for this load. Printing does not change the shipment.
-          </CardDescription>
+          <CardTitle><T>Manifest and pack list</T></CardTitle>
+          <CardDescription><T>Read-only documents for this load. Printing does not change the shipment.</T></CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <LoadManifestSheet doc={buildLoadManifest(order, locations)} />

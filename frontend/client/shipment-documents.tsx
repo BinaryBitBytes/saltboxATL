@@ -1,5 +1,6 @@
 "use client";
 
+import { T, useLocale, useT } from "@/frontend/client/language";
 import { DocumentBarcode, PrintDocument } from "@/frontend/client/print-document";
 import type {
   LoadManifestDocument,
@@ -18,18 +19,19 @@ function DocumentHeader({
   fields: Array<{ label: string; value: string }>;
   barcodeValue: string;
 }) {
+  const t = useT();
   return (
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black pb-3">
       <div>
         <p className="text-[0.65rem] font-semibold tracking-[0.16em] uppercase">
-          Saltbox · {eyebrow}
+          Saltbox · {t(eyebrow)}
         </p>
         <h2 className="mt-1 font-heading text-xl font-semibold">{title}</h2>
         <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-3">
           {fields.map((field) => (
             <div key={field.label}>
               <dt className="uppercase tracking-wide text-neutral-600">
-                {field.label}
+                <T>{field.label}</T>
               </dt>
               <dd>{field.value || "—"}</dd>
             </div>
@@ -45,13 +47,14 @@ function DocumentHeader({
 }
 
 function SignatureRow({ labels }: { labels: string[] }) {
+  const t = useT();
   return (
     <div className="mt-8 grid gap-6 sm:grid-cols-2">
       {labels.map((label) => (
         <div key={label} className="text-xs">
           <div className="h-8 border-b border-black" />
           <p className="mt-1 uppercase tracking-wide text-neutral-600">
-            {label}
+            {t(label)}
           </p>
         </div>
       ))}
@@ -60,6 +63,7 @@ function SignatureRow({ labels }: { labels: string[] }) {
 }
 
 export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
+  const locale = useLocale();
   return (
     <PrintDocument
       id={`pack-slip-${doc.shipmentId}`}
@@ -76,7 +80,7 @@ export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
             { label: "Customer", value: doc.customer },
             { label: "Carrier", value: doc.carrier },
             { label: "Shipper", value: doc.shipperName },
-            { label: "Shipped", value: formatDateTime(doc.shippedAt) },
+            { label: "Shipped", value: formatDateTime(doc.shippedAt, locale) },
             { label: "Pallets", value: String(doc.palletCount) },
             { label: "Units", value: String(doc.totalUnits) },
             {
@@ -90,20 +94,18 @@ export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
             <tr className="border-b border-black text-left">
               <th className="py-1 font-semibold">SKU</th>
               <th className="py-1 font-semibold">UPC</th>
-              <th className="py-1 font-semibold">Description</th>
-              <th className="py-1 font-semibold">Manufacturer</th>
-              <th className="py-1 font-semibold">Color</th>
-              <th className="py-1 font-semibold">Batch</th>
-              <th className="py-1 font-semibold">From</th>
-              <th className="py-1 text-right font-semibold">Qty</th>
+              <th className="py-1 font-semibold"><T>Description</T></th>
+              <th className="py-1 font-semibold"><T>Manufacturer</T></th>
+              <th className="py-1 font-semibold"><T>Color</T></th>
+              <th className="py-1 font-semibold"><T>Batch</T></th>
+              <th className="py-1 font-semibold"><T>From</T></th>
+              <th className="py-1 text-right font-semibold"><T>Qty</T></th>
             </tr>
           </thead>
           <tbody>
             {doc.lines.length === 0 ? (
               <tr>
-                <td className="py-3 text-neutral-600" colSpan={8}>
-                  No packed lines on this shipment.
-                </td>
+                <td className="py-3 text-neutral-600" colSpan={8}><T>No packed lines on this shipment.</T></td>
               </tr>
             ) : (
               doc.lines.map((line) => (
@@ -134,6 +136,7 @@ export function PackSlipSheet({ doc }: { doc: PackSlipDocument }) {
 }
 
 export function LoadManifestSheet({ doc }: { doc: LoadManifestDocument }) {
+  const locale = useLocale();
   return (
     <PrintDocument
       id={`load-manifest-${doc.shipmentId}`}
@@ -150,7 +153,7 @@ export function LoadManifestSheet({ doc }: { doc: LoadManifestDocument }) {
             { label: "Customer", value: doc.customer },
             { label: "Carrier", value: doc.carrier },
             { label: "Shipper", value: doc.shipperName },
-            { label: "Shipped", value: formatDateTime(doc.shippedAt) },
+            { label: "Shipped", value: formatDateTime(doc.shippedAt, locale) },
             { label: "Pallets", value: String(doc.totals.pallets) },
             { label: "Cases", value: String(doc.totals.cases) },
             { label: "SKUs", value: String(doc.totals.skus) },
@@ -171,11 +174,11 @@ export function LoadManifestSheet({ doc }: { doc: LoadManifestDocument }) {
               <thead>
                 <tr className="border-b border-black text-left">
                   <th className="py-1 font-semibold">SKU</th>
-                  <th className="py-1 font-semibold">Description</th>
-                  <th className="py-1 font-semibold">Manufacturer</th>
-                  <th className="py-1 font-semibold">Color</th>
-                  <th className="py-1 font-semibold">From</th>
-                  <th className="py-1 text-right font-semibold">Qty</th>
+                  <th className="py-1 font-semibold"><T>Description</T></th>
+                  <th className="py-1 font-semibold"><T>Manufacturer</T></th>
+                  <th className="py-1 font-semibold"><T>Color</T></th>
+                  <th className="py-1 font-semibold"><T>From</T></th>
+                  <th className="py-1 text-right font-semibold"><T>Qty</T></th>
                 </tr>
               </thead>
               <tbody>

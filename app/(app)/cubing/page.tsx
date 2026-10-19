@@ -1,3 +1,4 @@
+import { T } from "@/frontend/client/language";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -26,12 +27,8 @@ export default async function CubingPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Cubing</h1>
-        <p className="text-sm text-muted-foreground">
-          Receivers and inventory control cube each case as length × width × height
-          in inches, rounded up to the nearest quarter inch. That cube keeps putaway
-          and inventory from directing a quantity that is too large for a location.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Cubing</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Receivers and inventory control cube each case as length × width × height in inches, rounded up to the nearest quarter inch. That cube keeps putaway and inventory from directing a quantity that is too large for a location.</T></p>
       </div>
       <CubingWorkspace
         cubes={system.itemCubes}

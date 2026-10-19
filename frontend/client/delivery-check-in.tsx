@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -105,14 +106,14 @@ export function DeliveryCheckIn({
   return (
     <div className="grid gap-4">
       <div className="grid gap-2">
-        <p className="text-sm font-medium">Scan pallet or case label</p>
+        <p className="text-sm font-medium"><T>Scan pallet or case label</T></p>
         <ScanInput
           onScan={onScan}
           autoFocus
           placeholder="Scan the pallet or case shipping label"
         />
         {pending ? (
-          <p className="text-xs text-muted-foreground">Saving check-in…</p>
+          <p className="text-xs text-muted-foreground"><T>Saving check-in…</T></p>
         ) : null}
         {locationNote ? (
           <p className="text-xs text-muted-foreground">{locationNote}</p>
@@ -131,15 +132,13 @@ export function DeliveryCheckIn({
           />
         </Field>
         <div>
-          <Button type="submit" variant="outline" disabled={pending}>
-            Save notes
-          </Button>
+          <Button type="submit" variant="outline" disabled={pending}><T>Save notes</T></Button>
         </div>
         {noteMessage ? (
           <p className="text-xs text-muted-foreground">{noteMessage}</p>
         ) : null}
       </form>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
     </div>
   );
 }

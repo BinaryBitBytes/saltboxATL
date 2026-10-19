@@ -1,3 +1,4 @@
+import { T } from "@/frontend/client/language";
 import { getSystem } from "@/backend/server/store";
 import { requireUser } from "@/backend/server/dal";
 import { buildItemCatalog } from "@/lib/reports/item-report";
@@ -18,11 +19,8 @@ export default async function ReportsPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="font-heading text-xl font-semibold">Reports</h1>
-        <p className="text-sm text-muted-foreground">
-          Query items by SKU, UPC, purchase order, job ID, location, or
-          description, then print or export a report of the matches.
-        </p>
+        <h1 className="font-heading text-xl font-semibold"><T>Reports</T></h1>
+        <p className="text-sm text-muted-foreground"><T>Query items by SKU, UPC, purchase order, job ID, location, or description, then print or export a report of the matches.</T></p>
       </div>
       <ReportWorkspace catalog={catalog} />
     </div>

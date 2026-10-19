@@ -3,8 +3,10 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { translateNode, useLocale } from "@/frontend/client/language"
 
-function Label({ className, ...props }: React.ComponentProps<"label">) {
+function Label({ className, children, ...props }: React.ComponentProps<"label">) {
+  const locale = useLocale()
   return (
     <label
       data-slot="label"
@@ -13,7 +15,9 @@ function Label({ className, ...props }: React.ComponentProps<"label">) {
         className
       )}
       {...props}
-    />
+    >
+      {translateNode(children, locale)}
+    </label>
   )
 }
 

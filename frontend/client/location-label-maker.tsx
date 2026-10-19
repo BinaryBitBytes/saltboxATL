@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useMemo, useState } from "react";
 import type { Location, Room } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export function LocationLabelMaker({
   return (
     <Card className="print:border-0 print:shadow-none print:ring-0">
       <CardHeader className="print:hidden">
-        <CardTitle>Location label maker</CardTitle>
+        <CardTitle><T>Location label maker</T></CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-3 print:hidden sm:grid-cols-2">
@@ -60,7 +61,7 @@ export function LocationLabelMaker({
                 setSelectedIds([]);
               }}
             >
-              <option value="all">All rooms</option>
+              <option value="all"><T>All rooms</T></option>
               {rooms.map((room) => (
                 <option key={room.id} value={room.id}>
                   {room.name}
@@ -100,7 +101,7 @@ export function LocationLabelMaker({
         </div>
         <ul className="grid max-h-48 gap-1 overflow-y-auto rounded-md border border-border p-2 print:hidden">
           {filtered.length === 0 ? (
-            <li className="text-xs text-muted-foreground">No locations match.</li>
+            <li className="text-xs text-muted-foreground"><T>No locations match.</T></li>
           ) : (
             filtered.map((location) => (
               <li key={location.id}>

@@ -1,3 +1,4 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
@@ -7,7 +8,7 @@ import { PhotoProofCollector } from "@/frontend/client/photo-proof";
 import { collectKnownProducts } from "@/lib/codes/product-codes";
 import { photosForOwnerKind } from "@/lib/photos/query";
 import { hasPermission } from "@/lib/auth/permissions";
-import { formatDateTime } from "@/lib/format";
+
 import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import { JobIdEditor } from "@/frontend/client/job-id-editor";
 import { remainingExpectedPallets } from "@/lib/receiving/reopen";
@@ -42,11 +43,11 @@ export default async function ReceivingOrderPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-xl font-semibold">
-            Receiving {order.orderNumber}
+            <T>Receiving</T> {order.orderNumber}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {order.vendor} · carrier {order.carrierInbound} · received{" "}
-            {formatDateTime(order.receivedAt)}
+            {order.vendor} · <T>carrier</T> {order.carrierInbound} · <T>received</T>{" "}
+            <FormattedDate value={order.receivedAt} />
           </p>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -64,7 +65,7 @@ export default async function ReceivingOrderPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Order header</CardTitle>
+          <CardTitle><T>Order header</T></CardTitle>
           <CardDescription>PO {order.poNumber}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">

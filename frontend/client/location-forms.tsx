@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,7 +41,7 @@ function RoomForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Add room</CardTitle>
+        <CardTitle><T>Add room</T></CardTitle>
       </CardHeader>
       <CardContent>
         <form
@@ -64,7 +65,7 @@ function RoomForm() {
           <Field label="Description" htmlFor="room-description">
             <Input id="room-description" {...form.register("description")} />
           </Field>
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
           <Button type="submit" disabled={pending}>
             {pending ? "Saving…" : "Add room"}
           </Button>
@@ -92,7 +93,7 @@ function LocationForm({ rooms }: { rooms: Room[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Add location</CardTitle>
+        <CardTitle><T>Add location</T></CardTitle>
       </CardHeader>
       <CardContent>
         <form
@@ -132,7 +133,7 @@ function LocationForm({ rooms }: { rooms: Room[] }) {
             <NativeSelect {...form.register("storageClass")}>
               {STORAGE_CLASSES.map((value) => (
                 <option key={value} value={value}>
-                  {storageClassLabel(value)}
+                  <T>{storageClassLabel(value)}</T>
                 </option>
               ))}
             </NativeSelect>
@@ -153,7 +154,7 @@ function LocationForm({ rooms }: { rooms: Room[] }) {
           <Field label="Description" htmlFor="location-description">
             <Input id="location-description" {...form.register("description")} />
           </Field>
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
           <Button type="submit" disabled={pending || rooms.length === 0}>
             {pending ? "Saving…" : "Add location"}
           </Button>

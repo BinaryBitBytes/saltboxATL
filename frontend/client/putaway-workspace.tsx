@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -22,7 +23,7 @@ import { LIMITS } from "@/lib/validation/limits";
 
 function ErrorText({ error }: { error: string | null }) {
   if (!error) return null;
-  return <p className="text-xs text-destructive">{error}</p>;
+  return <p className="text-xs text-destructive"><T>{error}</T></p>;
 }
 
 export function PutawayWorkspace({
@@ -51,13 +52,10 @@ export function PutawayWorkspace({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Receiving still open</CardTitle>
+          <CardTitle><T>Receiving still open</T></CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
-          <p className="text-sm text-muted-foreground">
-            Finish checking in pallets and cases on the receiving order before
-            putaway can start.
-          </p>
+          <p className="text-sm text-muted-foreground"><T>Finish checking in pallets and cases on the receiving order before putaway can start.</T></p>
           <Button
             nativeButton={false}
             render={<Link href={`/receiving/${order.id}`} />}
@@ -71,9 +69,7 @@ export function PutawayWorkspace({
 
   if (order.status === "cancelled") {
     return (
-      <p className="text-sm text-muted-foreground">
-        This receiving order was cancelled and cannot be put away.
-      </p>
+      <p className="text-sm text-muted-foreground"><T>This receiving order was cancelled and cannot be put away.</T></p>
     );
   }
 
@@ -87,7 +83,7 @@ export function PutawayWorkspace({
         </CardHeader>
         <CardContent className="grid gap-3">
           {order.pallets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No pallets on this order.</p>
+            <p className="text-sm text-muted-foreground"><T>No pallets on this order.</T></p>
           ) : (
             order.pallets.map((pallet) => (
               <div
@@ -234,7 +230,7 @@ function PutawayCaseRow({
             value={locationId}
             onChange={(event) => setLocationId(event.target.value)}
           >
-            <option value="">Select location</option>
+            <option value=""><T>Select location</T></option>
             {roomLocations.map((location) => {
               const cube = cubeById.get(location.id);
               const open = cube
@@ -294,10 +290,7 @@ function PutawayActions({
           putaway location.
         </p>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          All cases have locations. Completing putaway adds this stock to on-hand
-          inventory.
-        </p>
+        <p className="text-sm text-muted-foreground"><T>All cases have locations. Completing putaway adds this stock to on-hand inventory.</T></p>
       )}
       <LargeInputConfirm
         total={totalUnits}

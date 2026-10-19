@@ -1,6 +1,9 @@
+"use client"
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { translateNode, useLocale } from "@/frontend/client/language"
 
 function Card({
   className,
@@ -33,23 +36,29 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+function CardTitle({ className, children, ...props }: React.ComponentProps<"div">) {
+  const locale = useLocale()
   return (
     <div
       data-slot="card-title"
       className={cn("font-heading text-sm font-medium", className)}
       {...props}
-    />
+    >
+      {translateNode(children, locale)}
+    </div>
   )
 }
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
+function CardDescription({ className, children, ...props }: React.ComponentProps<"div">) {
+  const locale = useLocale()
   return (
     <div
       data-slot="card-description"
       className={cn("text-xs/relaxed text-muted-foreground", className)}
       {...props}
-    />
+    >
+      {translateNode(children, locale)}
+    </div>
   )
 }
 

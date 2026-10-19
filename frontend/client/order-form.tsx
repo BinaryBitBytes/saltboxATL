@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -98,10 +99,8 @@ export function OrderForm({ inventory }: { inventory: OrderableInventoryRow[] })
       </Field>
 
       <div className="grid gap-2">
-        <h2 className="text-sm font-medium">Order against on-hand inventory</h2>
-        <p className="text-xs text-muted-foreground">
-          Available quantity is on hand minus units already reserved by open orders.
-        </p>
+        <h2 className="text-sm font-medium"><T>Order against on-hand inventory</T></h2>
+        <p className="text-xs text-muted-foreground"><T>Available quantity is on hand minus units already reserved by open orders.</T></p>
         <ScanInput
           onScan={(payload) => {
             const hit = orderable.find((row) => matchesScan(row, payload));
@@ -123,19 +122,17 @@ export function OrderForm({ inventory }: { inventory: OrderableInventoryRow[] })
             <thead className="border-b text-left">
               <tr>
                 <th className="px-2 py-2 font-medium">SKU</th>
-                <th className="px-2 py-2 font-medium">Location</th>
-                <th className="px-2 py-2 font-medium">On hand</th>
-                <th className="px-2 py-2 font-medium">Reserved</th>
-                <th className="px-2 py-2 font-medium">Available</th>
-                <th className="px-2 py-2 font-medium">Order qty</th>
+                <th className="px-2 py-2 font-medium"><T>Location</T></th>
+                <th className="px-2 py-2 font-medium"><T>On hand</T></th>
+                <th className="px-2 py-2 font-medium"><T>Reserved</T></th>
+                <th className="px-2 py-2 font-medium"><T>Available</T></th>
+                <th className="px-2 py-2 font-medium"><T>Order qty</T></th>
               </tr>
             </thead>
             <tbody>
               {orderable.length === 0 ? (
                 <tr>
-                  <td className="px-2 py-3 text-muted-foreground" colSpan={6}>
-                    Nothing is available to order. On-hand stock is empty or already reserved.
-                  </td>
+                  <td className="px-2 py-3 text-muted-foreground" colSpan={6}><T>Nothing is available to order. On-hand stock is empty or already reserved.</T></td>
                 </tr>
               ) : (
                 orderable.map((row) => (
@@ -175,7 +172,7 @@ export function OrderForm({ inventory }: { inventory: OrderableInventoryRow[] })
         </div>
       </div>
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
       <LargeInputConfirm
         total={orderTotal}
         threshold={LIMITS.largePickTotal}

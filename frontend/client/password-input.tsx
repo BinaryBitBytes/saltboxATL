@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
+import { useT } from "@/frontend/client/language";
 import { inputClassName } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ export function PasswordInput({
   onChange?: (value: string) => void;
 }) {
   const [visible, setVisible] = useState(false);
+  const t = useT();
 
   return (
     <div className="relative">
@@ -44,7 +46,7 @@ export function PasswordInput({
       <button
         type="button"
         className="absolute top-1/2 right-0.5 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={t(visible ? "Hide password" : "Show password")}
         aria-pressed={visible}
         aria-controls={id}
         onClick={() => setVisible((current) => !current)}

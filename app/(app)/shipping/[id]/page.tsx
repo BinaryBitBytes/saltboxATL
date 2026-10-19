@@ -1,3 +1,4 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import { notFound } from "next/navigation";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
@@ -12,7 +13,7 @@ import { DeliveryProgressView } from "@/frontend/client/delivery-progress";
 import { buildOutboundLabels } from "@/lib/labels/build-labels";
 import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
 import { photosForOwner } from "@/lib/photos/query";
-import { formatCaseItemLine, formatDateTime, formatPalletHeading } from "@/lib/format";
+import { formatCaseItemLine, formatPalletHeading } from "@/lib/format";
 import {
   Card,
   CardContent,
@@ -49,11 +50,11 @@ export default async function ShippingOrderPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-xl font-semibold">
-            Shipment {order.shipmentNumber}
+            <T>Shipment</T> {order.shipmentNumber}
           </h1>
           <p className="text-sm text-muted-foreground">
             {order.customer} · {order.carrierOutbound} ·{" "}
-            {formatDateTime(order.shippedAt)}
+            <FormattedDate value={order.shippedAt} />
           </p>
         </div>
         <ShippingStatusBadge status={order.status} />
@@ -61,10 +62,8 @@ export default async function ShippingOrderPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Delivery check-in</CardTitle>
-          <CardDescription>
-            Driver scans and proof of delivery. Warehouse shipping does not edit this log.
-          </CardDescription>
+          <CardTitle><T>Delivery check-in</T></CardTitle>
+          <CardDescription><T>Driver scans and proof of delivery. Warehouse shipping does not edit this log.</T></CardDescription>
         </CardHeader>
         <CardContent>
           <DeliveryProgressView order={order} />
@@ -73,7 +72,7 @@ export default async function ShippingOrderPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Shipment header</CardTitle>
+          <CardTitle><T>Shipment header</T></CardTitle>
           <CardDescription>Associate {order.shipperName}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
@@ -106,10 +105,8 @@ export default async function ShippingOrderPage({
 
       <Card className="print:border-0 print:shadow-none print:ring-0">
         <CardHeader className="print:hidden">
-          <CardTitle>Packing slip</CardTitle>
-          <CardDescription>
-            Customer packing list of SKUs, quantities, and source bins.
-          </CardDescription>
+          <CardTitle><T>Packing slip</T></CardTitle>
+          <CardDescription><T>Customer packing list of SKUs, quantities, and source bins.</T></CardDescription>
         </CardHeader>
         <CardContent>
           <PackSlipSheet doc={packSlip} />
@@ -118,10 +115,8 @@ export default async function ShippingOrderPage({
 
       <Card className="print:border-0 print:shadow-none print:ring-0">
         <CardHeader className="print:hidden">
-          <CardTitle>Load manifest</CardTitle>
-          <CardDescription>
-            Dock copy of pallets going on this outbound load.
-          </CardDescription>
+          <CardTitle><T>Load manifest</T></CardTitle>
+          <CardDescription><T>Dock copy of pallets going on this outbound load.</T></CardDescription>
         </CardHeader>
         <CardContent>
           <LoadManifestSheet doc={manifest} />
@@ -130,10 +125,8 @@ export default async function ShippingOrderPage({
 
       <Card className="print:border-0 print:shadow-none print:ring-0">
         <CardHeader className="print:hidden">
-          <CardTitle>Outbound freight labels</CardTitle>
-          <CardDescription>
-            Print after picking so the dock can scan this shipment.
-          </CardDescription>
+          <CardTitle><T>Outbound freight labels</T></CardTitle>
+          <CardDescription><T>Print after picking so the dock can scan this shipment.</T></CardDescription>
         </CardHeader>
         <CardContent>
           <LabelPrintSheet

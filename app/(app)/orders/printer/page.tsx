@@ -1,3 +1,4 @@
+import { FormattedDate, T } from "@/frontend/client/language";
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
@@ -12,7 +13,7 @@ import {
   type OrderBatchView,
 } from "@/frontend/client/order-documents";
 import type { CustomerOrder } from "@/lib/inventory-schema";
-import { formatDateTime } from "@/lib/format";
+
 import { Button } from "@/components/ui/button";
 
 function toBatch(
@@ -61,11 +62,7 @@ export default async function WarehousePrinterPage() {
           <h1 className="font-heading text-xl font-semibold">
             Label printer {printerName}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Submitted orders release a batch here automatically: one label per
-            item, a pack slip, and a loading sheet. Printing this queue is what
-            the warehouse pick request is tied to.
-          </p>
+          <p className="text-sm text-muted-foreground"><T>Submitted orders release a batch here automatically: one label per item, a pack slip, and a loading sheet. Printing this queue is what the warehouse pick request is tied to.</T></p>
         </div>
         <Button variant="outline" nativeButton={false} render={<Link href="/orders" />}>
           Orders
@@ -78,9 +75,9 @@ export default async function WarehousePrinterPage() {
       />
 
       <div className="grid gap-2 print:hidden">
-        <h2 className="text-sm font-medium">Recently printed</h2>
+        <h2 className="text-sm font-medium"><T>Recently printed</T></h2>
         {printed.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No batches printed on this station yet.</p>
+          <p className="text-sm text-muted-foreground"><T>No batches printed on this station yet.</T></p>
         ) : (
           <ul className="grid gap-2 text-sm">
             {printed.map((order) => (
@@ -91,7 +88,7 @@ export default async function WarehousePrinterPage() {
                 <span className="text-muted-foreground">
                   {" "}
                   · {order.customer} · pick {order.pickRequest.requestNumber} ·{" "}
-                  {formatDateTime(order.printBatch.printedAt ?? undefined)}
+                  <FormattedDate value={order.printBatch.printedAt ?? undefined} />
                 </span>
               </li>
             ))}

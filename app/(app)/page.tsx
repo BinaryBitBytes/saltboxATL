@@ -1,3 +1,5 @@
+import { FormattedDate, T } from "@/frontend/client/language";
+import { getTranslator } from "@/lib/i18n/server";
 import Link from "next/link";
 import { getSystem } from "@/backend/server/store";
 import { requireUser } from "@/backend/server/dal";
@@ -20,10 +22,11 @@ import {
   ReceivingStatusBadge,
   TransactionTypeBadge,
 } from "@/frontend/client/status-badge";
-import { formatDateTime, formatSignedInt, uniqueSkuCount } from "@/lib/format";
+import { formatSignedInt, uniqueSkuCount } from "@/lib/format";
 import { emptyActiveLocations } from "@/lib/locations/availability";
 
 export default async function Home() {
+  const { t } = await getTranslator();
   const user = await requireUser();
   const division = await resolveActiveDivision();
   const system = await getSystem();
@@ -82,9 +85,9 @@ export default async function Home() {
     <div className="grid gap-4 sm:gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="font-heading text-lg font-semibold sm:text-xl">Dashboard</h1>
+          <h1 className="font-heading text-lg font-semibold sm:text-xl"><T>Dashboard</T></h1>
           <p className="text-sm text-muted-foreground">
-            {divisionLabel(division)}. {subtitle}
+            <T>{divisionLabel(division)}</T>. <T>{subtitle}</T>
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -196,10 +199,8 @@ export default async function Home() {
       {forecast ? (
         <Card>
           <CardHeader>
-            <CardTitle>Expected inbound</CardTitle>
-            <CardDescription>
-              Buyer POs still on the way, grouped for the dock
-            </CardDescription>
+            <CardTitle><T>Expected inbound</T></CardTitle>
+            <CardDescription><T>Buyer POs still on the way, grouped for the dock</T></CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
             {forecast.rows.filter((row) =>
@@ -207,9 +208,7 @@ export default async function Home() {
               row.derivedStatus === "in-transit" ||
               row.derivedStatus === "receiving",
             ).length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No upcoming buyer purchase orders.
-              </p>
+              <p className="text-sm text-muted-foreground"><T>No upcoming buyer purchase orders.</T></p>
             ) : (
               forecast.rows
                 .filter((row) =>
@@ -240,12 +239,12 @@ export default async function Home() {
       {canDrive ? (
         <Card>
           <CardHeader>
-            <CardTitle>Loads</CardTitle>
-            <CardDescription>Manifests waiting for delivery check-in</CardDescription>
+            <CardTitle><T>Loads</T></CardTitle>
+            <CardDescription><T>Manifests waiting for delivery check-in</T></CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
             {loads.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active loads.</p>
+              <p className="text-sm text-muted-foreground"><T>No active loads.</T></p>
             ) : (
               loads.slice(0, 6).map(({ order, progress }) => (
                 <Link
@@ -271,14 +270,12 @@ export default async function Home() {
           {canReceive ? (
             <Card>
               <CardHeader>
-                <CardTitle>Open receiving</CardTitle>
-                <CardDescription>Inbound orders still being checked in</CardDescription>
+                <CardTitle><T>Open receiving</T></CardTitle>
+                <CardDescription><T>Inbound orders still being checked in</T></CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2">
                 {openReceiving.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No open receiving orders.
-                  </p>
+                  <p className="text-sm text-muted-foreground"><T>No open receiving orders.</T></p>
                 ) : (
                   openReceiving.slice(0, 6).map((order) => (
                     <Link
@@ -303,14 +300,12 @@ export default async function Home() {
           {canPutaway ? (
             <Card>
               <CardHeader>
-                <CardTitle>Awaiting putaway</CardTitle>
-                <CardDescription>Received cases waiting for a bin</CardDescription>
+                <CardTitle><T>Awaiting putaway</T></CardTitle>
+                <CardDescription><T>Received cases waiting for a bin</T></CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2">
                 {awaitingPutaway.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No orders are waiting for putaway.
-                  </p>
+                  <p className="text-sm text-muted-foreground"><T>No orders are waiting for putaway.</T></p>
                 ) : (
                   awaitingPutaway.slice(0, 6).map((order) => (
                     <Link
@@ -338,14 +333,12 @@ export default async function Home() {
         <div className="grid gap-4 sm:gap-6 min-[56rem]:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>On-hand snapshot</CardTitle>
-              <CardDescription>Highest quantities first</CardDescription>
+              <CardTitle><T>On-hand snapshot</T></CardTitle>
+              <CardDescription><T>Highest quantities first</T></CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2 text-sm">
               {inventory.length === 0 ? (
-                <p className="text-muted-foreground">
-                  Inventory is empty until putaway is completed.
-                </p>
+                <p className="text-muted-foreground"><T>Inventory is empty until putaway is completed.</T></p>
               ) : (
                 [...inventory]
                   .sort((a, b) => b.quantity - a.quantity)
@@ -371,8 +364,8 @@ export default async function Home() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Empty locations</CardTitle>
-              <CardDescription>Active bins with no on-hand quantity</CardDescription>
+              <CardTitle><T>Empty locations</T></CardTitle>
+              <CardDescription><T>Active bins with no on-hand quantity</T></CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2 text-sm">
               {availableLocations.length === 0 ? (
@@ -394,15 +387,15 @@ export default async function Home() {
                         · {location.roomName}
                       </span>
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      empty
-                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground"><T>empty</T></span>
                   </div>
                 ))
               )}
               {availableLocations.length > 8 ? (
                 <p className="text-xs text-muted-foreground">
-                  +{availableLocations.length - 8} more empty locations
+                  {t("{{count}} more empty locations", {
+                    count: availableLocations.length - 8,
+                  })}
                 </p>
               ) : null}
             </CardContent>
@@ -414,8 +407,8 @@ export default async function Home() {
         <Card>
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle>Recent transactions</CardTitle>
-              <CardDescription>Putaway, shipping, and adjustments</CardDescription>
+              <CardTitle><T>Recent transactions</T></CardTitle>
+              <CardDescription><T>Putaway, shipping, and adjustments</T></CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button nativeButton={false} variant="ghost" render={<Link href="/logbook" />}>
@@ -428,9 +421,7 @@ export default async function Home() {
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
             {transactions.length === 0 ? (
-              <p className="text-muted-foreground">
-                No stock movements yet. Complete putaway or post an adjustment.
-              </p>
+              <p className="text-muted-foreground"><T>No stock movements yet. Complete putaway or post an adjustment.</T></p>
             ) : (
               transactions.slice(0, 8).map((entry) => (
                 <div
@@ -441,7 +432,7 @@ export default async function Home() {
                     {entry.sku}
                     <span className="text-muted-foreground">
                       {" "}
-                      · {entry.locationCode} · {formatDateTime(entry.occurredAt)}
+                      · {entry.locationCode} · <FormattedDate value={entry.occurredAt} />
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">

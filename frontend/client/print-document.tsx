@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PrinterIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/frontend/client/language";
 import { printNamedDocument } from "@/frontend/client/print";
 
 export function DocumentBarcode({
@@ -15,6 +16,7 @@ export function DocumentBarcode({
 }) {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const barcodeId = useId().replace(/:/g, "");
+  const t = useT();
 
   useEffect(() => {
     const svg = barcodeRef.current;
@@ -36,7 +38,7 @@ export function DocumentBarcode({
       ref={barcodeRef}
       id={`doc-barcode-${barcodeId}`}
       role="img"
-      aria-label={label}
+      aria-label={t(label)}
       className="max-w-full text-black"
     />
   );
@@ -57,18 +59,19 @@ export function PrintDocument({
   layout?: "document" | "labels";
   children: ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <div>
-          <p className="text-sm font-medium">{title}</p>
+          <p className="text-sm font-medium">{t(title)}</p>
           {description ? (
-            <p className="text-xs text-muted-foreground">{description}</p>
+            <p className="text-xs text-muted-foreground">{t(description)}</p>
           ) : null}
         </div>
         <Button type="button" onClick={() => printNamedDocument(id)}>
           <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
-          {buttonLabel}
+          {t(buttonLabel)}
         </Button>
       </div>
       <div

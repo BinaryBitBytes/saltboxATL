@@ -1,5 +1,6 @@
 "use client";
 
+import { T, useLocale, useT } from "@/frontend/client/language";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -27,17 +28,20 @@ function SheetHeader({
   barcodeValue: string;
   fields: Array<{ label: string; value: string }>;
 }) {
+  const t = useT();
   return (
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black pb-3">
       <div>
         <p className="text-[0.65rem] font-semibold tracking-[0.16em] uppercase">
-          Saltbox · {eyebrow}
+          Saltbox · {t(eyebrow)}
         </p>
         <h2 className="mt-1 font-heading text-xl font-semibold">{title}</h2>
         <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-3">
           {fields.map((field) => (
             <div key={field.label}>
-              <dt className="uppercase tracking-wide text-neutral-600">{field.label}</dt>
+              <dt className="uppercase tracking-wide text-neutral-600">
+                <T>{field.label}</T>
+              </dt>
               <dd>{field.value || "—"}</dd>
             </div>
           ))}
@@ -49,6 +53,7 @@ function SheetHeader({
 }
 
 export function OrderPackSlipSheet({ doc }: { doc: OrderPackSlip }) {
+  const locale = useLocale();
   return (
     <article className="grid gap-4 text-sm text-black">
       <SheetHeader
@@ -58,7 +63,7 @@ export function OrderPackSlipSheet({ doc }: { doc: OrderPackSlip }) {
         fields={[
           { label: "Customer", value: doc.customer },
           { label: "Placed by", value: doc.placedBy },
-          { label: "Submitted", value: formatDateTime(doc.submittedAt) },
+          { label: "Submitted", value: formatDateTime(doc.submittedAt, locale) },
           { label: "Lines", value: String(doc.totalLines) },
           { label: "SKUs", value: String(doc.skuCount) },
           { label: "Units", value: String(doc.totalUnits) },
@@ -69,9 +74,9 @@ export function OrderPackSlipSheet({ doc }: { doc: OrderPackSlip }) {
           <tr className="border-b border-black text-left">
             <th className="py-1 font-semibold">SKU</th>
             <th className="py-1 font-semibold">UPC</th>
-            <th className="py-1 font-semibold">Description</th>
-            <th className="py-1 font-semibold">From</th>
-            <th className="py-1 text-right font-semibold">Qty</th>
+            <th className="py-1 font-semibold"><T>Description</T></th>
+            <th className="py-1 font-semibold"><T>From</T></th>
+            <th className="py-1 text-right font-semibold"><T>Qty</T></th>
           </tr>
         </thead>
         <tbody>
@@ -92,6 +97,7 @@ export function OrderPackSlipSheet({ doc }: { doc: OrderPackSlip }) {
 }
 
 export function OrderLoadingSheetView({ doc }: { doc: OrderLoadingSheet }) {
+  const locale = useLocale();
   return (
     <article className="grid gap-4 text-sm text-black">
       <SheetHeader
@@ -103,7 +109,7 @@ export function OrderLoadingSheetView({ doc }: { doc: OrderLoadingSheet }) {
           { label: "Pick", value: doc.pickRequestNumber },
           { label: "Printer", value: doc.printerName },
           { label: "Placed by", value: doc.placedBy },
-          { label: "Submitted", value: formatDateTime(doc.submittedAt) },
+          { label: "Submitted", value: formatDateTime(doc.submittedAt, locale) },
           { label: "Locations", value: String(doc.totals.locations) },
           { label: "Lines", value: String(doc.totals.lines) },
           { label: "Units", value: String(doc.totals.units) },
@@ -121,8 +127,8 @@ export function OrderLoadingSheetView({ doc }: { doc: OrderLoadingSheet }) {
             <thead>
               <tr className="border-b border-black text-left">
                 <th className="py-1 font-semibold">SKU</th>
-                <th className="py-1 font-semibold">Description</th>
-                <th className="py-1 text-right font-semibold">Qty</th>
+                <th className="py-1 font-semibold"><T>Description</T></th>
+                <th className="py-1 text-right font-semibold"><T>Qty</T></th>
               </tr>
             </thead>
             <tbody>
@@ -193,9 +199,7 @@ export function OrderPrintBatch({
             and loading sheet for {batch.printerName}.
           </p>
           <Button type="button" variant="outline" onClick={() => printNamedDocument(printId)}>
-            <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
-            Reprint batch
-          </Button>
+            <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} /><T>Reprint batch</T></Button>
         </div>
       ) : null}
       <div
@@ -255,9 +259,7 @@ export function WarehousePrinterQueue({
           {jobs.length} batch{jobs.length === 1 ? "" : "es"} printing to {printerName}.
         </p>
         <Button type="button" onClick={() => printNamedDocument("warehouse-label-queue")}>
-          <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
-          Print queue
-        </Button>
+          <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} /><T>Print queue</T></Button>
       </div>
       <div
         data-print-root="warehouse-label-queue"

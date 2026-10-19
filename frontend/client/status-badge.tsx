@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/frontend/client/language";
 import { Badge } from "@/components/ui/badge";
 import type {
   InventoryTransactionType,
@@ -41,7 +42,7 @@ export function ReceivingStatusBadge({
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
       <Badge variant={receivingVariant[status]}>{status}</Badge>
-      {isPartialed ? <Badge variant="outline">partialed</Badge> : null}
+      {isPartialed ? <Badge variant="outline"><T>partialed</T></Badge> : null}
     </span>
   );
 }
