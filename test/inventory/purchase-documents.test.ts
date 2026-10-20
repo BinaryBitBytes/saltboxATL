@@ -208,12 +208,15 @@ describe("purchase document recognition", () => {
     const storedText = extractPdfText(stored);
     expect(stored.byteLength).to.equal(bytes.byteLength);
     expect(storedText).to.include("C9300-24P");
+    expect(storedText).to.include("Catalyst 24 port");
     expect(storedText).to.include("Corning");
     expect(storedText).to.include("Morgan Coordinator");
+    expect(storedText).to.match(/\bRate\b/);
+    expect(storedText).to.match(/\bAmount\b/);
+    expect(storedText).to.include("#####");
+    expect(storedText).to.include("######");
     expect(storedText).to.not.include("12.50");
     expect(storedText).to.not.include("$48.00");
-    expect(storedText).to.not.match(/\bRate\b/);
-    expect(storedText).to.not.match(/\bAmount\b/);
 
     const orders: PurchaseOrder[] = [];
     const created = applyRecognizedPurchase(orders, recognized, {
@@ -255,6 +258,53 @@ describe("purchase document recognition", () => {
     expect(JSON.stringify(load)).to.not.include("12.50");
     expect(JSON.stringify(load)).to.not.include("$48.00");
     expect(JSON.stringify(buildInboundForecast(orders, receiving))).to.not.include("$");
+  });
+
+  it("keeps column order and does not turn the following prose into a line", async () => {
+    const bytes = pdfDocument([
+      "Vendor:",
+      "Corning",
+      "PO Number: PO-100",
+      "Ship To:",
+      "Saltbox ATL",
+      "Line Description MPN Qty Amount Rate",
+      "1 Catalyst 24 port C9300-24P 4 $48.00 12.50",
+      "Please deliver to dock 4 by 10.00",
+    ]);
+    const recognized = await recognizePurchasePdf(bytes, { vision: null });
+    expect(recognized.vendor).to.equal("Corning");
+    expect(recognized.shipTo).to.equal("Saltbox ATL");
+    expect(recognized.lines).to.have.length(1);
+    expect(recognized.lines[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantity: 4,
+      unitPrice: "12.50",
+      extendedPrice: "$48.00",
+    });
+    expect(JSON.stringify(recognized.lines)).to.not.include("Please");
+    expect(JSON.stringify(recognized.lines)).to.not.include("deliver");
+  });
+
+  it("masks numeric prices inside readable text and leaves other PDF bytes unchanged", () => {
+    const readable = pdfDocument([
+      "MPN Description Qty Rate Amount",
+      "C9300-24P Catalyst 24 port 4 12.50 $48.00",
+    ]);
+    const binary = `(${"\u0001\u0002\u0003"}12.50${"\u0004\u0005\u0006"})`;
+    const raw = Buffer.from(readable).toString("latin1").replace("%%EOF", `${binary}\n%%EOF`);
+    const bytes = new Uint8Array(Buffer.from(raw, "latin1"));
+    const stored = blackOutPricingColumns(bytes, ["12.50", "$48.00", "Rate", "Amount"]);
+    const storedRaw = Buffer.from(stored).toString("latin1");
+    expect(stored.byteLength).to.equal(bytes.byteLength);
+    expect(storedRaw).to.include(binary);
+    const storedText = extractPdfText(stored);
+    expect(storedText).to.match(/\bRate\b/);
+    expect(storedText).to.match(/\bAmount\b/);
+    expect(storedText).to.include("C9300-24P");
+    expect(storedText).to.include("Catalyst 24 port");
+    expect(storedText).to.not.include("12.50");
+    expect(storedText).to.not.include("$48.00");
   });
 
   it("drops Rate and Amount values when recognized lines are written to the inbound form", () => {

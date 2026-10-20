@@ -177,7 +177,7 @@ export function stageExpectedReceivingOrder(
   if (open) return open;
   const created = buildExpectedInboundLoad({
     ...input,
-    notes: "Expected contents from the purchase PDF after Rate and Amount were blacked out.",
+    notes: "Expected contents from the purchase PDF. Rate and Amount numbers are masked.",
   });
   receivingOrders.unshift(created);
   return created;

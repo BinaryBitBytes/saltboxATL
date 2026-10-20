@@ -29,15 +29,7 @@ export function applyRecognizedPurchase(
       ? incoming
       : existing?.lines && existing.lines.length > 0
         ? existing.lines
-        : [
-            {
-              id: input.nextLineId(),
-              sku: "",
-              upc: "",
-              description: "See attached purchase order",
-              quantity: 1,
-            },
-          ];
+        : [];
   const status =
     existing?.expectationStatus === "cancelled" ||
     existing?.expectationStatus === "in-transit"

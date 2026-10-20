@@ -26,37 +26,32 @@ export function redactPdfBytes(bytes: Uint8Array): Uint8Array {
   return new Uint8Array(Buffer.from(redacted, "latin1"));
 }
 
-const PRICING_COLUMN_HEADERS = [
-  "Extended Amount",
-  "Line Amount",
-  "Unit Price",
-  "Unit Rate",
-  "Ext Amount",
-  "Amount",
-  "Rate",
-];
+const PRICE_VALUE = /^\$?\d{1,3}(?:,\d{3})*(?:\.\d{2})$/;
 
-/** Column headers plus the Rate and Amount cell values that must be masked. */
+/** Numeric Rate and Price/Amount cell values. Header words are not included. */
 export function pricingBlackoutTokens(
   lines: ReadonlyArray<{ unitPrice?: string | null; extendedPrice?: string | null }>,
 ): string[] {
-  const tokens = [...PRICING_COLUMN_HEADERS];
+  const tokens: string[] = [];
   for (const line of lines) {
-    const rate = line.unitPrice?.trim();
-    const amount = line.extendedPrice?.trim();
-    if (rate) tokens.push(rate);
-    if (amount) tokens.push(amount);
+    const rate = line.unitPrice?.trim() ?? "";
+    const amount = line.extendedPrice?.trim() ?? "";
+    if (PRICE_VALUE.test(rate)) tokens.push(rate);
+    if (PRICE_VALUE.test(amount)) tokens.push(amount);
   }
   return tokens;
 }
 
 /**
- * Black out Rate and Amount text inside PDF string literals before the file is stored.
+ * Mask only the numeric Rate and Price/Amount values inside readable PDF text.
+ * Other words, and bytes that are not readable text, stay as they are.
  * Replacements keep the same byte length so the PDF cross-reference table stays valid.
  */
 export function blackOutPricingColumns(bytes: Uint8Array, tokens: readonly string[]): Uint8Array {
+  const prices = tokens.map((token) => token.trim()).filter((token) => PRICE_VALUE.test(token));
+  if (prices.length === 0) return bytes;
   const raw = Buffer.from(bytes).toString("latin1");
-  const masked = maskPdfLiterals(raw, tokens);
+  const masked = maskPdfLiterals(raw, prices);
   return new Uint8Array(Buffer.from(masked, "latin1"));
 }
 
@@ -88,12 +83,17 @@ function maskPdfLiterals(raw: string, tokens: readonly string[]): string {
     }
     const encoded = raw.slice(index + 1, end);
     const decoded = decodePdfLiteral(encoded);
+    if (!isMostlyText(decoded)) {
+      out += raw.slice(index, end + 1);
+      index = end;
+      continue;
+    }
     const masked = maskTokens(decoded, removable);
     const reencoded = encodePdfLiteral(masked);
-    if (reencoded.length === encoded.length) {
+    if (masked !== decoded && reencoded.length === encoded.length) {
       out += `(${reencoded})`;
     } else {
-      out += `(${encoded})`;
+      out += raw.slice(index, end + 1);
     }
     index = end;
   }

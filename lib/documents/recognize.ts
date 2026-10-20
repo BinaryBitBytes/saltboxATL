@@ -214,7 +214,8 @@ function parseLines(text: string): RecognizedLine[] {
     pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
     consumed.add(index);
   });
-  for (const tableLine of parseTableLines(rows, consumed)) {
+  const table = parseTableLines(rows, consumed);
+  for (const tableLine of table.lines) {
     pushLine(
       lines,
       tableLine.sku,
@@ -229,8 +230,10 @@ function parseLines(text: string): RecognizedLine[] {
   for (const match of remainder.matchAll(LINE_PATTERN)) {
     pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
   }
-  for (const match of remainder.matchAll(ROW_PATTERN)) {
-    pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
+  if (!table.found) {
+    for (const match of remainder.matchAll(ROW_PATTERN)) {
+      pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
+    }
   }
   return lines;
 }
@@ -239,81 +242,157 @@ const HEADER_PHRASES = [
   "manufacturer part number",
   "item description",
   "extended amount",
+  "extended price",
   "line amount",
+  "item number",
+  "line number",
   "unit price",
   "unit rate",
   "ext amount",
+  "ext price",
+  "item no",
+  "line no",
   "description",
   "quantity",
   "amount",
+  "price",
+  "total",
   "rate",
+  "item",
+  "line",
   "mpn",
   "sku",
   "upc",
   "qty",
+  "ln",
+  "no",
 ] as const;
 
-function parseTableLines(rows: string[], consumed: Set<number>): RecognizedLine[] {
-  const headerIndex = rows.findIndex((row, index) => !consumed.has(index) && headerCells(row));
-  if (headerIndex < 0) return [];
-  const columns = headerCells(rows[headerIndex]);
-  if (!columns) return [];
+type ColumnRole =
+  | "mpn"
+  | "sku"
+  | "upc"
+  | "description"
+  | "quantity"
+  | "rate"
+  | "amount"
+  | "index";
+
+const SKU_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/;
+const UPC_TOKEN = /^[A-Za-z0-9-]{1,32}$/;
+const LINE_NO = /^\d{1,4}$/;
+
+function parseTableLines(
+  rows: string[],
+  consumed: Set<number>,
+): { found: boolean; lines: RecognizedLine[] } {
+  const headerIndex = rows.findIndex((row, index) => !consumed.has(index) && headerRoles(row));
+  if (headerIndex < 0) return { found: false, lines: [] };
+  const roles = headerRoles(rows[headerIndex]);
+  if (!roles) return { found: false, lines: [] };
   consumed.add(headerIndex);
   const lines: RecognizedLine[] = [];
   for (let index = headerIndex + 1; index < rows.length; index += 1) {
     if (consumed.has(index)) continue;
     const row = rows[index].trim();
     if (!row) continue;
-    if (isNextField(row) || headerCells(row)) break;
-    const parsed = looseTableRow(row, columns);
-    if (!parsed) continue;
+    if (isNextField(row) || headerRoles(row)) break;
+    const parsed = alignedTableRow(row, roles);
+    if (!parsed) break;
     lines.push(parsed);
     consumed.add(index);
   }
-  return lines;
+  return { found: true, lines };
 }
 
-function headerCells(row: string): {
-  mpn: number;
-  sku: number;
-  upc: number;
-  description: number;
-  quantity: number;
-  rate: number;
-  amount: number;
-} | null {
+function headerRoles(row: string): ColumnRole[] | null {
   const cells = splitHeader(row);
   if (!cells) return null;
-  const normalized = cells.map(normalizeHeader);
-  const at = (names: string[]) => normalized.findIndex((cell) => names.includes(cell));
-  const columns = {
-    mpn: at(["mpn", "manufacturer part number"]),
-    sku: at(["sku"]),
-    upc: at(["upc"]),
-    description: at(["description", "item description"]),
-    quantity: at(["qty", "quantity"]),
-    rate: at(["rate", "unit rate", "unit price"]),
-    amount: at(["amount", "line amount", "ext amount", "extended amount"]),
-  };
-  if (columns.quantity < 0) return null;
-  if (columns.mpn < 0 && columns.sku < 0 && columns.description < 0) return null;
-  return columns;
+  const raw = cells.map(roleForHeader);
+  if (raw.some((role) => role == null)) return null;
+  const named = raw as Array<ColumnRole | "item">;
+  const hasPart = named.includes("mpn") || named.includes("sku");
+  let skuSeen = hasPart;
+  const roles: ColumnRole[] = named.map((role) => {
+    if (role !== "item") return role;
+    if (!skuSeen) {
+      skuSeen = true;
+      return "sku";
+    }
+    return "index";
+  });
+  if (!roles.includes("quantity")) return null;
+  if (!roles.some((role) => role === "mpn" || role === "sku" || role === "description")) {
+    return null;
+  }
+  return roles;
+}
+
+function roleForHeader(cell: string): ColumnRole | "item" | null {
+  switch (normalizeHeader(cell)) {
+    case "mpn":
+    case "manufacturer part number":
+      return "mpn";
+    case "sku":
+      return "sku";
+    case "upc":
+      return "upc";
+    case "description":
+    case "item description":
+      return "description";
+    case "qty":
+    case "quantity":
+      return "quantity";
+    case "rate":
+    case "unit rate":
+    case "unit price":
+    case "price":
+      return "rate";
+    case "amount":
+    case "line amount":
+    case "ext amount":
+    case "extended amount":
+    case "ext price":
+    case "extended price":
+    case "total":
+      return "amount";
+    case "line":
+    case "line no":
+    case "line number":
+    case "ln":
+    case "no":
+      return "index";
+    case "item":
+    case "item no":
+    case "item number":
+      return "item";
+    default:
+      return null;
+  }
 }
 
 function splitHeader(row: string): string[] | null {
   const wide = splitWide(row);
-  if (wide.length >= 3 && wide.every((cell) => HEADER_PHRASES.includes(normalizeHeader(cell) as (typeof HEADER_PHRASES)[number]))) {
+  if (
+    wide.length >= 3 &&
+    wide.every((cell) => roleForHeader(cell) != null)
+  ) {
     return wide;
   }
-  const words = row.trim().split(/\s+/).filter(Boolean);
+  const words = row
+    .trim()
+    .split(/\s+/)
+    .filter((word) => normalizeHeader(word) !== "");
   const cells: string[] = [];
   for (let index = 0; index < words.length; ) {
     const phrase = HEADER_PHRASES.find((candidate) => {
       const parts = candidate.split(" ");
-      return words
-        .slice(index, index + parts.length)
-        .map(normalizeHeader)
-        .join(" ") === candidate;
+      return (
+        words
+          .slice(index, index + parts.length)
+          .map(normalizeHeader)
+          .join(" ") === candidate
+      );
     });
     if (!phrase) return null;
     cells.push(phrase);
@@ -328,54 +407,59 @@ function splitWide(row: string): string[] {
   return row.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean);
 }
 
-function looseTableRow(
-  row: string,
-  columns: NonNullable<ReturnType<typeof headerCells>>,
-): RecognizedLine | null {
+function alignedTableRow(row: string, roles: ColumnRole[]): RecognizedLine | null {
   const wide = splitWide(row);
-  if (wide.length >= 3) {
-    return rowFromCells(wide, columns);
+  const atomic = wide.length === roles.length;
+  const tokens = atomic ? wide : row.split(/\s+/).filter(Boolean);
+  const descriptionColumns = roles.filter((role) => role === "description").length;
+  if (descriptionColumns > 1) return null;
+  if (atomic || descriptionColumns === 0) {
+    if (tokens.length !== roles.length) return null;
+  } else if (tokens.length < roles.length) {
+    return null;
   }
-  const tokens = row.split(/\s+/).filter(Boolean);
-  if (tokens.length < 2) return null;
-  let cursor = tokens.length;
-  const amount = isMoney(tokens[cursor - 1]) ? tokens[--cursor] : "";
-  const rate = cursor > 0 && isMoney(tokens[cursor - 1]) ? tokens[--cursor] : "";
-  if (cursor < 2 || !/^\d+$/.test(tokens[cursor - 1] ?? "")) return null;
-  const quantity = Number.parseInt(tokens[cursor - 1] ?? "", 10);
-  const sku = tokens[0] ?? "";
-  const description = tokens.slice(1, cursor - 1).join(" ");
-  if (!Number.isInteger(quantity) || quantity < 1) return null;
+  const descriptionWidth = descriptionColumns === 0 ? 0 : tokens.length - (roles.length - 1);
+  if (descriptionColumns === 1 && descriptionWidth < 1) return null;
+
+  let cursor = 0;
+  const values: Partial<Record<ColumnRole, string>> = {};
+  for (const role of roles) {
+    if (role === "description") {
+      values.description = tokens.slice(cursor, cursor + descriptionWidth).join(" ");
+      cursor += descriptionWidth;
+      continue;
+    }
+    const token = tokens[cursor] ?? "";
+    cursor += 1;
+    if (role === "index") {
+      if (!LINE_NO.test(token)) return null;
+      continue;
+    }
+    values[role] = token;
+  }
+  if (cursor !== tokens.length) return null;
+
+  const quantity = Number.parseInt((values.quantity ?? "").replace(/,/g, ""), 10);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > LIMITS.quantityMax) return null;
+  if (roles.includes("rate") && !isMoney(values.rate)) return null;
+  if (roles.includes("amount") && !isMoney(values.amount)) return null;
+
+  const sku = (values.mpn || values.sku || "").trim();
+  if ((roles.includes("mpn") || roles.includes("sku")) && !SKU_TOKEN.test(sku)) return null;
+  const upc = (values.upc ?? "").trim();
+  if (roles.includes("upc") && upc && upc !== "-" && !UPC_TOKEN.test(upc)) return null;
+  const description = (values.description ?? "").replace(/\s+/g, " ").trim();
+  if (description && isMoney(description)) return null;
+  if (!sku && !description) return null;
+
   return {
     sku,
-    upc: "",
+    upc: upc === "-" ? "" : upc,
     description,
     quantity,
-    unitPrice: rate || null,
-    extendedPrice: amount || null,
+    unitPrice: values.rate ?? null,
+    extendedPrice: values.amount ?? null,
   };
-}
-
-function rowFromCells(
-  cells: string[],
-  columns: NonNullable<ReturnType<typeof headerCells>>,
-): RecognizedLine | null {
-  const sku = cellAt(cells, columns.mpn) || cellAt(cells, columns.sku);
-  const quantity = Number.parseInt(cellAt(cells, columns.quantity).replace(/,/g, ""), 10);
-  if (!Number.isInteger(quantity) || quantity < 1) return null;
-  return {
-    sku,
-    upc: cellAt(cells, columns.upc),
-    description: cellAt(cells, columns.description),
-    quantity,
-    unitPrice: cellAt(cells, columns.rate) || null,
-    extendedPrice: cellAt(cells, columns.amount) || null,
-  };
-}
-
-function cellAt(cells: string[], index: number): string {
-  if (index < 0) return "";
-  return (cells[index] ?? "").trim();
 }
 
 function isMoney(value: string | undefined): boolean {
@@ -401,7 +485,7 @@ function shipToSection(text: string): string | null {
   if (inline) collected.push(inline);
   for (let index = start + 1; index < rows.length; index += 1) {
     const row = rows[index].trim();
-    if (!row || isNextField(row)) break;
+    if (!row || isNextField(row) || headerRoles(row)) break;
     collected.push(row);
   }
   const value = collected.join("\n").trim().slice(0, LIMITS.notes);
@@ -477,7 +561,9 @@ function labeled(text: string, labels: string[]): string | null {
     for (let next = index + 1; next < rows.length; next += 1) {
       const value = (rows[next] ?? "").trim().replace(/\s{2,}/g, " ");
       if (!value) continue;
-      if (wanted.has(normalizeHeader(value)) || isNextField(value)) return null;
+      if (wanted.has(normalizeHeader(value)) || isNextField(value) || headerRoles(value)) {
+        return null;
+      }
       return value;
     }
   }

@@ -75,7 +75,7 @@ export default async function InboundPage() {
         <Card>
           <CardHeader>
             <CardTitle><T>Read purchase document</T></CardTitle>
-            <CardDescription><T>Read a purchase order or invoice PDF. Rate and Amount are blacked out before the file is saved. Vendor, buyer, job ID, and expected lines are filled in, and the dock gets an expected receiving load.</T></CardDescription>
+            <CardDescription><T>Read a purchase order or invoice PDF. Only the numbers in the Rate and Amount cells are masked before the file is saved. Vendor, buyer, job ID, and expected lines are filled from the matching columns, and the dock gets an expected receiving load.</T></CardDescription>
           </CardHeader>
           <CardContent>
             <PurchaseDocumentUpload />

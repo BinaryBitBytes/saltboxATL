@@ -1079,7 +1079,7 @@ export const ES: Record<string, string> = {
   "Notes:": "Notas:",
   "The PDF file is saved for project managers.": "El PDF se guarda para los gerentes de proyecto.",
   "Read purchase document": "Leer documento de compra",
-  "Read a purchase order or invoice PDF. Rate and Amount are blacked out before the file is saved. Vendor, buyer, job ID, and expected lines are filled in, and the dock gets an expected receiving load.": "Lee un PDF de orden de compra o factura. La tarifa y el importe se tapan antes de guardar el archivo. Se llenan el proveedor, el comprador, el ID de trabajo y las líneas esperadas, y el muelle recibe una carga de recepción esperada.",
+  "Read a purchase order or invoice PDF. Only the numbers in the Rate and Amount cells are masked before the file is saved. Vendor, buyer, job ID, and expected lines are filled from the matching columns, and the dock gets an expected receiving load.": "Lee un PDF de orden de compra o factura. Solo se tapan los números de las celdas de tarifa e importe antes de guardar el archivo. El proveedor, el comprador, el ID de trabajo y las líneas esperadas se llenan desde las columnas que coinciden, y el muelle recibe una carga de recepción esperada.",
   "Purchase document": "Documento de compra",
   "Purchase order PDF": "PDF de orden de compra",
   "Invoice PDF": "PDF de factura",
