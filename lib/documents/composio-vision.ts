@@ -469,7 +469,15 @@ async function executeConsumerVision(
       params: {
         name: "COMPOSIO_MULTI_EXECUTE_TOOL",
         arguments: {
-          tools: [{ tool_slug: slug, arguments: args }],
+          tools: [
+            {
+              tool_slug: slug,
+              arguments: args,
+              ...(env.connectedAccountId
+                ? { account: env.connectedAccountId }
+                : {}),
+            },
+          ],
           sync_response_to_workbench: false,
         },
       },

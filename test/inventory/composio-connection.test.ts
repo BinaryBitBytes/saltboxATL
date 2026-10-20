@@ -75,6 +75,7 @@ describe("Composio connection checks", () => {
         apiKey: consumerKey,
         parent: "projects/warehouse-prod/locations/us",
         userId: "saltbox-inbound",
+        connectedAccountId: "google_cloud_vision_lavabo-weve",
       },
       async (url, init) => {
         const headers = Object.fromEntries(
@@ -113,6 +114,7 @@ describe("Composio connection checks", () => {
     expect(calls[0]?.headers["x-consumer-api-key"]).to.equal(consumerKey);
     expect(calls[0]?.headers["x-api-key"]).to.equal(undefined);
     expect(calls[2]?.headers["mcp-session-id"]).to.equal("sess-1");
+    expect(calls[2]?.body).to.include("google_cloud_vision_lavabo-weve");
     expect(result.failure).to.equal(null);
     expect(result.text).to.include("PO Number: PO-100");
   });
