@@ -10,8 +10,6 @@ const CONSUMER_MCP_URL = "https://connect.composio.dev/mcp";
 const DEFAULT_SLUG = "GOOGLE_CLOUD_VISION_ANNOTATE_FILES";
 const DEFAULT_PARENT = "projects/saltbox/locations/us";
 const DEFAULT_USER = "saltbox-inbound";
-const COMPOSIO_PROJECT_PARENT =
-  /^projects\/project-[0-9a-f-]+\/locations\//i;
 
 export type ComposioVisionEnv = {
   apiKey?: string;
@@ -241,11 +239,6 @@ export function assessComposioSetup(
   if (!config.apiKey) problems.push("COMPOSIO_API_KEY is missing.");
   if (parentIsPlaceholder) {
     problems.push("COMPOSIO_VISION_PARENT is still the example project.");
-  }
-  if (COMPOSIO_PROJECT_PARENT.test(parent)) {
-    problems.push(
-      "COMPOSIO_VISION_PARENT looks like a Composio project id. Use your Google Cloud project id: projects/<gcp-project-id>/locations/us.",
-    );
   }
   if (!config.connectedAccountId) {
     warnings.push(

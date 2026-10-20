@@ -119,13 +119,15 @@ describe("Composio connection checks", () => {
     expect(result.text).to.include("PO Number: PO-100");
   });
 
-  it("flags a Composio project id used as the Google Cloud Vision parent", () => {
+  it("accepts a Google Cloud project id that starts with project-", () => {
     const setup = assessComposioSetup({
       COMPOSIO_API_KEY: "ck_examplekeyvalueblNH",
-      COMPOSIO_VISION_PARENT: "projects/project-74a3df87-030f-4256-8f0/locations/us",
+      COMPOSIO_VISION_PARENT: "projects/project-example/locations/us",
+      COMPOSIO_CONNECTED_ACCOUNT_ID: "google_cloud_vision_lavabo-weve",
     });
     expect(setup.apiKeyKind).to.equal("consumer");
-    expect(setup.problems.join(" ")).to.include("Google Cloud project id");
+    expect(setup.parentIsPlaceholder).to.equal(false);
+    expect(setup.problems).to.deep.equal([]);
   });
 
   it("explains a 401 on a ck_ key instead of calling the key corrupt", () => {
