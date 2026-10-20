@@ -4,6 +4,9 @@ import {
   ExpectationStatusSchema,
   PalletSchema,
   PurchaseOrderSourceSchema,
+  PurchaseDocumentKindSchema,
+  PurchaseDocumentLineSchema,
+  RecognitionSourceSchema,
   CustomerOrderSchema,
   type CustomerOrder,
   type InventoryItem,
@@ -13,6 +16,7 @@ import {
   type Location,
   type Pallet,
   type PhotoAttachment,
+  type PurchaseDocument,
   type PurchaseOrder,
   type ReceivingOrder,
   type Room,
@@ -395,8 +399,10 @@ export function mapReceivingOrder(row: {
   created_at: Date | string | null;
   updated_at: Date | string | null;
   created_by: string | null;
+  intake?: string | null;
   division?: string | null;
 }): ReceivingOrder {
+  const intake = row.intake === "expected" || row.intake === "dock" ? row.intake : undefined;
   return {
     id: row.id,
     division: storedDivision(row.division),
@@ -408,6 +414,7 @@ export function mapReceivingOrder(row: {
     receiverName: row.receiver_name,
     loadPalletCount: row.load_pallet_count,
     status: row.status,
+    intake,
     isPartialed: row.is_partialed,
     partialedAt: iso(row.partialed_at),
     partialedBy: row.partialed_by ?? undefined,
@@ -418,6 +425,50 @@ export function mapReceivingOrder(row: {
     notes: row.notes ?? undefined,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
+    createdBy: row.created_by ?? undefined,
+  };
+}
+
+function parseDocumentLines(raw: unknown): PurchaseDocument["lines"] {
+  const parsed = PurchaseDocumentLineSchema.array().safeParse(raw ?? []);
+  return parsed.success ? parsed.data : [];
+}
+
+export function mapPurchaseDocument(row: {
+  id: string;
+  purchase_order_number: string;
+  kind: string;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  prices_redacted: boolean;
+  recognition_source: string;
+  recognition_note?: string | null;
+  job_id_number?: string | null;
+  lines?: unknown;
+  inbound_load_id?: string | null;
+  created_at: Date | string;
+  created_by?: string | null;
+  division?: string | null;
+}): PurchaseDocument {
+  const kind = PurchaseDocumentKindSchema.parse(row.kind);
+  const recognitionSource = RecognitionSourceSchema.parse(row.recognition_source);
+  const jobId = row.job_id_number?.trim();
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    purchaseOrderNumber: row.purchase_order_number,
+    kind,
+    originalName: row.original_name,
+    mimeType: "application/pdf",
+    size: row.size,
+    pricesRedacted: row.prices_redacted,
+    recognitionSource,
+    recognitionNote: row.recognition_note ?? undefined,
+    jobIdNumber: jobId ? jobId : null,
+    lines: parseDocumentLines(row.lines),
+    inboundLoadId: row.inbound_load_id ?? null,
+    createdAt: isoRequired(row.created_at),
     createdBy: row.created_by ?? undefined,
   };
 }
@@ -513,6 +564,7 @@ export function assembleSystem(parts: {
   transactions: InventoryTransaction[];
   photos: PhotoAttachment[];
   purchaseOrders: PurchaseOrder[];
+  purchaseDocuments?: PurchaseDocument[];
   receivingOrders: ReceivingOrder[];
   shippingOrders: ShippingOrder[];
   customerOrders?: CustomerOrder[];
@@ -526,6 +578,7 @@ export function assembleSystem(parts: {
     transactions: parts.transactions,
     photos: parts.photos,
     purchaseOrders: parts.purchaseOrders,
+    purchaseDocuments: parts.purchaseDocuments ?? [],
     receivingOrders: parts.receivingOrders,
     shippingOrders: parts.shippingOrders,
     customerOrders: parts.customerOrders ?? [],

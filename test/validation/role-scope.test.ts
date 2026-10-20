@@ -62,6 +62,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "viewInventory",
     "viewInboundForecast",
     "assignJobId",
+    "viewPurchaseDocuments",
   ],
   driver: ["viewDashboard", "viewDriverLoad", "confirmDelivery"],
   manager: [
@@ -82,6 +83,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "uploadBuyerOrders",
     "viewInboundForecast",
     "assignJobId",
+    "viewPurchaseDocuments",
     "viewDriverLoad",
     "confirmDelivery",
   ],
@@ -116,6 +118,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "uploadBuyerOrders",
     "viewInboundForecast",
     "assignJobId",
+    "viewPurchaseDocuments",
     "viewDriverLoad",
     "confirmDelivery",
   ],
@@ -181,6 +184,16 @@ const API_RULES: Array<{
     method: "DELETE",
     path: `/api/photos/${ORDER_ID}`,
     permissions: ["receive", "ship", "adjustInventory", "confirmDelivery"],
+  },
+  {
+    method: "POST",
+    path: "/api/purchase-documents",
+    permissions: ["uploadBuyerOrders"],
+  },
+  {
+    method: "GET",
+    path: `/api/purchase-documents/${ORDER_ID}`,
+    permissions: ["viewPurchaseDocuments"],
   },
 ];
 

@@ -46,7 +46,12 @@ export default async function ReceivingOrderPage({
             <T>Receiving</T> {order.orderNumber}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {order.vendor} · <T>carrier</T> {order.carrierInbound} · <T>received</T>{" "}
+            {order.vendor} · <T>carrier</T> {order.carrierInbound} ·{" "}
+            {order.intake === "expected" && order.status === "draft" ? (
+              <T>expected</T>
+            ) : (
+              <T>received</T>
+            )}{" "}
             <FormattedDate value={order.receivedAt} />
           </p>
         </div>
@@ -54,6 +59,7 @@ export default async function ReceivingOrderPage({
           <ReceivingStatusBadge
             status={order.status}
             isPartialed={order.isPartialed}
+            intake={order.intake}
           />
           {canReopen &&
           order.status === "completed" &&
@@ -83,8 +89,16 @@ export default async function ReceivingOrderPage({
             value={String(order.loadPalletCount)}
           />
           <Detail
-            label="Received / remaining"
-            value={`${order.pallets.length} received · ${remaining} remaining`}
+            label={
+              order.intake === "expected" && order.status === "draft"
+                ? "Staged / still to arrive"
+                : "Received / remaining"
+            }
+            value={
+              order.intake === "expected" && order.status === "draft"
+                ? `${order.pallets.length} staged · ${remaining} still to arrive`
+                : `${order.pallets.length} received · ${remaining} remaining`
+            }
           />
           <Detail
             label="Working pallet"
@@ -170,7 +184,9 @@ export default async function ReceivingOrderPage({
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">
+        <T>{label}</T>
+      </p>
       <p>{value}</p>
     </div>
   );

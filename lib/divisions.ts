@@ -93,6 +93,7 @@ export function scopeSystem(
 ): InventorySystem {
   const scoped = structuredClone(system);
   scoped.purchaseOrders = inDivision(scoped.purchaseOrders, division);
+  scoped.purchaseDocuments = inDivision(scoped.purchaseDocuments, division);
   scoped.receivingOrders = inDivision(scoped.receivingOrders, division);
   scoped.shippingOrders = inDivision(scoped.shippingOrders, division);
   scoped.customerOrders = inDivision(scoped.customerOrders, division);
@@ -125,6 +126,11 @@ export function mergeDivision(
   division: Division,
 ): InventorySystem {
   full.purchaseOrders = replaceDivision(full.purchaseOrders, scoped.purchaseOrders, division);
+  full.purchaseDocuments = replaceDivision(
+    full.purchaseDocuments,
+    scoped.purchaseDocuments,
+    division,
+  );
   full.receivingOrders = replaceDivision(full.receivingOrders, scoped.receivingOrders, division);
   full.shippingOrders = replaceDivision(full.shippingOrders, scoped.shippingOrders, division);
   full.customerOrders = replaceDivision(full.customerOrders, scoped.customerOrders, division);

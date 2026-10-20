@@ -39,6 +39,7 @@ import type {
   Location,
   DeliveryRecord,
   PurchaseOrder,
+  PurchaseDocument,
   CustomerOrder,
   ReceivingOrder,
   ShippingOrder,
@@ -49,6 +50,10 @@ import {
   type SpreadsheetFormText,
 } from "@/lib/inventory/spreadsheet-source";
 import { ValidationError } from "@/lib/validation/errors";
+import {
+  importInvoiceLoadRecord,
+  redactPurchaseDocumentRecord,
+} from "@/backend/server/document-service";
 
 export type ActionFailure = {
   ok: false;
@@ -110,6 +115,41 @@ export async function setPurchaseOrderJobId(
     await requireApiPermission("assignJobId");
     const data = await setPurchaseOrderJobIdRecord(rawData);
     revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function redactInvoicePrices(
+  documentId: string,
+): Promise<ActionResult<PurchaseDocument>> {
+  try {
+    await requireApiPermission("uploadBuyerOrders");
+    const data = await redactPurchaseDocumentRecord(documentId);
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function importInvoiceInboundLoad(
+  documentId: string,
+  rawData?: unknown,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    const user = await requireApiPermission("uploadBuyerOrders");
+    const record =
+      rawData && typeof rawData === "object" && !Array.isArray(rawData)
+        ? (rawData as {
+            confirmLargeInput?: boolean;
+            confirmationQuantity?: number;
+          })
+        : {};
+    const data = await importInvoiceLoadRecord(documentId, record, user.name);
+    revalidateInventory();
+    if (data.id) revalidatePath(`/receiving/${data.id}`);
     return { ok: true, data };
   } catch (error) {
     return fail(error);

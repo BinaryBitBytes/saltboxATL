@@ -16,8 +16,9 @@ export function jsonError(error: unknown, fallbackStatus = 500) {
   }
 
   if (error instanceof ZodError) {
+    const message = error.issues[0]?.message || "The inventory record could not be saved.";
     return NextResponse.json(
-      { success: false, errors: flattenError(error) },
+      { success: false, error: message, errors: flattenError(error) },
       { status: 400 },
     );
   }

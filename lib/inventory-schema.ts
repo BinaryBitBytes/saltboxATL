@@ -346,6 +346,8 @@ export const ReceivingOrderSchema = z.object({
   receiverName: NonEmptyStringSchema,
   loadPalletCount: z.coerce.number().int().min(0),
   status: ReceivingOrderStatusSchema.default("draft"),
+  /** draft + expected is an inbound load imported from an invoice, not yet checked in. */
+  intake: z.enum(["dock", "expected"]).optional(),
   isPartialed: z.boolean().default(false),
   partialedAt: DateTimeSchema.optional(),
   partialedBy: z.string().optional(),
@@ -520,7 +522,7 @@ export const InventoryItemSchema = z.object({
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
-export const InventoryTransactionTypeSchema = z.enum([
+export const INVENTORY_TRANSACTION_TYPES = [
   "receiving",
   "putaway",
   "shipping",
@@ -529,10 +531,21 @@ export const InventoryTransactionTypeSchema = z.enum([
   "shortage",
   "damage",
   "import",
-]);
-export type InventoryTransactionType = z.infer<
-  typeof InventoryTransactionTypeSchema
->;
+] as const;
+export type InventoryTransactionType = (typeof INVENTORY_TRANSACTION_TYPES)[number];
+
+function storedTransactionLabel(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.replace(/[\u0000-\u001F]/g, "").trim().slice(0, 64);
+  if (!trimmed || hasHtmlMarkup(trimmed)) return fallback;
+  return trimmed;
+}
+
+/** Known stock movements, plus older rows whose type was stored outside that list. */
+export const InventoryTransactionTypeSchema = z.preprocess(
+  (value) => storedTransactionLabel(value, "import"),
+  z.string().min(1).max(64),
+);
 
 export const InventoryTransactionSchema = z.object({
   id: UuidSchema,
@@ -549,15 +562,11 @@ export const InventoryTransactionSchema = z.object({
   quantityBefore: z.coerce.number().int().min(0).optional(),
   quantityAfter: z.coerce.number().int().min(0).optional(),
   reason: OptionalNotesSchema,
-  referenceType: z
-    .enum([
-      "receiving-order",
-      "shipping-order",
-      "customer-order",
-      "adjustment",
-      "spreadsheet-import",
-    ])
-    .optional(),
+  referenceType: z.preprocess((value) => {
+    if (value == null) return undefined;
+    const label = storedTransactionLabel(value, "");
+    return label || undefined;
+  }, z.string().min(1).max(64).optional()),
   referenceId: UuidSchema.optional(),
   scannedCode: z.string().optional(),
   createdBy: z.string().optional(),
@@ -950,8 +959,63 @@ export type CreateCustomerOrderInput = z.infer<
   typeof CreateCustomerOrderInputSchema
 >;
 
+export const PurchaseDocumentKindSchema = z.enum([
+  "purchase-order",
+  "invoice",
+]);
+export type PurchaseDocumentKind = z.infer<typeof PurchaseDocumentKindSchema>;
+
+export const RecognitionSourceSchema = z.enum(["composio", "embedded-text"]);
+export type RecognitionSource = z.infer<typeof RecognitionSourceSchema>;
+
+const PriceTextSchema = z.preprocess(
+  (value) => {
+    if (value == null) return null;
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+  },
+  z
+    .string()
+    .max(32)
+    .refine((value) => !hasControlChars(value) && !hasHtmlMarkup(value), {
+      error: "Price contains invalid characters.",
+    })
+    .nullable(),
+);
+
+export const PurchaseDocumentLineSchema = z.object({
+  sku: z.string().trim().max(LIMITS.sku).default(""),
+  upc: z.string().trim().max(LIMITS.upc).default(""),
+  description: z.string().trim().max(LIMITS.description).default(""),
+  quantity: QuantitySchema,
+  unitPrice: PriceTextSchema.default(null),
+  extendedPrice: PriceTextSchema.default(null),
+});
+export type PurchaseDocumentLine = z.infer<typeof PurchaseDocumentLineSchema>;
+
+export const PurchaseDocumentSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  purchaseOrderNumber: NonEmptyStringSchema,
+  kind: PurchaseDocumentKindSchema,
+  originalName: PhotoFileNameSchema,
+  mimeType: z.literal("application/pdf"),
+  size: z.number().int().min(1).max(LIMITS.purchaseDocumentMaxBytes),
+  pricesRedacted: z.boolean().default(false),
+  recognitionSource: RecognitionSourceSchema,
+  recognitionNote: OptionalNotesSchema,
+  jobIdNumber: JobIdNumberSchema.optional().default(null),
+  lines: z.array(PurchaseDocumentLineSchema).max(200).default([]),
+  inboundLoadId: UuidSchema.nullable().optional(),
+  createdAt: DateTimeSchema,
+  createdBy: z.string().trim().max(LIMITS.name).optional(),
+});
+export type PurchaseDocument = z.infer<typeof PurchaseDocumentSchema>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
+  purchaseDocuments: z.array(PurchaseDocumentSchema).default([]),
   receivingOrders: z.array(ReceivingOrderSchema).default([]),
   shippingOrders: z.array(ShippingOrderSchema).default([]),
   customerOrders: z.array(CustomerOrderSchema).default([]),

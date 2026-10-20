@@ -54,6 +54,7 @@ export const PERMISSIONS = {
     "manager",
   ]),
   assignJobId: withSecurityRoles(["project-manager", "manager"]),
+  viewPurchaseDocuments: withSecurityRoles(["project-manager", "manager"]),
   viewDriverLoad: withSecurityRoles(["driver", "manager"]),
   confirmDelivery: withSecurityRoles(["driver", "manager"]),
 } as const;
@@ -182,6 +183,13 @@ export function canAccessPath(
       "adjustInventory",
       "confirmDelivery",
     ]);
+  }
+  if (
+    path === "/api/purchase-documents" ||
+    path.startsWith("/api/purchase-documents/")
+  ) {
+    if (isRead(method)) return hasPermission(role, "viewPurchaseDocuments");
+    return hasPermission(role, "uploadBuyerOrders");
   }
 
   return false;

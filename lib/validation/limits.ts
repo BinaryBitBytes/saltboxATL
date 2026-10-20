@@ -23,6 +23,7 @@ export const LIMITS = {
   photoMaxBytes: 2 * 1024 * 1024,
   photoMaxCount: 16,
   photoFileName: 120,
+  purchaseDocumentMaxBytes: 8 * 1024 * 1024,
   spreadsheetMaxBytes: 2 * 1024 * 1024,
   spreadsheetMaxRows: 5000,
 } as const;

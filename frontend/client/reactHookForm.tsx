@@ -11,9 +11,18 @@ import { createReceivingOrder } from "@/backend/server/serverAction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Field } from "@/frontend/client/field";
 import { localDateTimeValue, toIsoDateTime } from "@/lib/format";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
+import { Field, NativeSelect } from "@/frontend/client/field";
+import { expectedOrderNumber } from "@/lib/documents/order-number";
+
+export type ExpectedPoPreset = {
+  purchaseOrderNumber: string;
+  vendor: string;
+  carrier: string;
+  expectedPalletCount: number;
+  jobIdNumber: string | null;
+};
 
 const ReceivingFormSchema = z.object({
   poNumber: NonEmptyStringSchema,
@@ -36,9 +45,13 @@ type ReceivingFormValues = z.infer<typeof ReceivingFormSchema>;
 export default function ReceivingForm({
   defaultReceiverName = "",
   canAssignJobId = false,
+  presets = [],
+  initial = null,
 }: {
   defaultReceiverName?: string;
   canAssignJobId?: boolean;
+  presets?: ExpectedPoPreset[];
+  initial?: ExpectedPoPreset | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -49,13 +62,15 @@ export default function ReceivingForm({
   const form = useForm<ReceivingFormValues>({
     resolver: zodResolver(ReceivingFormSchema),
     defaultValues: {
-      poNumber: "",
-      jobIdNumber: "",
-      vendor: "",
-      orderNumber: "",
-      carrierInbound: "",
+      poNumber: initial?.purchaseOrderNumber ?? "",
+      jobIdNumber: canAssignJobId ? (initial?.jobIdNumber ?? "") : "",
+      vendor: initial?.vendor ?? "",
+      orderNumber: initial
+        ? expectedOrderNumber(initial.purchaseOrderNumber)
+        : "",
+      carrierInbound: initial?.carrier ?? "",
       receiverName: defaultReceiverName,
-      loadPalletCount: 1,
+      loadPalletCount: initial?.expectedPalletCount || 1,
       notes: "",
       receivedAtLocal: localDateTimeValue(),
       poGeneratedAtLocal: localDateTimeValue(),
@@ -100,8 +115,43 @@ export default function ReceivingForm({
     name: "loadPalletCount",
   });
 
+  function applyPreset(purchaseOrderNumber: string) {
+    const preset = presets.find(
+      (entry) => entry.purchaseOrderNumber === purchaseOrderNumber,
+    );
+    if (!preset) return;
+    form.setValue("poNumber", preset.purchaseOrderNumber, { shouldValidate: true });
+    form.setValue("vendor", preset.vendor, { shouldValidate: true });
+    form.setValue("carrierInbound", preset.carrier, { shouldValidate: true });
+    form.setValue("loadPalletCount", preset.expectedPalletCount || 1, {
+      shouldValidate: true,
+    });
+    form.setValue("orderNumber", expectedOrderNumber(preset.purchaseOrderNumber), {
+      shouldValidate: true,
+    });
+    if (canAssignJobId) {
+      form.setValue("jobIdNumber", preset.jobIdNumber ?? "");
+    }
+  }
+
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
+      {presets.length > 0 ? (
+        <Field label="Expected PO" htmlFor="expected-po">
+          <NativeSelect
+            id="expected-po"
+            defaultValue={initial?.purchaseOrderNumber ?? ""}
+            onChange={(event) => applyPreset(event.target.value)}
+          >
+            <option value="">Choose an expected PO</option>
+            {presets.map((preset) => (
+              <option key={preset.purchaseOrderNumber} value={preset.purchaseOrderNumber}>
+                {preset.purchaseOrderNumber} · {preset.vendor}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="PO number" htmlFor="poNumber" error={errors.poNumber?.message}>
           <Input id="poNumber" {...form.register("poNumber")} />

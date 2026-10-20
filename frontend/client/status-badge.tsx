@@ -35,13 +35,18 @@ const shippingVariant: Record<
 export function ReceivingStatusBadge({
   status,
   isPartialed = false,
+  intake,
 }: {
   status: ReceivingOrderStatus;
   isPartialed?: boolean;
+  intake?: "dock" | "expected" | null;
 }) {
+  const expected = intake === "expected" && status === "draft";
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      <Badge variant={receivingVariant[status]}>{status}</Badge>
+      <Badge variant={receivingVariant[status]}>
+        {expected ? <T>Expected</T> : status}
+      </Badge>
       {isPartialed ? <Badge variant="outline"><T>partialed</T></Badge> : null}
     </span>
   );
@@ -103,10 +108,8 @@ const transactionVariant: Record<
   import: "secondary",
 };
 
-export function TransactionTypeBadge({
-  type,
-}: {
-  type: InventoryTransactionType;
-}) {
-  return <Badge variant={transactionVariant[type]}>{type}</Badge>;
+export function TransactionTypeBadge({ type }: { type: string }) {
+  const variant =
+    transactionVariant[type as InventoryTransactionType] ?? "outline";
+  return <Badge variant={variant}>{type}</Badge>;
 }

@@ -327,6 +327,7 @@ describe("inventory spreadsheet import and export", () => {
       photos: [],
       users: [],
       itemCubes: [],
+      purchaseDocuments: [],
     });
     const parsed = parseInventorySpreadsheet(inventoryRowsToSpreadsheet(rows));
     expect(parsed[0]?.color).to.equal("Orange");
