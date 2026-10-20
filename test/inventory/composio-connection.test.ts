@@ -206,6 +206,29 @@ describe("Composio connection checks", () => {
     expect(lines).to.not.include(SECRET);
   });
 
+  it("does not invent a user id when COMPOSIO_USER_ID is empty", async () => {
+    let body = "";
+    await executeComposioVision(
+      PDF,
+      "po.pdf",
+      {
+        apiKey: SECRET,
+        parent: "projects/warehouse-prod/locations/us",
+        connectedAccountId: "google_cloud_vision_lavabo-weve",
+      },
+      async (_url, init) => {
+        body = String(init?.body ?? "");
+        return jsonResponse(200, {
+          successful: true,
+          data: { responses: [{ fullTextAnnotation: { text: "PO Number: PO-100" } }] },
+        });
+      },
+    );
+    expect(body).to.not.include("saltbox-inbound");
+    expect(body).to.not.include("user_id");
+    expect(body).to.include("google_cloud_vision_lavabo-weve");
+  });
+
   it("logs an invalid key separately from a privileges refusal", async () => {
     const invalid = await executeComposioVision(PDF, "po.pdf", { apiKey: SECRET }, async () =>
       jsonResponse(401, { error: { message: "Invalid API key" } }),

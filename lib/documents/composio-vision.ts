@@ -9,7 +9,6 @@ const EXECUTE_URL = "https://backend.composio.dev/api/v3.1/tools/execute";
 const CONSUMER_MCP_URL = "https://connect.composio.dev/mcp";
 const DEFAULT_SLUG = "GOOGLE_CLOUD_VISION_ANNOTATE_FILES";
 const DEFAULT_PARENT = "projects/saltbox/locations/us";
-const DEFAULT_USER = "saltbox-inbound";
 
 export type ComposioVisionEnv = {
   apiKey?: string;
@@ -64,7 +63,7 @@ export function composioVisionEnvFromProcess(
 ): ComposioVisionEnv {
   return {
     apiKey: env.COMPOSIO_API_KEY?.trim() || undefined,
-    userId: env.COMPOSIO_USER_ID?.trim() || DEFAULT_USER,
+    userId: env.COMPOSIO_USER_ID?.trim() || undefined,
     parent: env.COMPOSIO_VISION_PARENT?.trim() || DEFAULT_PARENT,
     toolSlug: env.COMPOSIO_VISION_TOOL_SLUG?.trim() || DEFAULT_SLUG,
     connectedAccountId: env.COMPOSIO_CONNECTED_ACCOUNT_ID?.trim() || undefined,
@@ -249,7 +248,7 @@ export function assessComposioSetup(
     apiKey: config.apiKey ? "present" : "missing",
     apiKeyHint: maskApiKey(config.apiKey),
     apiKeyKind: composioKeyKind(config.apiKey),
-    userId: config.userId || DEFAULT_USER,
+    userId: config.userId || "(not sent)",
     parent,
     parentIsPlaceholder,
     toolSlug: config.toolSlug || DEFAULT_SLUG,
@@ -302,7 +301,7 @@ export async function executeComposioVision(
     url: `${EXECUTE_URL}/${slug}`,
     transport: "project-api",
     authHeader: Object.keys(authHeaders)[0],
-    userId: env.userId || DEFAULT_USER,
+    userId: env.userId || "(not sent)",
     parent: env.parent || DEFAULT_PARENT,
     toolSlug: slug,
     apiKey: setup.apiKeyHint,
@@ -319,7 +318,7 @@ export async function executeComposioVision(
       ...authHeaders,
     },
     body: JSON.stringify({
-      user_id: env.userId || DEFAULT_USER,
+      ...(env.userId ? { user_id: env.userId } : {}),
       ...(env.connectedAccountId
         ? { connected_account_id: env.connectedAccountId }
         : {}),
@@ -396,7 +395,7 @@ async function executeConsumerVision(
     url: CONSUMER_MCP_URL,
     transport: "consumer-mcp",
     authHeader: "x-consumer-api-key",
-    userId: env.userId || DEFAULT_USER,
+    userId: env.userId || "(not sent)",
     parent: env.parent || DEFAULT_PARENT,
     toolSlug: slug,
     apiKey: setup.apiKeyHint,
