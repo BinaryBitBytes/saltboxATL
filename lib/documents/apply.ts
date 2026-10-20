@@ -54,7 +54,7 @@ export function applyRecognizedPurchase(
     expectedArrivalAt:
       recognized.expectedArrivalAt || existing?.expectedArrivalAt || input.now,
     buyerName: recognized.buyerName || existing?.buyerName || undefined,
-    notes: existing?.expectationNotes || recognized.note,
+    notes: associateNotes(recognized, existing?.expectationNotes),
     expectationStatus: status,
     expectedPalletCount:
       recognized.expectedPalletCount ?? existing?.expectedPalletCount ?? 0,
@@ -73,7 +73,9 @@ export function buyerLinesFromRecognition(
 ): BuyerPoLine[] {
   const buyerLines: BuyerPoLine[] = [];
   for (const line of lines) {
-    const description = cleanDescription(line.description);
+    const description = cleanDescription(
+      stripKnownPrices(line.description, [line.unitPrice, line.extendedPrice]),
+    );
     const sku = isSku(line.sku) ? line.sku : "";
     const upc = isUpc(line.upc) ? line.upc : "";
     if (!sku && !description) continue;
@@ -87,6 +89,29 @@ export function buyerLinesFromRecognition(
     });
   }
   return buyerLines;
+}
+
+function associateNotes(
+  recognized: RecognizedPurchase,
+  existingNotes: string | undefined,
+): string {
+  const base = recognized.shipTo || existingNotes || recognized.note;
+  const prices = recognized.lines.flatMap((line) => [line.unitPrice, line.extendedPrice]);
+  return stripKnownPrices(base, prices) || recognized.note;
+}
+
+function stripKnownPrices(value: string, prices: Array<string | null>): string {
+  const removable = prices
+    .filter((price): price is string => Boolean(price))
+    .sort((left, right) => right.length - left.length);
+  let next = value;
+  for (const price of removable) {
+    next = next.split(price).join(" ");
+  }
+  return next
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
 
 function cleanDescription(value: string): string {

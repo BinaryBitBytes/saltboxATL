@@ -25,6 +25,7 @@ export type RecognizedPurchase = {
   buyerName: string | null;
   expectedArrivalAt: string | null;
   expectedPalletCount: number | null;
+  shipTo: string | null;
   lines: RecognizedLine[];
   source: "composio" | "embedded-text";
   note: string;
@@ -41,7 +42,10 @@ export type VisionReader = (
 ) => Promise<string | null | VisionReadResult>;
 
 const LINE_PATTERN =
-  /SKU:\s*([A-Za-z0-9._/-]+)\s+UPC:\s*([A-Za-z0-9-]+)\s+Description:\s*(.+?)\s+Qty:\s*(\d+)(?:\s+Unit Price:\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?(?:\s+(?:Amount|Extended):\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?/gi;
+  /SKU:\s*([A-Za-z0-9._/-]+)\s+UPC:\s*([A-Za-z0-9-]+)\s+Description:\s*(.+?)\s+Qty:\s*(\d+)(?:\s+(?:Unit Price|Rate):\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?(?:\s+(?:Amount|Extended):\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?/gi;
+
+const MPN_LINE =
+  /^(?:MPN|Manufacturer Part Number):\s*([A-Za-z0-9._/-]+)(?:\s+SKU:\s*[A-Za-z0-9._/-]+)?(?:\s+UPC:\s*([A-Za-z0-9-]+))?\s+Description:\s*(.+?)\s+Qty:\s*(\d+)(?:\s+(?:Rate|Unit Price):\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?(?:\s+(?:Amount|Extended(?: Amount)?|Line Amount):\s*(\$[\d,]+\.\d{2}|\d[\d,]*\.\d{2}))?\s*$/i;
 
 const ROW_PATTERN =
   /^([A-Za-z0-9][A-Za-z0-9._/-]{0,63})\s+([A-Za-z0-9-]{6,32})\s+(.+?)\s+(\d+)\s+(\$[\d,]+\.\d{2})\s+(\$[\d,]+\.\d{2})\s*$/gm;
@@ -56,6 +60,7 @@ export function emptyRecognition(): RecognizedPurchase {
     buyerName: null,
     expectedArrivalAt: null,
     expectedPalletCount: null,
+    shipTo: null,
     lines: [],
     source: "embedded-text",
     note: EMBEDDED_NOTE,
@@ -80,7 +85,14 @@ export function parsePurchaseFields(text: string): Omit<
   );
   const jobIdNumber = optionalJobId(
     codeToken(
-      labeled(text, ["Job ID Number", "JobIDNumber", "Job ID", "Job #"]),
+      labeled(text, [
+        "Job ID Number",
+        "JobIDNumber",
+        "Job Number",
+        "Job No\\.",
+        "Job ID",
+        "Job #",
+      ]),
       LIMITS.code,
     ),
   );
@@ -107,6 +119,7 @@ export function parsePurchaseFields(text: string): Omit<
     buyerName,
     expectedArrivalAt,
     expectedPalletCount,
+    shipTo: shipToSection(text),
     lines: parseLines(text),
   };
 }
@@ -186,19 +199,56 @@ function mergeFields(
     buyerName: primary.buyerName ?? fallback.buyerName,
     expectedArrivalAt: primary.expectedArrivalAt ?? fallback.expectedArrivalAt,
     expectedPalletCount: primary.expectedPalletCount ?? fallback.expectedPalletCount,
+    shipTo: primary.shipTo ?? fallback.shipTo,
     lines: primary.lines.length > 0 ? primary.lines : fallback.lines,
   };
 }
 
 function parseLines(text: string): RecognizedLine[] {
   const lines: RecognizedLine[] = [];
-  for (const match of text.matchAll(LINE_PATTERN)) {
+  const rows = text.split(/\n/);
+  const consumed = new Set<number>();
+  rows.forEach((row, index) => {
+    const match = row.match(MPN_LINE);
+    if (!match) return;
+    pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
+    consumed.add(index);
+  });
+  const remainder = rows.filter((_, index) => !consumed.has(index)).join("\n");
+  for (const match of remainder.matchAll(LINE_PATTERN)) {
     pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
   }
-  for (const match of text.matchAll(ROW_PATTERN)) {
+  for (const match of remainder.matchAll(ROW_PATTERN)) {
     pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
   }
   return lines;
+}
+
+function shipToSection(text: string): string | null {
+  const rows = text.split(/\n/);
+  const start = rows.findIndex((row) => /^\s*ship\s*to\s*:?/i.test(row));
+  if (start < 0) return null;
+  const inline = rows[start].replace(/^\s*ship\s*to\s*:?\s*/i, "").trim();
+  const collected: string[] = [];
+  if (inline) collected.push(inline);
+  for (let index = start + 1; index < rows.length; index += 1) {
+    const row = rows[index].trim();
+    if (!row || isNextField(row)) break;
+    collected.push(row);
+  }
+  const value = collected.join("\n").trim().slice(0, LIMITS.notes);
+  if (!value || hasControlChars(value) || hasHtmlMarkup(value)) return null;
+  return value;
+}
+
+function isNextField(row: string): boolean {
+  return (
+    /^(?:vendor|supplier|carrier|ship via|buyer|expected|arrival|eta|pallets|pallet count|project|upc|sku|mpn|manufacturer part number)\s*:/i.test(
+      row,
+    ) ||
+    /^(?:p\.?\s*o\.?|purchase order)\b[^:\n]*:/i.test(row) ||
+    /^job\b[^:\n]*:/i.test(row)
+  );
 }
 
 function pushLine(

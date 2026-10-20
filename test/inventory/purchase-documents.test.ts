@@ -19,7 +19,10 @@ import {
   executeComposioVision,
   textFromVisionPayload,
 } from "@/lib/documents/composio-vision";
-import { applyRecognizedPurchase } from "@/lib/documents/apply";
+import {
+  applyRecognizedPurchase,
+  buyerLinesFromRecognition,
+} from "@/lib/documents/apply";
 import {
   buildExpectedInboundLoad,
   invoiceImportError,
@@ -109,6 +112,82 @@ describe("purchase document recognition", () => {
     expect(recognized.purchaseOrderNumber).to.equal("PO-100");
     expect(recognized.jobIdNumber).to.equal("JOB-42");
     expect(recognized.lines).to.have.length(1);
+  });
+
+  it("maps MPN, vendor, PO number, job number, quantity, and description, and stores Ship To in notes", async () => {
+    const bytes = pdfDocument([
+      "Vendor: Corning",
+      "PO #: PO-100",
+      "Job Number: JOB-42",
+      "Ship To:",
+      "Saltbox ATL",
+      "123 Dock Street",
+      "Freight 12.50 and $48.00 prepaid",
+      "MPN: C9300-24P SKU: IGNORE-SKU Description: Catalyst 24 port QTY: 4 Rate: 12.50 Amount: $48.00",
+    ]);
+    const recognized = await recognizePurchasePdf(bytes, { vision: null });
+    expect(recognized.vendor).to.equal("Corning");
+    expect(recognized.purchaseOrderNumber).to.equal("PO-100");
+    expect(recognized.jobIdNumber).to.equal("JOB-42");
+    expect(recognized.shipTo).to.equal(
+      "Saltbox ATL\n123 Dock Street\nFreight 12.50 and $48.00 prepaid",
+    );
+    expect(recognized.lines[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantity: 4,
+      unitPrice: "12.50",
+      extendedPrice: "$48.00",
+    });
+    expect(recognized.lines[0].sku).to.not.equal("IGNORE-SKU");
+
+    const orders: PurchaseOrder[] = [];
+    const created = applyRecognizedPurchase(orders, recognized, {
+      id: PO_ID,
+      now: NOW,
+      uploadedBy: "Morgan Coordinator",
+      nextLineId: () => LINE_ID,
+    });
+    expect(created.vendor).to.equal("Corning");
+    expect(created.purchaseOrderNumber).to.equal("PO-100");
+    expect(created.jobIdNumber).to.equal("JOB-42");
+    expect(created.lines?.[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantity: 4,
+    });
+    expect(created.expectationNotes).to.equal(
+      "Saltbox ATL\n123 Dock Street\nFreight and prepaid",
+    );
+    expect(created.expectationNotes).to.not.include("JOB-42");
+
+    const visible = JSON.stringify(buildInboundForecast(orders, []));
+    expect(visible).to.not.include("12.50");
+    expect(visible).to.not.include("$48.00");
+    expect(visible).to.not.include("IGNORE-SKU");
+    expect(visible).to.include("C9300-24P");
+    expect(visible).to.include("Saltbox ATL");
+  });
+
+  it("drops Rate and Amount values when recognized lines are written to the inbound form", () => {
+    const lines = buyerLinesFromRecognition(
+      [
+        {
+          sku: "C9300-24P",
+          upc: "",
+          description: "Catalyst 24 port 12.50 $48.00",
+          quantity: 4,
+          unitPrice: "12.50",
+          extendedPrice: "$48.00",
+        },
+      ],
+      () => LINE_ID,
+    );
+    expect(lines[0].quantity).to.equal(4);
+    expect(lines[0].description).to.equal("Catalyst 24 port");
+    expect(JSON.stringify(lines)).to.not.include("12.50");
+    expect(JSON.stringify(lines)).to.not.include("$48.00");
+    expect(JSON.stringify(lines)).to.not.include("unitPrice");
   });
 
   it("fills the inbound PO and keeps a project manager job ID", async () => {
