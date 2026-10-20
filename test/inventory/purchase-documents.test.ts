@@ -1,6 +1,10 @@
 import { describe, it } from "mocha";
 import { expect } from "chai";
-import { PurchaseDocumentSchema, type PurchaseOrder } from "@/lib/inventory-schema";
+import {
+  InventorySystemSchema,
+  PurchaseDocumentSchema,
+  type PurchaseOrder,
+} from "@/lib/inventory-schema";
 import { canAccessPath } from "@/lib/auth/permissions";
 import { buildInboundForecast } from "@/lib/inbound/forecast";
 import { saveBuyerPurchaseOrder } from "@/lib/purchase-orders";
@@ -348,5 +352,39 @@ describe("purchase document recognition", () => {
       text: null,
       failure: { kind: "missing-api-key", status: null, message: "COMPOSIO_API_KEY is missing." },
     });
+  });
+});
+
+describe("inventory history saved with a purchase document", () => {
+  it("keeps stock rows whose type and reference are outside the current lists", () => {
+    const id = "77777777-7777-4777-8777-777777777777";
+    const parsed = InventorySystemSchema.parse({
+      transactions: [
+        {
+          id,
+          type: "check-in",
+          occurredAt: NOW,
+          sku: "FBR-LC-12-100",
+          quantityDelta: 1,
+          referenceType: "purchase-order",
+        },
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          type: null,
+          occurredAt: NOW,
+          sku: "FBR-LC-12-100",
+          quantityDelta: -1,
+          referenceType: null,
+        },
+      ],
+    });
+    expect(parsed.transactions[0]?.type).to.equal("check-in");
+    expect(parsed.transactions[0]?.referenceType).to.equal("purchase-order");
+    expect(parsed.transactions[1]?.type).to.equal("import");
+    expect(parsed.transactions[1]?.referenceType).to.equal(undefined);
+    expect(parsed.transactions.map((entry) => entry.id)).to.deep.equal([
+      id,
+      "88888888-8888-4888-8888-888888888888",
+    ]);
   });
 });

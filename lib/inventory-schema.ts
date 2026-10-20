@@ -522,7 +522,7 @@ export const InventoryItemSchema = z.object({
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
-export const InventoryTransactionTypeSchema = z.enum([
+export const INVENTORY_TRANSACTION_TYPES = [
   "receiving",
   "putaway",
   "shipping",
@@ -531,10 +531,21 @@ export const InventoryTransactionTypeSchema = z.enum([
   "shortage",
   "damage",
   "import",
-]);
-export type InventoryTransactionType = z.infer<
-  typeof InventoryTransactionTypeSchema
->;
+] as const;
+export type InventoryTransactionType = (typeof INVENTORY_TRANSACTION_TYPES)[number];
+
+function storedTransactionLabel(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.replace(/[\u0000-\u001F]/g, "").trim().slice(0, 64);
+  if (!trimmed || hasHtmlMarkup(trimmed)) return fallback;
+  return trimmed;
+}
+
+/** Known stock movements, plus older rows whose type was stored outside that list. */
+export const InventoryTransactionTypeSchema = z.preprocess(
+  (value) => storedTransactionLabel(value, "import"),
+  z.string().min(1).max(64),
+);
 
 export const InventoryTransactionSchema = z.object({
   id: UuidSchema,
@@ -551,15 +562,11 @@ export const InventoryTransactionSchema = z.object({
   quantityBefore: z.coerce.number().int().min(0).optional(),
   quantityAfter: z.coerce.number().int().min(0).optional(),
   reason: OptionalNotesSchema,
-  referenceType: z
-    .enum([
-      "receiving-order",
-      "shipping-order",
-      "customer-order",
-      "adjustment",
-      "spreadsheet-import",
-    ])
-    .optional(),
+  referenceType: z.preprocess((value) => {
+    if (value == null) return undefined;
+    const label = storedTransactionLabel(value, "");
+    return label || undefined;
+  }, z.string().min(1).max(64).optional()),
   referenceId: UuidSchema.optional(),
   scannedCode: z.string().optional(),
   createdBy: z.string().optional(),

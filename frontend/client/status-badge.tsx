@@ -108,10 +108,8 @@ const transactionVariant: Record<
   import: "secondary",
 };
 
-export function TransactionTypeBadge({
-  type,
-}: {
-  type: InventoryTransactionType;
-}) {
-  return <Badge variant={transactionVariant[type]}>{type}</Badge>;
+export function TransactionTypeBadge({ type }: { type: string }) {
+  const variant =
+    transactionVariant[type as InventoryTransactionType] ?? "outline";
+  return <Badge variant={variant}>{type}</Badge>;
 }
