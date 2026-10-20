@@ -4,11 +4,18 @@ import {
   InventorySystemSchema,
   PurchaseDocumentSchema,
   type PurchaseOrder,
+  type ReceivingOrder,
 } from "@/lib/inventory-schema";
 import { canAccessPath } from "@/lib/auth/permissions";
 import { buildInboundForecast } from "@/lib/inbound/forecast";
 import { saveBuyerPurchaseOrder } from "@/lib/purchase-orders";
-import { isPdf, redactPdfBytes } from "@/lib/documents/pdf-text";
+import {
+  blackOutPricingColumns,
+  extractPdfText,
+  isPdf,
+  pricingBlackoutTokens,
+  redactPdfBytes,
+} from "@/lib/documents/pdf-text";
 import {
   COMPOSIO_NOTE,
   EMBEDDED_NOTE,
@@ -27,7 +34,9 @@ import {
   buildExpectedInboundLoad,
   invoiceImportError,
   pdfStillContainsPrices,
+  receivableInvoiceLines,
   redactDocumentLines,
+  stageExpectedReceivingOrder,
 } from "@/lib/documents/inbound-load";
 import { purchaseDocumentView } from "@/lib/documents/view";
 
@@ -167,6 +176,85 @@ describe("purchase document recognition", () => {
     expect(visible).to.not.include("IGNORE-SKU");
     expect(visible).to.include("C9300-24P");
     expect(visible).to.include("Saltbox ATL");
+  });
+
+  it("blacks out Rate and Amount in the PDF, then fills vendor, buyer, job, and expected contents", async () => {
+    const bytes = pdfDocument([
+      "Vendor:",
+      "Corning",
+      "Buyer Name:",
+      "Morgan Coordinator",
+      "Job ID:",
+      "JOB-42",
+      "PO Number:",
+      "PO-100",
+      "MPN Description Qty Rate Amount",
+      "C9300-24P Catalyst 24 port 4 12.50 $48.00",
+    ]);
+    const recognized = await recognizePurchasePdf(bytes, { vision: null });
+    expect(recognized.vendor).to.equal("Corning");
+    expect(recognized.buyerName).to.equal("Morgan Coordinator");
+    expect(recognized.jobIdNumber).to.equal("JOB-42");
+    expect(recognized.purchaseOrderNumber).to.equal("PO-100");
+    expect(recognized.lines[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantity: 4,
+      unitPrice: "12.50",
+      extendedPrice: "$48.00",
+    });
+
+    const stored = blackOutPricingColumns(bytes, pricingBlackoutTokens(recognized.lines));
+    const storedText = extractPdfText(stored);
+    expect(stored.byteLength).to.equal(bytes.byteLength);
+    expect(storedText).to.include("C9300-24P");
+    expect(storedText).to.include("Corning");
+    expect(storedText).to.include("Morgan Coordinator");
+    expect(storedText).to.not.include("12.50");
+    expect(storedText).to.not.include("$48.00");
+    expect(storedText).to.not.match(/\bRate\b/);
+    expect(storedText).to.not.match(/\bAmount\b/);
+
+    const orders: PurchaseOrder[] = [];
+    const created = applyRecognizedPurchase(orders, recognized, {
+      id: PO_ID,
+      now: NOW,
+      uploadedBy: "Morgan Coordinator",
+      nextLineId: () => LINE_ID,
+    });
+    expect(created.vendor).to.equal("Corning");
+    expect(created.buyerName).to.equal("Morgan Coordinator");
+    expect(created.jobIdNumber).to.equal("JOB-42");
+    expect(created.lines?.[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantity: 4,
+    });
+
+    const receiving: ReceivingOrder[] = [];
+    const contents = receivableInvoiceLines(recognized.lines);
+    const load = stageExpectedReceivingOrder(receiving, {
+      id: LOAD_ID,
+      palletId: PALLET_ID,
+      caseIds: [CASE_ID],
+      now: NOW,
+      purchaseOrderNumber: created.purchaseOrderNumber,
+      vendor: created.vendor || "Corning",
+      carrier: "Estes",
+      palletCount: 1,
+      receiverName: "Morgan Coordinator",
+      lines: contents,
+      existingOrderNumbers: [],
+    });
+    expect(load?.intake).to.equal("expected");
+    expect(load?.pallets[0].cases[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantityInCase: 4,
+    });
+    expect(JSON.stringify(load)).to.not.include("12.50");
+    expect(JSON.stringify(load)).to.not.include("$48.00");
+    expect(JSON.stringify(buildInboundForecast(orders, receiving))).to.not.include("$");
   });
 
   it("drops Rate and Amount values when recognized lines are written to the inbound form", () => {

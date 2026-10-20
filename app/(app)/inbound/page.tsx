@@ -75,7 +75,7 @@ export default async function InboundPage() {
         <Card>
           <CardHeader>
             <CardTitle><T>Read purchase document</T></CardTitle>
-            <CardDescription><T>Read a purchase order or invoice PDF. Image recognition fills the PO, job ID, vendor, carrier, and lines, and the dock sees that purchase as an expected PO.</T></CardDescription>
+            <CardDescription><T>Read a purchase order or invoice PDF. Rate and Amount are blacked out before the file is saved. Vendor, buyer, job ID, and expected lines are filled in, and the dock gets an expected receiving load.</T></CardDescription>
           </CardHeader>
           <CardContent>
             <PurchaseDocumentUpload />

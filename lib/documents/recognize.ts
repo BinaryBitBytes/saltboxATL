@@ -214,6 +214,17 @@ function parseLines(text: string): RecognizedLine[] {
     pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
     consumed.add(index);
   });
+  for (const tableLine of parseTableLines(rows, consumed)) {
+    pushLine(
+      lines,
+      tableLine.sku,
+      tableLine.upc,
+      tableLine.description,
+      String(tableLine.quantity),
+      tableLine.unitPrice ?? undefined,
+      tableLine.extendedPrice ?? undefined,
+    );
+  }
   const remainder = rows.filter((_, index) => !consumed.has(index)).join("\n");
   for (const match of remainder.matchAll(LINE_PATTERN)) {
     pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
@@ -222,6 +233,163 @@ function parseLines(text: string): RecognizedLine[] {
     pushLine(lines, match[1], match[2], match[3], match[4], match[5], match[6]);
   }
   return lines;
+}
+
+const HEADER_PHRASES = [
+  "manufacturer part number",
+  "item description",
+  "extended amount",
+  "line amount",
+  "unit price",
+  "unit rate",
+  "ext amount",
+  "description",
+  "quantity",
+  "amount",
+  "rate",
+  "mpn",
+  "sku",
+  "upc",
+  "qty",
+] as const;
+
+function parseTableLines(rows: string[], consumed: Set<number>): RecognizedLine[] {
+  const headerIndex = rows.findIndex((row, index) => !consumed.has(index) && headerCells(row));
+  if (headerIndex < 0) return [];
+  const columns = headerCells(rows[headerIndex]);
+  if (!columns) return [];
+  consumed.add(headerIndex);
+  const lines: RecognizedLine[] = [];
+  for (let index = headerIndex + 1; index < rows.length; index += 1) {
+    if (consumed.has(index)) continue;
+    const row = rows[index].trim();
+    if (!row) continue;
+    if (isNextField(row) || headerCells(row)) break;
+    const parsed = looseTableRow(row, columns);
+    if (!parsed) continue;
+    lines.push(parsed);
+    consumed.add(index);
+  }
+  return lines;
+}
+
+function headerCells(row: string): {
+  mpn: number;
+  sku: number;
+  upc: number;
+  description: number;
+  quantity: number;
+  rate: number;
+  amount: number;
+} | null {
+  const cells = splitHeader(row);
+  if (!cells) return null;
+  const normalized = cells.map(normalizeHeader);
+  const at = (names: string[]) => normalized.findIndex((cell) => names.includes(cell));
+  const columns = {
+    mpn: at(["mpn", "manufacturer part number"]),
+    sku: at(["sku"]),
+    upc: at(["upc"]),
+    description: at(["description", "item description"]),
+    quantity: at(["qty", "quantity"]),
+    rate: at(["rate", "unit rate", "unit price"]),
+    amount: at(["amount", "line amount", "ext amount", "extended amount"]),
+  };
+  if (columns.quantity < 0) return null;
+  if (columns.mpn < 0 && columns.sku < 0 && columns.description < 0) return null;
+  return columns;
+}
+
+function splitHeader(row: string): string[] | null {
+  const wide = splitWide(row);
+  if (wide.length >= 3 && wide.every((cell) => HEADER_PHRASES.includes(normalizeHeader(cell) as (typeof HEADER_PHRASES)[number]))) {
+    return wide;
+  }
+  const words = row.trim().split(/\s+/).filter(Boolean);
+  const cells: string[] = [];
+  for (let index = 0; index < words.length; ) {
+    const phrase = HEADER_PHRASES.find((candidate) => {
+      const parts = candidate.split(" ");
+      return words
+        .slice(index, index + parts.length)
+        .map(normalizeHeader)
+        .join(" ") === candidate;
+    });
+    if (!phrase) return null;
+    cells.push(phrase);
+    index += phrase.split(" ").length;
+  }
+  return cells.length >= 3 ? cells : null;
+}
+
+function splitWide(row: string): string[] {
+  if (row.includes("|")) return row.split("|").map((cell) => cell.trim()).filter(Boolean);
+  if (row.includes("\t")) return row.split("\t").map((cell) => cell.trim()).filter(Boolean);
+  return row.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean);
+}
+
+function looseTableRow(
+  row: string,
+  columns: NonNullable<ReturnType<typeof headerCells>>,
+): RecognizedLine | null {
+  const wide = splitWide(row);
+  if (wide.length >= 3) {
+    return rowFromCells(wide, columns);
+  }
+  const tokens = row.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return null;
+  let cursor = tokens.length;
+  const amount = isMoney(tokens[cursor - 1]) ? tokens[--cursor] : "";
+  const rate = cursor > 0 && isMoney(tokens[cursor - 1]) ? tokens[--cursor] : "";
+  if (cursor < 2 || !/^\d+$/.test(tokens[cursor - 1] ?? "")) return null;
+  const quantity = Number.parseInt(tokens[cursor - 1] ?? "", 10);
+  const sku = tokens[0] ?? "";
+  const description = tokens.slice(1, cursor - 1).join(" ");
+  if (!Number.isInteger(quantity) || quantity < 1) return null;
+  return {
+    sku,
+    upc: "",
+    description,
+    quantity,
+    unitPrice: rate || null,
+    extendedPrice: amount || null,
+  };
+}
+
+function rowFromCells(
+  cells: string[],
+  columns: NonNullable<ReturnType<typeof headerCells>>,
+): RecognizedLine | null {
+  const sku = cellAt(cells, columns.mpn) || cellAt(cells, columns.sku);
+  const quantity = Number.parseInt(cellAt(cells, columns.quantity).replace(/,/g, ""), 10);
+  if (!Number.isInteger(quantity) || quantity < 1) return null;
+  return {
+    sku,
+    upc: cellAt(cells, columns.upc),
+    description: cellAt(cells, columns.description),
+    quantity,
+    unitPrice: cellAt(cells, columns.rate) || null,
+    extendedPrice: cellAt(cells, columns.amount) || null,
+  };
+}
+
+function cellAt(cells: string[], index: number): string {
+  if (index < 0) return "";
+  return (cells[index] ?? "").trim();
+}
+
+function isMoney(value: string | undefined): boolean {
+  return Boolean(value && /^\$?\d{1,3}(?:,\d{3})*(?:\.\d{2})$/.test(value));
+}
+
+function normalizeHeader(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[.#:$]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function shipToSection(text: string): string | null {
@@ -299,8 +467,21 @@ function labeled(text: string, labels: string[]): string | null {
     "i",
   );
   const match = text.match(pattern);
-  const value = match?.[1]?.trim().replace(/\s{2,}/g, " ") ?? "";
-  return value || null;
+  const inline = match?.[1]?.trim().replace(/\s{2,}/g, " ") ?? "";
+  if (inline) return inline;
+  const wanted = new Set(labels.map((label) => normalizeHeader(label.replace(/\\/g, ""))));
+  const rows = text.split(/\n/);
+  for (let index = 0; index < rows.length; index += 1) {
+    const label = normalizeHeader(rows[index] ?? "");
+    if (!wanted.has(label)) continue;
+    for (let next = index + 1; next < rows.length; next += 1) {
+      const value = (rows[next] ?? "").trim().replace(/\s{2,}/g, " ");
+      if (!value) continue;
+      if (wanted.has(normalizeHeader(value)) || isNextField(value)) return null;
+      return value;
+    }
+  }
+  return null;
 }
 
 function codeToken(value: string | null, max: number): string | null {

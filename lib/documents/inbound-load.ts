@@ -148,6 +148,41 @@ export function buildExpectedInboundLoad(input: {
   });
 }
 
+/** Open one expected receiving load for a PO, with the parsed lines already on the pallet. */
+export function stageExpectedReceivingOrder(
+  receivingOrders: ReceivingOrder[],
+  input: {
+    id: string;
+    palletId: string;
+    caseIds: string[];
+    now: string;
+    purchaseOrderNumber: string;
+    vendor: string;
+    carrier: string;
+    palletCount: number;
+    receiverName: string;
+    createdBy?: string;
+    lines: ReceivableLine[];
+    existingOrderNumbers: readonly string[];
+  },
+): ReceivingOrder | null {
+  if (input.lines.length === 0) return null;
+  const open = receivingOrders.find(
+    (order) =>
+      order.poNumber === input.purchaseOrderNumber &&
+      order.status !== "cancelled" &&
+      order.status !== "completed" &&
+      order.status !== "received",
+  );
+  if (open) return open;
+  const created = buildExpectedInboundLoad({
+    ...input,
+    notes: "Expected contents from the purchase PDF after Rate and Amount were blacked out.",
+  });
+  receivingOrders.unshift(created);
+  return created;
+}
+
 export function pdfStillContainsPrices(bytes: Uint8Array): boolean {
   const raw = Buffer.from(bytes).toString("latin1");
   return raw !== redactMoneyTokens(raw);

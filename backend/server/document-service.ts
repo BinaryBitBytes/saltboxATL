@@ -24,7 +24,12 @@ import {
   readPurchaseDocumentFile,
   writePurchaseDocumentFile,
 } from "@/backend/server/document-store";
-import { isPdf, redactPdfBytes } from "@/lib/documents/pdf-text";
+import {
+  blackOutPricingColumns,
+  isPdf,
+  pricingBlackoutTokens,
+  redactPdfBytes,
+} from "@/lib/documents/pdf-text";
 import { recognizePurchasePdf } from "@/lib/documents/recognize";
 import { assessComposioSetup, composioVisionClient } from "@/lib/documents/composio-vision";
 import { applyRecognizedPurchase } from "@/lib/documents/apply";
@@ -34,6 +39,7 @@ import {
   invoiceImportError,
   receivableInvoiceLines,
   redactDocumentLines,
+  stageExpectedReceivingOrder,
 } from "@/lib/documents/inbound-load";
 import { findPurchaseOrder } from "@/lib/purchase-orders";
 
@@ -75,6 +81,10 @@ export async function uploadPurchaseDocumentRecord(
     throw new ServiceError("The PDF did not include a purchase order number.");
   }
 
+  const storedBytes = blackOutPricingColumns(
+    input.bytes,
+    pricingBlackoutTokens(recognized.lines),
+  );
   const documentId = createId();
   const now = nowIso();
   const draft = {
@@ -83,8 +93,8 @@ export async function uploadPurchaseDocumentRecord(
     kind: kindParsed.data,
     originalName,
     mimeType: "application/pdf" as const,
-    size: input.bytes.byteLength,
-    pricesRedacted: false,
+    size: storedBytes.byteLength,
+    pricesRedacted: true,
     recognitionSource: recognized.source,
     recognitionNote: recognized.note,
     jobIdNumber: recognized.jobIdNumber,
@@ -93,8 +103,8 @@ export async function uploadPurchaseDocumentRecord(
       upc: line.upc,
       description: line.description,
       quantity: line.quantity,
-      unitPrice: kindParsed.data === "invoice" ? line.unitPrice : null,
-      extendedPrice: kindParsed.data === "invoice" ? line.extendedPrice : null,
+      unitPrice: null,
+      extendedPrice: null,
     })),
     createdAt: now,
     createdBy: input.createdBy,
@@ -104,7 +114,7 @@ export async function uploadPurchaseDocumentRecord(
     throw new ServiceError(parsed.error);
   }
 
-  await writePurchaseDocumentFile(documentId, input.bytes);
+  await writePurchaseDocumentFile(documentId, storedBytes);
   try {
     return await updateSystem((system) => {
       const purchaseOrder = applyRecognizedPurchase(system.purchaseOrders, recognized, {
@@ -113,6 +123,23 @@ export async function uploadPurchaseDocumentRecord(
         uploadedBy: input.createdBy,
         nextLineId: createId,
       });
+      const receiver = PersonNameSchema.safeParse(input.createdBy);
+      const expectedLines = receivableInvoiceLines(recognized.lines);
+      const load = stageExpectedReceivingOrder(system.receivingOrders, {
+        id: createId(),
+        palletId: createId(),
+        caseIds: expectedLines.map(() => createId()),
+        now,
+        purchaseOrderNumber: purchaseOrder.purchaseOrderNumber,
+        vendor: purchaseOrder.vendor?.trim() || "Unspecified vendor",
+        carrier: purchaseOrder.carrier?.trim() || "Unspecified carrier",
+        palletCount: purchaseOrder.expectedPalletCount || 1,
+        receiverName: receiver.success ? receiver.data : "Expected Receiver",
+        createdBy: input.createdBy,
+        lines: expectedLines,
+        existingOrderNumbers: system.receivingOrders.map((order) => order.orderNumber),
+      });
+      if (load) parsed.data.inboundLoadId = load.id;
       if (!system.purchaseDocuments) system.purchaseDocuments = [];
       system.purchaseDocuments.unshift(parsed.data);
       return { document: parsed.data, purchaseOrder };
