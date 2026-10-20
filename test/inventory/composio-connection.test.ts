@@ -206,6 +206,21 @@ describe("Composio connection checks", () => {
     expect(lines).to.not.include(SECRET);
   });
 
+  it("treats a missing user id as COMPOSIO_USER_ID, not a missing Google Cloud project", () => {
+    const failure = classifyComposioFailure(400, {
+      error: {
+        message:
+          "User ID is required with connected account. Please provide a user ID to identify the connected account.",
+        slug: "ActionExecute_ConnectedAccountEntityIdRequired",
+        suggested_fix:
+          "Pass entity_id (your user identifier) in the request body along with connected_account_id.",
+      },
+    });
+    expect(failure.kind).to.equal("missing-user-id");
+    expect(failure.message).to.include("COMPOSIO_USER_ID");
+    expect(failure.message).to.include("not a missing Google Cloud project");
+  });
+
   it("does not invent a user id when COMPOSIO_USER_ID is empty", async () => {
     let body = "";
     await executeComposioVision(

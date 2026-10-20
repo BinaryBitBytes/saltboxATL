@@ -22,6 +22,7 @@ export type ComposioFailureKind =
   | "missing-api-key"
   | "invalid-api-key"
   | "privileges"
+  | "missing-user-id"
   | "missing-connection"
   | "bad-request"
   | "unavailable";
@@ -195,6 +196,20 @@ export function classifyComposioFailure(
   }
   if (
     status === 400 &&
+    (haystack.includes("user id is required") ||
+      haystack.includes("userid is required") ||
+      haystack.includes("entity_id") ||
+      haystack.includes("entityidrequired"))
+  ) {
+    return {
+      kind: "missing-user-id",
+      status,
+      message:
+        "HTTP 400 means COMPOSIO_USER_ID is required with COMPOSIO_CONNECTED_ACCOUNT_ID. This is not a missing Google Cloud project id. In the Composio dashboard open Connected Accounts, select the Google Cloud Vision account, and copy the User ID (also called Entity ID) into COMPOSIO_USER_ID.",
+    };
+  }
+  if (
+    status === 400 &&
     (haystack.includes("connected account") ||
       haystack.includes("no active connection") ||
       haystack.includes("not connected") ||
@@ -318,7 +333,7 @@ export async function executeComposioVision(
       ...authHeaders,
     },
     body: JSON.stringify({
-      ...(env.userId ? { user_id: env.userId } : {}),
+      ...(env.userId ? { user_id: env.userId, entity_id: env.userId } : {}),
       ...(env.connectedAccountId
         ? { connected_account_id: env.connectedAccountId }
         : {}),
