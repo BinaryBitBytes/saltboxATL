@@ -9,9 +9,11 @@ import {
   createLocationRecord,
   createReceivingOrderRecord,
   recordDeliveryScanRecord,
+  deleteInboundPurchaseOrderRecord,
   saveBuyerPurchaseOrderRecord,
   saveDeliveryNotesRecord,
   setPurchaseOrderJobIdRecord,
+  updateInboundPurchaseOrderRecord,
   createRoomRecord,
   acknowledgeWarehousePrintsRecord,
   cancelCustomerOrderRecord,
@@ -54,6 +56,7 @@ import {
   importInvoiceLoadRecord,
   redactPurchaseDocumentRecord,
 } from "@/backend/server/document-service";
+import { deletePurchaseDocumentFile } from "@/backend/server/document-store";
 
 export type ActionFailure = {
   ok: false;
@@ -164,6 +167,42 @@ export async function saveBuyerPurchaseOrder(
     const data = await saveBuyerPurchaseOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function updateInboundPurchaseOrder(
+  rawData: unknown,
+): Promise<ActionResult<PurchaseOrder>> {
+  try {
+    const user = await requireApiPermission("uploadBuyerOrders");
+    const data = await updateInboundPurchaseOrderRecord(withCreatedBy(rawData, user));
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function deleteInboundPurchaseOrder(
+  rawData: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireApiPermission("uploadBuyerOrders");
+    const id =
+      rawData && typeof rawData === "object" && !Array.isArray(rawData)
+        ? String((rawData as { id?: unknown }).id ?? "")
+        : "";
+    const documentIds = await deleteInboundPurchaseOrderRecord(rawData);
+    await Promise.all(
+      documentIds.flatMap((documentId) => [
+        deletePurchaseDocumentFile(documentId, false),
+        deletePurchaseDocumentFile(documentId, true),
+      ]),
+    );
+    revalidateInventory();
+    return { ok: true, data: { id } };
   } catch (error) {
     return fail(error);
   }

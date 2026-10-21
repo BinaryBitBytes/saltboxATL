@@ -8,9 +8,11 @@ import {
   CreateShippingOrderInputSchema,
   CubeItemInputSchema,
   RecordDeliveryScanInputSchema,
+  DeleteInboundPurchaseOrderInputSchema,
   SaveBuyerPurchaseOrderInputSchema,
   SaveDeliveryNotesInputSchema,
   SetPurchaseOrderJobIdInputSchema,
+  UpdateInboundPurchaseOrderInputSchema,
   PalletInputSchema,
   PutawayLocationInputSchema,
   ReopenReceivingInputSchema,
@@ -39,6 +41,7 @@ import {
   upsertPurchaseOrder,
 } from "@/lib/purchase-orders";
 import { createId, nowIso } from "@/backend/server/helperUtils";
+import { deleteInboundEntry, updateInboundEntry } from "@/lib/inbound/entry";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
   addQuantity,
@@ -567,6 +570,60 @@ export async function saveBuyerPurchaseOrderRecord(
       uploadedBy: parsed.data.createdBy,
     }),
   );
+}
+
+export async function updateInboundPurchaseOrderRecord(
+  rawData: unknown,
+): Promise<PurchaseOrder> {
+  const parsed = parseWithSchema(UpdateInboundPurchaseOrderInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  assertLargeInputConfirmed(
+    sumQuantities(parsed.data.lines),
+    parsed.data,
+    LIMITS.largeQuantity,
+    "expected quantity",
+  );
+  const now = nowIso();
+  return updateSystem((system) => {
+    const result = updateInboundEntry(system, {
+      id: parsed.data.id,
+      purchaseOrderNumber: parsed.data.purchaseOrderNumber,
+      projectId: parsed.data.projectId,
+      jobIdNumber: parsed.data.jobIdNumber,
+      vendor: parsed.data.vendor,
+      carrier: parsed.data.carrier,
+      expectedArrivalAt: parsed.data.expectedArrivalAt,
+      buyerName: parsed.data.buyerName,
+      notes: parsed.data.notes,
+      expectationStatus: parsed.data.expectationStatus,
+      expectedPalletCount: parsed.data.expectedPalletCount,
+      lines: parsed.data.lines.map((line) => ({
+        id: createId(),
+        sku: line.sku,
+        upc: line.upc,
+        description: line.description,
+        quantity: line.quantity,
+      })),
+      now,
+      nextId: createId,
+    });
+    if (!result.ok) throw new ServiceError(result.error);
+    return result.purchaseOrder;
+  });
+}
+
+export async function deleteInboundPurchaseOrderRecord(rawData: unknown): Promise<string[]> {
+  const parsed = parseWithSchema(DeleteInboundPurchaseOrderInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  return updateSystem((system) => {
+    const result = deleteInboundEntry(system, parsed.data.id);
+    if (!result.ok) throw new ServiceError(result.error);
+    return result.documentIds;
+  });
 }
 
 function requireShipment(system: InventorySystem, shipmentId: string) {

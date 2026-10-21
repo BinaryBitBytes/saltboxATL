@@ -335,6 +335,35 @@ export type SaveBuyerPurchaseOrderInput = z.infer<
   typeof SaveBuyerPurchaseOrderInputSchema
 >;
 
+export const INBOUND_DELETE_CONFIRMATION = "DELETE";
+
+export const UpdateInboundPurchaseOrderInputSchema =
+  SaveBuyerPurchaseOrderInputSchema.safeExtend({
+    id: UuidSchema,
+    jobIdNumber: JobIdNumberSchema.optional().default(null),
+  });
+export type UpdateInboundPurchaseOrderInput = z.infer<
+  typeof UpdateInboundPurchaseOrderInputSchema
+>;
+
+export const DeleteInboundPurchaseOrderInputSchema = z
+  .object({
+    id: UuidSchema,
+    confirmText: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.confirmText !== INBOUND_DELETE_CONFIRMATION) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Type DELETE to confirm this inbound entry should be removed.",
+        path: ["confirmText"],
+      });
+    }
+  });
+export type DeleteInboundPurchaseOrderInput = z.infer<
+  typeof DeleteInboundPurchaseOrderInputSchema
+>;
+
 export const ReceivingOrderSchema = z.object({
   id: UuidSchema,
   division: DivisionSchema.optional(),

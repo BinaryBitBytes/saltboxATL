@@ -1,4 +1,8 @@
 import { FormattedDate, T } from "@/frontend/client/language";
+import {
+  InboundPoActions,
+  type InboundPoDraft,
+} from "@/frontend/client/inbound-po-actions";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -8,6 +12,7 @@ import {
 } from "@/lib/inbound/forecast";
 
 import { formatJobId } from "@/lib/purchase-orders";
+import type { PurchaseOrder } from "@/lib/inventory-schema";
 import { BuyerPoForm } from "@/frontend/client/buyer-po-form";
 import { PurchaseDocumentUpload } from "@/frontend/client/purchase-document-upload";
 import { PurchaseDocumentActions } from "@/frontend/client/purchase-document-actions";
@@ -129,6 +134,14 @@ export default async function InboundPage() {
                     value={`${row.expectedUnits} / ${row.receivedUnits}`}
                   />
                 </div>
+                {canUpload ? (
+                  <InboundPoActions
+                    order={inboundDraft(
+                      system.purchaseOrders.find((order) => order.id === row.id),
+                      row,
+                    )}
+                  />
+                ) : null}
                 {canAssign ? (
                   <JobIdEditor
                     purchaseOrderNumber={row.purchaseOrderNumber}
@@ -169,6 +182,43 @@ export default async function InboundPage() {
       </div>
     </div>
   );
+}
+
+function inboundDraft(
+  order: PurchaseOrder | undefined,
+  row: {
+    id: string;
+    purchaseOrderNumber: string;
+    projectId: string | null;
+    jobIdNumber: string | null;
+    vendor: string;
+    carrier: string;
+    expectedArrivalAt: string | null;
+    buyerName: string | null;
+    notes: string;
+    expectedPalletCount: number;
+    lines: Array<{ sku: string; upc: string; description: string; quantity: number }>;
+  },
+): InboundPoDraft {
+  return {
+    id: order?.id ?? row.id,
+    purchaseOrderNumber: order?.purchaseOrderNumber ?? row.purchaseOrderNumber,
+    projectId: order?.projectId ?? row.projectId ?? "",
+    jobIdNumber: order?.jobIdNumber ?? row.jobIdNumber ?? "",
+    vendor: order?.vendor ?? row.vendor,
+    carrier: order?.carrier ?? row.carrier,
+    expectedArrivalAt: order?.expectedArrivalAt ?? row.expectedArrivalAt ?? "",
+    buyerName: order?.buyerName ?? row.buyerName ?? "",
+    notes: order?.expectationNotes ?? row.notes,
+    expectationStatus: order?.expectationStatus ?? "expected",
+    expectedPalletCount: order?.expectedPalletCount ?? row.expectedPalletCount,
+    lines: (order?.lines ?? row.lines).map((line) => ({
+      sku: line.sku,
+      upc: line.upc,
+      description: line.description,
+      quantity: line.quantity,
+    })),
+  };
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
