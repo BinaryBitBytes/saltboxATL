@@ -1,17 +1,21 @@
 "use client";
 
-import { T } from "@/frontend/client/language";
+import { T, useT } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  deletePurchaseDocument,
   importInvoiceInboundLoad,
   redactInvoicePrices,
 } from "@/backend/server/serverAction";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Field } from "@/frontend/client/field";
 import {
   LargeInputConfirm,
   largeInputPayload,
 } from "@/frontend/client/large-input-confirm";
+import { INBOUND_DELETE_CONFIRMATION } from "@/lib/inventory-schema";
 import { LIMITS } from "@/lib/validation/limits";
 import type { PurchaseDocumentView } from "@/lib/documents/view";
 
@@ -21,8 +25,11 @@ export function PurchaseDocumentActions({
   document: PurchaseDocumentView;
 }) {
   const router = useRouter();
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
   const expectedUnits = document.lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -38,6 +45,25 @@ export function PurchaseDocumentActions({
         setError(result.error);
         return;
       }
+      router.refresh();
+    });
+  }
+
+  function removePdf(event: React.FormEvent) {
+    event.preventDefault();
+    if (confirmText !== INBOUND_DELETE_CONFIRMATION) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await deletePurchaseDocument({
+        id: document.id,
+        confirmText,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setDeleting(false);
+      setConfirmText("");
       router.refresh();
     });
   }
@@ -138,12 +164,76 @@ export function PurchaseDocumentActions({
             {pending ? "Importing…" : "Import into inbound load"}
           </Button>
         ) : null}
+        {document.canDelete ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              setError(null);
+              setConfirmText("");
+              setDeleting(true);
+            }}
+          >
+            Delete PDF
+          </Button>
+        ) : null}
         {document.imported && !document.canImport ? (
           <p className="text-xs text-muted-foreground">
             <T>Imported into inbound load</T>
           </p>
         ) : null}
       </div>
+      {deleting ? (
+        <form
+          onSubmit={removePdf}
+          className="grid gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3"
+        >
+          <p className="text-sm font-medium">
+            {t("You are deleting the uploaded PDF {{name}}.", { name: document.originalName })}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <T>
+              This removes the saved PDF. The inbound entry, its expected lines, and the expected receiving load stay. Use Edit entry if those fields also came from the wrong file. This cannot be undone.
+            </T>
+          </p>
+          <Field label="Type DELETE to confirm." htmlFor={`${document.id}-delete-pdf`}>
+            <Input
+              id={`${document.id}-delete-pdf`}
+              value={confirmText}
+              onChange={(event) => setConfirmText(event.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              aria-label={t("Type DELETE to confirm.")}
+            />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="submit"
+              variant="destructive"
+              size="sm"
+              disabled={pending || confirmText !== INBOUND_DELETE_CONFIRMATION}
+            >
+              {pending ? "Deleting…" : "Delete this PDF"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() => {
+                setDeleting(false);
+                setConfirmText("");
+                setError(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
     </div>
   );
 }

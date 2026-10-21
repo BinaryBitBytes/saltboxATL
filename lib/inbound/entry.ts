@@ -142,6 +142,22 @@ export function deleteInboundEntry(
   return { ok: true, documentIds };
 }
 
+/** Remove one uploaded PDF. The purchase order and receiving loads stay. */
+export function deleteUploadedPurchasePdf(
+  system: InventorySystem,
+  documentId: string,
+): { ok: true; documentId: string } | { ok: false; error: string } {
+  const documents = system.purchaseDocuments ?? [];
+  const index = documents.findIndex((document) => document.id === documentId);
+  if (index < 0) {
+    return { ok: false, error: "That purchase PDF was not found." };
+  }
+  const removed = documents[index];
+  documents.splice(index, 1);
+  system.purchaseDocuments = documents;
+  return { ok: true, documentId: removed?.id ?? documentId };
+}
+
 function syncExpectedLoad(
   system: InventorySystem,
   input: {

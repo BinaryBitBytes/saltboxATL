@@ -364,6 +364,24 @@ export type DeleteInboundPurchaseOrderInput = z.infer<
   typeof DeleteInboundPurchaseOrderInputSchema
 >;
 
+export const DeletePurchaseDocumentInputSchema = z
+  .object({
+    id: UuidSchema,
+    confirmText: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.confirmText !== INBOUND_DELETE_CONFIRMATION) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Type DELETE to confirm this uploaded PDF should be removed.",
+        path: ["confirmText"],
+      });
+    }
+  });
+export type DeletePurchaseDocumentInput = z.infer<
+  typeof DeletePurchaseDocumentInputSchema
+>;
+
 export const ReceivingOrderSchema = z.object({
   id: UuidSchema,
   division: DivisionSchema.optional(),

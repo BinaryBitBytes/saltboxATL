@@ -53,6 +53,7 @@ import {
 } from "@/lib/inventory/spreadsheet-source";
 import { ValidationError } from "@/lib/validation/errors";
 import {
+  deletePurchaseDocumentRecord,
   importInvoiceLoadRecord,
   redactPurchaseDocumentRecord,
 } from "@/backend/server/document-service";
@@ -119,6 +120,23 @@ export async function setPurchaseOrderJobId(
     const data = await setPurchaseOrderJobIdRecord(rawData);
     revalidateInventory();
     return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function deletePurchaseDocument(
+  rawData: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireApiPermission("uploadBuyerOrders");
+    const documentId = await deletePurchaseDocumentRecord(rawData);
+    await Promise.all([
+      deletePurchaseDocumentFile(documentId, false),
+      deletePurchaseDocumentFile(documentId, true),
+    ]);
+    revalidateInventory();
+    return { ok: true, data: { id: documentId } };
   } catch (error) {
     return fail(error);
   }

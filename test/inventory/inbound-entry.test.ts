@@ -2,6 +2,7 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import {
   DeleteInboundPurchaseOrderInputSchema,
+  DeletePurchaseDocumentInputSchema,
   INBOUND_DELETE_CONFIRMATION,
   InventorySystemSchema,
   PurchaseDocumentSchema,
@@ -10,7 +11,11 @@ import {
   type PurchaseOrder,
 } from "@/lib/inventory-schema";
 import { buildExpectedInboundLoad } from "@/lib/documents/inbound-load";
-import { deleteInboundEntry, updateInboundEntry } from "@/lib/inbound/entry";
+import {
+  deleteInboundEntry,
+  deleteUploadedPurchasePdf,
+  updateInboundEntry,
+} from "@/lib/inbound/entry";
 import { saveBuyerPurchaseOrder } from "@/lib/purchase-orders";
 
 const NOW = "2026-10-21T15:00:00.000Z";
@@ -567,6 +572,97 @@ describe("inbound purchase order corrections", () => {
     expect(stored.purchaseOrders).to.have.length(1);
     expect(stored.receivingOrders[0].status).to.equal("cancelled");
     expect(stored.purchaseDocuments?.[0].id).to.equal(DOC_ID);
+  });
+
+  it("removes one uploaded PDF and leaves the purchase order and receiving loads", () => {
+    const wrong = document("PO-100", DOC_ID);
+    wrong.originalName = "wrong.pdf";
+    wrong.inboundLoadId = LOAD_ID;
+    const kept = document("PO-100", EXTRA_DOC_ID);
+    kept.originalName = "right.pdf";
+    const started = expectedLoad();
+    started.id = "99999999-9999-4999-8999-999999999993";
+    started.status = "in-progress";
+    started.intake = "dock";
+    started.workingPalletId = "99999999-9999-4999-8999-999999999994";
+    started.pallets[0].id = "99999999-9999-4999-8999-999999999994";
+    started.pallets[0].cases[0].id = "99999999-9999-4999-8999-999999999995";
+    const stored = system({
+      purchaseOrders: [buyer(), buyer({ id: OTHER_ID, purchaseOrderNumber: "PO-200" })],
+      receivingOrders: [expectedLoad(), started],
+      purchaseDocuments: [wrong, kept, document("PO-200", OTHER_DOC_ID)],
+    });
+    const result = deleteUploadedPurchasePdf(stored, DOC_ID);
+    expect(result).to.deep.equal({ ok: true, documentId: DOC_ID });
+    expect(stored.purchaseOrders.map((order) => order.purchaseOrderNumber)).to.deep.equal([
+      "PO-100",
+      "PO-200",
+    ]);
+    expect(stored.purchaseOrders[0]).to.include({
+      vendor: "Corning",
+      carrier: "Estes",
+    });
+    expect(stored.purchaseOrders[0].lines?.[0]).to.deep.include({
+      sku: "BAD-SKU",
+      description: "Wrong description",
+      quantity: 1,
+    });
+    expect(stored.receivingOrders.map((order) => order.id)).to.deep.equal([
+      LOAD_ID,
+      "99999999-9999-4999-8999-999999999993",
+    ]);
+    expect(stored.receivingOrders[0]).to.include({
+      poNumber: "PO-100",
+      intake: "expected",
+      status: "draft",
+      orderNumber: "EXP-PO-100",
+    });
+    expect(stored.receivingOrders[0].pallets[0].cases[0].sku).to.equal("BAD-SKU");
+    expect(stored.receivingOrders[1]).to.include({
+      poNumber: "PO-100",
+      vendor: "Corning",
+      intake: "dock",
+      status: "in-progress",
+    });
+    expect(stored.receivingOrders[1].pallets[0].cases[0].sku).to.equal("BAD-SKU");
+    expect(stored.purchaseDocuments?.map((entry) => entry.id)).to.deep.equal([
+      EXTRA_DOC_ID,
+      OTHER_DOC_ID,
+    ]);
+    expect(stored.purchaseDocuments?.[0].originalName).to.equal("right.pdf");
+    expect(stored.purchaseDocuments?.[0].purchaseOrderNumber).to.equal("PO-100");
+  });
+
+  it("leaves every record alone when the uploaded PDF id is missing", () => {
+    const stored = system({
+      purchaseOrders: [buyer()],
+      receivingOrders: [expectedLoad()],
+      purchaseDocuments: [document("PO-100", DOC_ID)],
+    });
+    const result = deleteUploadedPurchasePdf(stored, MISSING_ID);
+    expect(result).to.deep.equal({
+      ok: false,
+      error: "That purchase PDF was not found.",
+    });
+    expect(stored.purchaseOrders).to.have.length(1);
+    expect(stored.receivingOrders).to.have.length(1);
+    expect(stored.purchaseDocuments?.map((entry) => entry.id)).to.deep.equal([DOC_ID]);
+  });
+
+  it("requires the exact word DELETE before an uploaded PDF can be removed", () => {
+    expect(
+      DeletePurchaseDocumentInputSchema.safeParse({
+        id: DOC_ID,
+        confirmText: INBOUND_DELETE_CONFIRMATION,
+      }).success,
+    ).to.equal(true);
+    for (const confirmText of ["delete", "DELETE ", " DELETE", ""]) {
+      const rejected = DeletePurchaseDocumentInputSchema.safeParse({
+        id: DOC_ID,
+        confirmText,
+      });
+      expect(rejected.success, JSON.stringify(confirmText)).to.equal(false);
+    }
   });
 
   it("requires the exact word DELETE before the delete schema accepts the request", () => {

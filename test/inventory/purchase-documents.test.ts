@@ -639,6 +639,8 @@ describe("purchase document recognition", () => {
     });
     expect(coordinator.canOpenFile).to.equal(false);
     expect(coordinator.canRedact).to.equal(true);
+    expect(coordinator.canDelete).to.equal(true);
+    expect(coordinator.purchaseOrderNumber).to.equal("PO-100");
     expect(coordinator.lines[0].unitPrice).to.equal("$4.50");
 
     const associate = purchaseDocumentView(parsed, {
@@ -649,6 +651,7 @@ describe("purchase document recognition", () => {
     expect(associate.lines[0].unitPrice).to.equal(null);
     expect(associate.lines[0].extendedPrice).to.equal(null);
     expect(associate.canRedact).to.equal(false);
+    expect(associate.canDelete).to.equal(false);
 
     const manager = purchaseDocumentView(
       { ...parsed, pricesRedacted: true },
@@ -657,6 +660,15 @@ describe("purchase document recognition", () => {
     expect(manager.canOpenFile).to.equal(true);
     expect(manager.lines[0].unitPrice).to.equal(null);
     expect(manager.canImport).to.equal(false);
+    expect(manager.canDelete).to.equal(false);
+
+    const uploadedOrder = purchaseDocumentView(
+      { ...parsed, kind: "purchase-order", pricesRedacted: true },
+      { canOpenFile: false, canUpload: true, canSeePrices: false },
+    );
+    expect(uploadedOrder.canDelete).to.equal(true);
+    expect(uploadedOrder.canRedact).to.equal(false);
+    expect(uploadedOrder.lines[0].unitPrice).to.equal(null);
   });
 
   it("keeps the PDF file itself to project managers", () => {

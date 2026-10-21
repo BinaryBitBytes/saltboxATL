@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  DeletePurchaseDocumentInputSchema,
   PhotoFileNameSchema,
   PurchaseDocumentKindSchema,
   PurchaseDocumentSchema,
@@ -8,6 +9,7 @@ import {
   type PurchaseOrder,
   type ReceivingOrder,
 } from "@/lib/inventory-schema";
+import { deleteUploadedPurchasePdf } from "@/lib/inbound/entry";
 import { PersonNameSchema } from "@/lib/validation/fields";
 import { LIMITS } from "@/lib/validation/limits";
 import {
@@ -187,6 +189,18 @@ export async function redactPurchaseDocumentRecord(
     document.pricesRedacted = true;
     document.lines = redactDocumentLines(document.lines);
     return document;
+  });
+}
+
+export async function deletePurchaseDocumentRecord(rawData: unknown): Promise<string> {
+  const parsed = parseWithSchema(DeletePurchaseDocumentInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  return updateSystem((system) => {
+    const result = deleteUploadedPurchasePdf(system, parsed.data.id);
+    if (!result.ok) throw new ServiceError(result.error);
+    return result.documentId;
   });
 }
 
