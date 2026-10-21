@@ -8,9 +8,11 @@ import {
   CreateShippingOrderInputSchema,
   CubeItemInputSchema,
   RecordDeliveryScanInputSchema,
+  DeleteInboundPurchaseOrderInputSchema,
   SaveBuyerPurchaseOrderInputSchema,
   SaveDeliveryNotesInputSchema,
   SetPurchaseOrderJobIdInputSchema,
+  UpdateInboundPurchaseOrderInputSchema,
   PalletInputSchema,
   PutawayLocationInputSchema,
   ReopenReceivingInputSchema,
@@ -39,6 +41,8 @@ import {
   upsertPurchaseOrder,
 } from "@/lib/purchase-orders";
 import { createId, nowIso } from "@/backend/server/helperUtils";
+import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
+import { PersonNameSchema } from "@/lib/validation/fields";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
   addQuantity,
@@ -543,13 +547,15 @@ export async function saveBuyerPurchaseOrderRecord(
   );
 
   const now = nowIso();
-  return updateSystem((system) =>
-    saveBuyerPurchaseOrder(system.purchaseOrders, {
+  const receiver = PersonNameSchema.safeParse(parsed.data.createdBy);
+  return updateSystem((system) => {
+    const purchaseOrder = saveBuyerPurchaseOrder(system.purchaseOrders, {
       id: createId(),
       purchaseOrderNumber: parsed.data.purchaseOrderNumber,
       generatedAt: parsed.data.expectedArrivalAt,
       createdAt: now,
       projectId: parsed.data.projectId,
+      jobIdNumber: parsed.data.jobIdNumber,
       vendor: parsed.data.vendor,
       carrier: parsed.data.carrier,
       expectedArrivalAt: parsed.data.expectedArrivalAt,
@@ -565,8 +571,82 @@ export async function saveBuyerPurchaseOrderRecord(
         quantity: line.quantity,
       })),
       uploadedBy: parsed.data.createdBy,
-    }),
+    });
+    refreshExpectedLoad(system, {
+      purchaseOrderNumber: purchaseOrder.purchaseOrderNumber,
+      vendor: purchaseOrder.vendor?.trim() || "Unspecified vendor",
+      carrier: purchaseOrder.carrier?.trim() || "Unspecified carrier",
+      palletCount: purchaseOrder.expectedPalletCount ?? 0,
+      lines: purchaseOrder.lines ?? [],
+      now,
+      nextId: createId,
+      receiverName: receiver.success ? receiver.data : "Expected Receiver",
+    });
+    return purchaseOrder;
+  });
+}
+
+export async function updateInboundPurchaseOrderRecord(
+  rawData: unknown,
+): Promise<PurchaseOrder> {
+  const parsed = parseWithSchema(UpdateInboundPurchaseOrderInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  assertLargeInputConfirmed(
+    sumQuantities(parsed.data.lines),
+    parsed.data,
+    LIMITS.largeQuantity,
+    "expected quantity",
   );
+  const now = nowIso();
+  return updateSystem((system) => {
+    const result = updateInboundEntry(system, {
+      id: parsed.data.id,
+      purchaseOrderNumber: parsed.data.purchaseOrderNumber,
+      projectId: parsed.data.projectId,
+      jobIdNumber: parsed.data.jobIdNumber,
+      vendor: parsed.data.vendor,
+      carrier: parsed.data.carrier,
+      expectedArrivalAt: parsed.data.expectedArrivalAt,
+      buyerName: parsed.data.buyerName,
+      notes: parsed.data.notes,
+      expectationStatus: parsed.data.expectationStatus,
+      expectedPalletCount: parsed.data.expectedPalletCount,
+      lines: parsed.data.lines.map((line) => ({
+        id: createId(),
+        sku: line.sku,
+        upc: line.upc,
+        description: line.description,
+        quantity: line.quantity,
+      })),
+      now,
+      nextId: createId,
+    });
+    if (!result.ok) throw new ServiceError(result.error);
+    return result.purchaseOrder;
+  });
+}
+
+export async function deleteInboundPurchaseOrderRecord(
+  rawData: unknown,
+  actor: { role: string; id: string },
+): Promise<string[]> {
+  const parsed = parseWithSchema(DeleteInboundPurchaseOrderInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  return updateSystem((system) => {
+    const result = deleteInboundEntry(system, parsed.data.id, {
+      actorRole: actor.role,
+      actorId: actor.id,
+      now: nowIso(),
+      dockConfirmText: parsed.data.dockConfirmText,
+      nextId: createId,
+    });
+    if (!result.ok) throw new ServiceError(result.error);
+    return result.documentIds;
+  });
 }
 
 function requireShipment(system: InventorySystem, shipmentId: string) {

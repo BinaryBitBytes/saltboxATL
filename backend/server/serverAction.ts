@@ -9,9 +9,11 @@ import {
   createLocationRecord,
   createReceivingOrderRecord,
   recordDeliveryScanRecord,
+  deleteInboundPurchaseOrderRecord,
   saveBuyerPurchaseOrderRecord,
   saveDeliveryNotesRecord,
   setPurchaseOrderJobIdRecord,
+  updateInboundPurchaseOrderRecord,
   createRoomRecord,
   acknowledgeWarehousePrintsRecord,
   cancelCustomerOrderRecord,
@@ -51,9 +53,11 @@ import {
 } from "@/lib/inventory/spreadsheet-source";
 import { ValidationError } from "@/lib/validation/errors";
 import {
+  deletePurchaseDocumentRecord,
   importInvoiceLoadRecord,
   redactPurchaseDocumentRecord,
 } from "@/backend/server/document-service";
+import { deletePurchaseDocumentFile } from "@/backend/server/document-store";
 
 export type ActionFailure = {
   ok: false;
@@ -121,6 +125,23 @@ export async function setPurchaseOrderJobId(
   }
 }
 
+export async function deletePurchaseDocument(
+  rawData: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireApiPermission("uploadBuyerOrders");
+    const documentId = await deletePurchaseDocumentRecord(rawData);
+    await Promise.all([
+      deletePurchaseDocumentFile(documentId, false),
+      deletePurchaseDocumentFile(documentId, true),
+    ]);
+    revalidateInventory();
+    return { ok: true, data: { id: documentId } };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function redactInvoicePrices(
   documentId: string,
 ): Promise<ActionResult<PurchaseDocument>> {
@@ -164,6 +185,45 @@ export async function saveBuyerPurchaseOrder(
     const data = await saveBuyerPurchaseOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function updateInboundPurchaseOrder(
+  rawData: unknown,
+): Promise<ActionResult<PurchaseOrder>> {
+  try {
+    const user = await requireApiPermission("uploadBuyerOrders");
+    const data = await updateInboundPurchaseOrderRecord(withCreatedBy(rawData, user));
+    revalidateInventory();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function deleteInboundPurchaseOrder(
+  rawData: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireApiPermission("uploadBuyerOrders");
+    const id =
+      rawData && typeof rawData === "object" && !Array.isArray(rawData)
+        ? String((rawData as { id?: unknown }).id ?? "")
+        : "";
+    const documentIds = await deleteInboundPurchaseOrderRecord(rawData, {
+      role: user.role,
+      id: user.id,
+    });
+    await Promise.all(
+      documentIds.flatMap((documentId) => [
+        deletePurchaseDocumentFile(documentId, false),
+        deletePurchaseDocumentFile(documentId, true),
+      ]),
+    );
+    revalidateInventory();
+    return { ok: true, data: { id } };
   } catch (error) {
     return fail(error);
   }

@@ -1,13 +1,14 @@
 import "server-only";
 
 import {
+  DeletePurchaseDocumentInputSchema,
   PhotoFileNameSchema,
   PurchaseDocumentKindSchema,
   PurchaseDocumentSchema,
   type PurchaseDocument,
-  type PurchaseOrder,
   type ReceivingOrder,
 } from "@/lib/inventory-schema";
+import { deleteUploadedPurchasePdf } from "@/lib/inbound/entry";
 import { PersonNameSchema } from "@/lib/validation/fields";
 import { LIMITS } from "@/lib/validation/limits";
 import {
@@ -24,10 +25,19 @@ import {
   readPurchaseDocumentFile,
   writePurchaseDocumentFile,
 } from "@/backend/server/document-store";
-import { isPdf, redactPdfBytes } from "@/lib/documents/pdf-text";
+import {
+  blackOutPricingColumns,
+  isPdf,
+  pricingBlackoutTokens,
+  redactPdfBytes,
+} from "@/lib/documents/pdf-text";
 import { recognizePurchasePdf } from "@/lib/documents/recognize";
 import { assessComposioSetup, composioVisionClient } from "@/lib/documents/composio-vision";
-import { applyRecognizedPurchase } from "@/lib/documents/apply";
+import {
+  inboundReviewFromRecognition,
+  type InboundReviewDraft,
+} from "@/lib/documents/apply";
+import { redactPositionedPrices } from "@/lib/documents/pdf-redact";
 import {
   INVOICE_ONLY,
   buildExpectedInboundLoad,
@@ -47,7 +57,7 @@ export type PurchaseDocumentUpload = {
 
 export async function uploadPurchaseDocumentRecord(
   input: PurchaseDocumentUpload,
-): Promise<{ document: PurchaseDocument; purchaseOrder: PurchaseOrder }> {
+): Promise<{ document: PurchaseDocument; review: InboundReviewDraft }> {
   if (input.bytes.byteLength > LIMITS.purchaseDocumentMaxBytes) {
     throw new ServiceError(
       `Each PDF must be ${Math.round(LIMITS.purchaseDocumentMaxBytes / (1024 * 1024))} MB or smaller.`,
@@ -75,6 +85,10 @@ export async function uploadPurchaseDocumentRecord(
     throw new ServiceError("The PDF did not include a purchase order number.");
   }
 
+  const positioned = await redactPositionedPrices(input.bytes);
+  const storedBytes =
+    positioned ??
+    blackOutPricingColumns(input.bytes, pricingBlackoutTokens(recognized.lines));
   const documentId = createId();
   const now = nowIso();
   const draft = {
@@ -83,8 +97,8 @@ export async function uploadPurchaseDocumentRecord(
     kind: kindParsed.data,
     originalName,
     mimeType: "application/pdf" as const,
-    size: input.bytes.byteLength,
-    pricesRedacted: false,
+    size: storedBytes.byteLength,
+    pricesRedacted: true,
     recognitionSource: recognized.source,
     recognitionNote: recognized.note,
     jobIdNumber: recognized.jobIdNumber,
@@ -93,8 +107,8 @@ export async function uploadPurchaseDocumentRecord(
       upc: line.upc,
       description: line.description,
       quantity: line.quantity,
-      unitPrice: kindParsed.data === "invoice" ? line.unitPrice : null,
-      extendedPrice: kindParsed.data === "invoice" ? line.extendedPrice : null,
+      unitPrice: null,
+      extendedPrice: null,
     })),
     createdAt: now,
     createdBy: input.createdBy,
@@ -104,18 +118,13 @@ export async function uploadPurchaseDocumentRecord(
     throw new ServiceError(parsed.error);
   }
 
-  await writePurchaseDocumentFile(documentId, input.bytes);
+  await writePurchaseDocumentFile(documentId, storedBytes);
+  const review = inboundReviewFromRecognition(recognized);
   try {
     return await updateSystem((system) => {
-      const purchaseOrder = applyRecognizedPurchase(system.purchaseOrders, recognized, {
-        id: createId(),
-        now,
-        uploadedBy: input.createdBy,
-        nextLineId: createId,
-      });
       if (!system.purchaseDocuments) system.purchaseDocuments = [];
       system.purchaseDocuments.unshift(parsed.data);
-      return { document: parsed.data, purchaseOrder };
+      return { document: parsed.data, review };
     });
   } catch (error) {
     await deletePurchaseDocumentFile(documentId);
@@ -160,6 +169,18 @@ export async function redactPurchaseDocumentRecord(
     document.pricesRedacted = true;
     document.lines = redactDocumentLines(document.lines);
     return document;
+  });
+}
+
+export async function deletePurchaseDocumentRecord(rawData: unknown): Promise<string> {
+  const parsed = parseWithSchema(DeletePurchaseDocumentInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  return updateSystem((system) => {
+    const result = deleteUploadedPurchasePdf(system, parsed.data.id);
+    if (!result.ok) throw new ServiceError(result.error);
+    return result.documentId;
   });
 }
 

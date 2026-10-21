@@ -14,6 +14,7 @@ export type PurchaseDocumentLineView = {
 
 export type PurchaseDocumentView = {
   id: string;
+  purchaseOrderNumber: string;
   kind: PurchaseDocumentKind;
   originalName: string;
   recognitionNote: string;
@@ -21,6 +22,7 @@ export type PurchaseDocumentView = {
   canOpenFile: boolean;
   canRedact: boolean;
   canImport: boolean;
+  canDelete: boolean;
   imported: boolean;
   lines: PurchaseDocumentLineView[];
 };
@@ -35,11 +37,13 @@ export function purchaseDocumentView(
     !document.pricesRedacted;
   return {
     id: document.id,
+    purchaseOrderNumber: document.purchaseOrderNumber,
     kind: document.kind,
     originalName: document.originalName,
     recognitionNote: document.recognitionNote ?? "",
     pricesRedacted: document.pricesRedacted,
     canOpenFile: access.canOpenFile,
+    canDelete: access.canUpload,
     canRedact: access.canUpload && document.kind === "invoice" && !document.pricesRedacted,
     canImport:
       access.canUpload &&

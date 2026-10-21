@@ -29,15 +29,7 @@ export function applyRecognizedPurchase(
       ? incoming
       : existing?.lines && existing.lines.length > 0
         ? existing.lines
-        : [
-            {
-              id: input.nextLineId(),
-              sku: "",
-              upc: "",
-              description: "See attached purchase order",
-              quantity: 1,
-            },
-          ];
+        : [];
   const status =
     existing?.expectationStatus === "cancelled" ||
     existing?.expectationStatus === "in-transit"
@@ -54,7 +46,7 @@ export function applyRecognizedPurchase(
     expectedArrivalAt:
       recognized.expectedArrivalAt || existing?.expectedArrivalAt || input.now,
     buyerName: recognized.buyerName || existing?.buyerName || undefined,
-    notes: existing?.expectationNotes || recognized.note,
+    notes: associateNotes(recognized, existing?.expectationNotes),
     expectationStatus: status,
     expectedPalletCount:
       recognized.expectedPalletCount ?? existing?.expectedPalletCount ?? 0,
@@ -67,14 +59,49 @@ export function applyRecognizedPurchase(
   return saved;
 }
 
+export type InboundReviewDraft = {
+  purchaseOrderNumber: string;
+  vendor: string;
+  jobIdNumber: string;
+  notes: string;
+  lines: Array<{
+    sku: string;
+    upc: string;
+    description: string;
+    quantity: number;
+  }>;
+};
+
+/** Fields for the inbound form. The user reviews these before the PO is saved. */
+export function inboundReviewFromRecognition(
+  recognized: RecognizedPurchase,
+): InboundReviewDraft {
+  return {
+    purchaseOrderNumber: recognized.purchaseOrderNumber ?? "",
+    vendor: recognized.vendor ?? "",
+    jobIdNumber: recognized.jobIdNumber ?? "",
+    notes: recognized.shipTo ?? "",
+    lines: buyerLinesFromRecognition(recognized.lines, () => "00000000-0000-4000-8000-000000000001").map(
+      (line) => ({
+        sku: line.sku,
+        upc: line.upc,
+        description: line.description,
+        quantity: line.quantity,
+      }),
+    ),
+  };
+}
+
 export function buyerLinesFromRecognition(
   lines: RecognizedLine[],
   nextLineId: () => string,
 ): BuyerPoLine[] {
   const buyerLines: BuyerPoLine[] = [];
   for (const line of lines) {
-    const description = cleanDescription(line.description);
-    const sku = isSku(line.sku) ? line.sku : "";
+    const description = cleanDescription(
+      stripKnownPrices(line.description, [line.unitPrice, line.extendedPrice]),
+    );
+    const sku = skuFromRecognition(line.sku);
     const upc = isUpc(line.upc) ? line.upc : "";
     if (!sku && !description) continue;
     if (!Number.isInteger(line.quantity) || line.quantity < 1) continue;
@@ -87,6 +114,36 @@ export function buyerLinesFromRecognition(
     });
   }
   return buyerLines;
+}
+
+function associateNotes(
+  recognized: RecognizedPurchase,
+  existingNotes: string | undefined,
+): string {
+  const base = recognized.shipTo || existingNotes || recognized.note;
+  const prices = recognized.lines.flatMap((line) => [line.unitPrice, line.extendedPrice]);
+  return stripKnownPrices(base, prices) || recognized.note;
+}
+
+function stripKnownPrices(value: string, prices: Array<string | null>): string {
+  const removable = prices
+    .filter((price): price is string => Boolean(price))
+    .sort((left, right) => right.length - left.length);
+  let next = value;
+  for (const price of removable) {
+    next = next.split(price).join(" ");
+  }
+  return next
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
+function skuFromRecognition(value: string): string {
+  const trimmed = value.trim();
+  if (isSku(trimmed)) return trimmed;
+  const hyphenated = trimmed.replace(/\s+/g, "-");
+  return isSku(hyphenated) ? hyphenated : "";
 }
 
 function cleanDescription(value: string): string {

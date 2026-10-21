@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       createdBy: user.name,
     });
     console.log("[purchase-documents] saved", {
-      purchaseOrderNumber: saved.purchaseOrder.purchaseOrderNumber,
+      purchaseOrderNumber: saved.review.purchaseOrderNumber,
       source: saved.document.recognitionSource,
       note: saved.document.recognitionNote,
     });

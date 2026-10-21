@@ -1,7 +1,8 @@
 "use client";
 
 import { T } from "@/frontend/client/language";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import type { InboundReviewDraft } from "@/lib/documents/apply";
 import { useRouter } from "next/navigation";
 import { saveBuyerPurchaseOrder } from "@/backend/server/serverAction";
 import { Button } from "@/components/ui/button";
@@ -40,12 +41,17 @@ function emptyLine(): LineDraft {
   };
 }
 
-export function BuyerPoForm() {
+export function BuyerPoForm({
+  draft,
+}: {
+  draft?: (InboundReviewDraft & { version: number }) | null;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState("");
   const [projectId, setProjectId] = useState("");
+  const [jobIdNumber, setJobIdNumber] = useState("");
   const [vendor, setVendor] = useState("");
   const [carrier, setCarrier] = useState("");
   const [buyerName, setBuyerName] = useState("");
@@ -58,6 +64,26 @@ export function BuyerPoForm() {
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
+
+  useEffect(() => {
+    if (!draft) return;
+    setPurchaseOrderNumber(draft.purchaseOrderNumber);
+    setVendor(draft.vendor);
+    setJobIdNumber(draft.jobIdNumber);
+    setNotes(draft.notes);
+    setLines(
+      draft.lines.length > 0
+        ? draft.lines.map((line) => ({
+            key: nextLineKey(),
+            sku: line.sku,
+            upc: line.upc,
+            description: line.description,
+            quantity: String(line.quantity),
+          }))
+        : [emptyLine()],
+    );
+    setError(null);
+  }, [draft]);
 
   const expectedUnits = lines.reduce(
     (sum, line) => sum + (Number(line.quantity) || 0),
@@ -82,6 +108,7 @@ export function BuyerPoForm() {
       const result = await saveBuyerPurchaseOrder({
         purchaseOrderNumber,
         projectId,
+        jobIdNumber,
         vendor,
         carrier,
         buyerName,
@@ -108,6 +135,7 @@ export function BuyerPoForm() {
       }
       setPurchaseOrderNumber("");
       setProjectId("");
+      setJobIdNumber("");
       setVendor("");
       setCarrier("");
       setBuyerName("");
@@ -128,6 +156,14 @@ export function BuyerPoForm() {
             value={purchaseOrderNumber}
             onChange={(event) => setPurchaseOrderNumber(event.target.value)}
             required
+          />
+        </Field>
+        <Field label="Job ID" htmlFor="job-id">
+          <Input
+            id="job-id"
+            value={jobIdNumber}
+            maxLength={LIMITS.code}
+            onChange={(event) => setJobIdNumber(event.target.value)}
           />
         </Field>
         <Field label="Project ID" htmlFor="project-id">

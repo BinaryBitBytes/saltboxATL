@@ -277,6 +277,7 @@ export const SaveBuyerPurchaseOrderInputSchema = z
   .object({
     purchaseOrderNumber: NonEmptyStringSchema,
     projectId: JobIdNumberSchema.optional().default(null),
+    jobIdNumber: JobIdNumberSchema.optional().default(null),
     vendor: NonEmptyStringSchema,
     carrier: NonEmptyStringSchema,
     expectedArrivalAt: DateTimeSchema,
@@ -333,6 +334,55 @@ export const SaveBuyerPurchaseOrderInputSchema = z
   });
 export type SaveBuyerPurchaseOrderInput = z.infer<
   typeof SaveBuyerPurchaseOrderInputSchema
+>;
+
+export const INBOUND_DELETE_CONFIRMATION = "DELETE";
+export const INBOUND_DOCK_DELETE_CONFIRMATION = "DeleteThisMeow";
+export const INBOUND_DOCK_DELETE_DAILY_LIMIT = 5;
+
+export const UpdateInboundPurchaseOrderInputSchema =
+  SaveBuyerPurchaseOrderInputSchema.safeExtend({
+    id: UuidSchema,
+  });
+export type UpdateInboundPurchaseOrderInput = z.infer<
+  typeof UpdateInboundPurchaseOrderInputSchema
+>;
+
+export const DeleteInboundPurchaseOrderInputSchema = z
+  .object({
+    id: UuidSchema,
+    confirmText: z.string(),
+    dockConfirmText: z.string().max(64).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.confirmText !== INBOUND_DELETE_CONFIRMATION) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Type DELETE to confirm this inbound entry should be removed.",
+        path: ["confirmText"],
+      });
+    }
+  });
+export type DeleteInboundPurchaseOrderInput = z.infer<
+  typeof DeleteInboundPurchaseOrderInputSchema
+>;
+
+export const DeletePurchaseDocumentInputSchema = z
+  .object({
+    id: UuidSchema,
+    confirmText: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.confirmText !== INBOUND_DELETE_CONFIRMATION) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Type DELETE to confirm this uploaded PDF should be removed.",
+        path: ["confirmText"],
+      });
+    }
+  });
+export type DeletePurchaseDocumentInput = z.infer<
+  typeof DeletePurchaseDocumentInputSchema
 >;
 
 export const ReceivingOrderSchema = z.object({

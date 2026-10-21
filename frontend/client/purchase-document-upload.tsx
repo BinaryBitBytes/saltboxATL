@@ -6,13 +6,17 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, NativeSelect } from "@/frontend/client/field";
+import type { InboundReviewDraft } from "@/lib/documents/apply";
 
-export function PurchaseDocumentUpload() {
+export function PurchaseDocumentUpload({
+  onReview,
+}: {
+  onReview?: (review: InboundReviewDraft) => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [savedPo, setSavedPo] = useState<string | null>(null);
-  const [savedJob, setSavedJob] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const [kind, setKind] = useState<"purchase-order" | "invoice">("purchase-order");
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -20,8 +24,7 @@ export function PurchaseDocumentUpload() {
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    setSavedPo(null);
-    setSavedJob(null);
+    setReady(false);
     if (!file) {
       setError("Choose a PDF purchase order or invoice.");
       return;
@@ -40,14 +43,14 @@ export function PurchaseDocumentUpload() {
       const payload = (await response.json()) as {
         success?: boolean;
         error?: string;
-        data?: { purchaseOrder?: { purchaseOrderNumber?: string; jobIdNumber?: string | null } };
+        data?: { review?: InboundReviewDraft };
       };
-      if (!response.ok || !payload.success) {
+      if (!response.ok || !payload.success || !payload.data?.review) {
         setError(payload.error || "The PDF could not be read.");
         return;
       }
-      setSavedPo(payload.data?.purchaseOrder?.purchaseOrderNumber ?? "");
-      setSavedJob(payload.data?.purchaseOrder?.jobIdNumber ?? null);
+      onReview?.(payload.data.review);
+      setReady(true);
       setPurchaseOrderNumber("");
       setFile(null);
       router.refresh();
@@ -91,15 +94,9 @@ export function PurchaseDocumentUpload() {
           <T>{error}</T>
         </p>
       ) : null}
-      {savedPo ? (
+      {ready ? (
         <p className="text-xs text-muted-foreground">
-          <T>Saved as an expected PO.</T> {savedPo}
-          {savedJob ? (
-            <>
-              {" · "}
-              <T>Job ID</T> {savedJob}
-            </>
-          ) : null}
+          <T>The PDF is stored. Review the inbound form below, then save it.</T>
         </p>
       ) : null}
       <div>

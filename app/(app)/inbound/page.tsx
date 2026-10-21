@@ -1,4 +1,8 @@
 import { FormattedDate, T } from "@/frontend/client/language";
+import {
+  InboundPoActions,
+  type InboundPoDraft,
+} from "@/frontend/client/inbound-po-actions";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -7,9 +11,10 @@ import {
   inboundStatusLabel,
 } from "@/lib/inbound/forecast";
 
+import { inboundReceivingHasStarted } from "@/lib/inbound/entry";
 import { formatJobId } from "@/lib/purchase-orders";
-import { BuyerPoForm } from "@/frontend/client/buyer-po-form";
-import { PurchaseDocumentUpload } from "@/frontend/client/purchase-document-upload";
+import type { PurchaseOrder } from "@/lib/inventory-schema";
+import { InboundCapture } from "@/frontend/client/inbound-capture";
 import { PurchaseDocumentActions } from "@/frontend/client/purchase-document-actions";
 import { JobIdEditor } from "@/frontend/client/job-id-editor";
 import { purchaseDocumentView } from "@/lib/documents/view";
@@ -40,7 +45,7 @@ export default async function InboundPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold"><T>Inbound forecast</T></h1>
         <p className="text-sm text-muted-foreground"><T>Buyer purchase orders describe the carrier, vendor, and lines expected before the dock receives them. Project managers assign the internal job ID. Warehouse roles can read this board and cannot change it.</T></p>
-        <p className="text-sm text-muted-foreground"><T>The PDF file is saved for project managers.</T></p>
+        <p className="text-sm text-muted-foreground"><T>The PDF can be opened by managers, security managers, project managers, and coordinators.</T></p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -71,29 +76,7 @@ export default async function InboundPage() {
         </div>
       ) : null}
 
-      {canUpload ? (
-        <Card>
-          <CardHeader>
-            <CardTitle><T>Read purchase document</T></CardTitle>
-            <CardDescription><T>Read a purchase order or invoice PDF. Image recognition fills the PO, job ID, vendor, carrier, and lines, and the dock sees that purchase as an expected PO.</T></CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PurchaseDocumentUpload />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {canUpload ? (
-        <Card>
-          <CardHeader>
-            <CardTitle><T>Upload buyer PO</T></CardTitle>
-            <CardDescription><T>Saving the same PO number updates the expected details and leaves the job ID assigned by the project manager in place.</T></CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BuyerPoForm />
-          </CardContent>
-        </Card>
-      ) : null}
+      {canUpload ? <InboundCapture /> : null}
 
       <div className="grid gap-3">
         {forecast.rows.length === 0 ? (
@@ -129,6 +112,19 @@ export default async function InboundPage() {
                     value={`${row.expectedUnits} / ${row.receivedUnits}`}
                   />
                 </div>
+                {canUpload ? (
+                  <InboundPoActions
+                    order={inboundDraft(
+                      system.purchaseOrders.find((order) => order.id === row.id),
+                      row,
+                    )}
+                    freightOnDock={inboundReceivingHasStarted(
+                      system.receivingOrders,
+                      row.purchaseOrderNumber,
+                    )}
+                    canDeleteDockFreight={user.role === "coordinator"}
+                  />
+                ) : null}
                 {canAssign ? (
                   <JobIdEditor
                     purchaseOrderNumber={row.purchaseOrderNumber}
@@ -169,6 +165,43 @@ export default async function InboundPage() {
       </div>
     </div>
   );
+}
+
+function inboundDraft(
+  order: PurchaseOrder | undefined,
+  row: {
+    id: string;
+    purchaseOrderNumber: string;
+    projectId: string | null;
+    jobIdNumber: string | null;
+    vendor: string;
+    carrier: string;
+    expectedArrivalAt: string | null;
+    buyerName: string | null;
+    notes: string;
+    expectedPalletCount: number;
+    lines: Array<{ sku: string; upc: string; description: string; quantity: number }>;
+  },
+): InboundPoDraft {
+  return {
+    id: order?.id ?? row.id,
+    purchaseOrderNumber: order?.purchaseOrderNumber ?? row.purchaseOrderNumber,
+    projectId: order?.projectId ?? row.projectId ?? "",
+    jobIdNumber: order?.jobIdNumber ?? row.jobIdNumber ?? "",
+    vendor: order?.vendor ?? row.vendor,
+    carrier: order?.carrier ?? row.carrier,
+    expectedArrivalAt: order?.expectedArrivalAt ?? row.expectedArrivalAt ?? "",
+    buyerName: order?.buyerName ?? row.buyerName ?? "",
+    notes: order?.expectationNotes ?? row.notes,
+    expectationStatus: order?.expectationStatus ?? "expected",
+    expectedPalletCount: order?.expectedPalletCount ?? row.expectedPalletCount,
+    lines: (order?.lines ?? row.lines).map((line) => ({
+      sku: line.sku,
+      upc: line.upc,
+      description: line.description,
+      quantity: line.quantity,
+    })),
+  };
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
