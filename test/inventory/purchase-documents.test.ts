@@ -149,6 +149,7 @@ describe("purchase document recognition", () => {
       extendedPrice: "$48.00",
     });
     expect(recognized.lines[0].sku).to.not.equal("IGNORE-SKU");
+    expect(recognized.lines[0].upc).to.equal("");
 
     const orders: PurchaseOrder[] = [];
     const created = applyRecognizedPurchase(orders, recognized, {
@@ -162,6 +163,7 @@ describe("purchase document recognition", () => {
     expect(created.jobIdNumber).to.equal("JOB-42");
     expect(created.lines?.[0]).to.deep.include({
       sku: "C9300-24P",
+      upc: "",
       description: "Catalyst 24 port",
       quantity: 4,
     });
@@ -286,6 +288,127 @@ describe("purchase document recognition", () => {
     expect(JSON.stringify(recognized.lines)).to.not.include("deliver");
   });
 
+  it("stops the item table at the first row that does not match and does not resume", async () => {
+    const recognized = await recognizePurchasePdf(
+      pdfDocument([
+        "PO Number: PO-100",
+        "MPN Description Qty Rate Amount",
+        "C9300-24P Catalyst 24 port 4 12.50 $48.00",
+        "Please deliver to dock 4",
+        "WS-C3850-24T Switch 24 port 2 10.00 $20.00",
+        "ABC-100 123456 Widget housing 3 $9.00 $27.00",
+      ]),
+      { vision: null },
+    );
+    expect(recognized.lines.map((line) => line.sku)).to.deep.equal(["C9300-24P"]);
+  });
+
+  it("still reads a loose sku and upc row when the page has no table header", async () => {
+    const recognized = await recognizePurchasePdf(
+      pdfDocument(["PO Number: PO-100", "ABC-100 123456 Widget housing 3 $9.00 $27.00"]),
+      { vision: null },
+    );
+    expect(recognized.lines).to.have.length(1);
+    expect(recognized.lines[0]).to.deep.include({
+      sku: "ABC-100",
+      upc: "123456",
+      description: "Widget housing",
+      quantity: 3,
+      unitPrice: "$9.00",
+      extendedPrice: "$27.00",
+    });
+  });
+
+  it("uses the MPN column as the SKU when the table also has a SKU column", async () => {
+    const recognized = await recognizePurchasePdf(
+      pdfDocument([
+        "PO Number: PO-100",
+        "SKU MPN Description Qty",
+        "IGNORE-SKU C9300-24P Catalyst 24 port 4",
+      ]),
+      { vision: null },
+    );
+    expect(recognized.lines).to.have.length(1);
+    expect(recognized.lines[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantity: 4,
+      unitPrice: null,
+      extendedPrice: null,
+    });
+    expect(recognized.lines[0].sku).to.not.equal("IGNORE-SKU");
+  });
+
+  it("uses the SKU column when the table has no MPN column", async () => {
+    const recognized = await recognizePurchasePdf(
+      pdfDocument([
+        "PO Number: PO-100",
+        "SKU Description Qty",
+        "C9300-24P Catalyst 24 port 4",
+      ]),
+      { vision: null },
+    );
+    expect(recognized.lines[0]).to.deep.include({
+      sku: "C9300-24P",
+      description: "Catalyst 24 port",
+      quantity: 4,
+    });
+  });
+
+  it("keeps the existing lines when a later PDF has no item rows", async () => {
+    const orders: PurchaseOrder[] = [];
+    const first = await recognizePurchasePdf(pdfDocument(SAMPLE_LINES), { vision: null });
+    applyRecognizedPurchase(orders, first, {
+      id: PO_ID,
+      now: NOW,
+      uploadedBy: "Morgan Coordinator",
+      nextLineId: () => LINE_ID,
+    });
+    const again = await recognizePurchasePdf(
+      pdfDocument(["PO Number: PO-100", "Vendor: CommScope", "Job Number: JOB-NEW"]),
+      { vision: null },
+    );
+    expect(again.lines).to.deep.equal([]);
+    applyRecognizedPurchase(orders, again, {
+      id: PO_ID,
+      now: NOW,
+      uploadedBy: "Morgan Coordinator",
+      nextLineId: () => "99999999-9999-4999-8999-999999999999",
+    });
+    expect(orders).to.have.length(1);
+    expect(orders[0].vendor).to.equal("CommScope");
+    expect(orders[0].jobIdNumber).to.equal("JOB-42");
+    expect(orders[0].lines).to.have.length(1);
+    expect(orders[0].lines?.[0].id).to.equal(LINE_ID);
+    expect(orders[0].lines?.[0].sku).to.equal("FBR-LC-12-100");
+    expect(orders[0].expectationNotes).to.not.include("JOB-NEW");
+  });
+
+  it("stores no placeholder line when the PDF has a ship-to block and no items", async () => {
+    const recognized = await recognizePurchasePdf(
+      pdfDocument([
+        "Vendor: Corning",
+        "PO Number: PO-100",
+        "Job Number: JOB-42",
+        "Ship To:",
+        "Saltbox ATL",
+      ]),
+      { vision: null },
+    );
+    expect(recognized.lines).to.deep.equal([]);
+    const orders: PurchaseOrder[] = [];
+    const created = applyRecognizedPurchase(orders, recognized, {
+      id: PO_ID,
+      now: NOW,
+      uploadedBy: "Morgan Coordinator",
+      nextLineId: () => LINE_ID,
+    });
+    expect(created.lines).to.deep.equal([]);
+    expect(created.jobIdNumber).to.equal("JOB-42");
+    expect(created.expectationNotes).to.equal("Saltbox ATL");
+    expect(created.expectationNotes).to.not.include("JOB-42");
+  });
+
   it("masks numeric prices inside readable text and leaves other PDF bytes unchanged", () => {
     const readable = pdfDocument([
       "MPN Description Qty Rate Amount",
@@ -305,6 +428,43 @@ describe("purchase document recognition", () => {
     expect(storedText).to.include("Catalyst 24 port");
     expect(storedText).to.not.include("12.50");
     expect(storedText).to.not.include("$48.00");
+    expect(storedText).to.match(/\b4\b/);
+  });
+
+  it("collects only numeric rate and amount cell values for blackout", () => {
+    expect(
+      pricingBlackoutTokens([
+        { unitPrice: "Rate", extendedPrice: "4" },
+        { unitPrice: " 12.50 ", extendedPrice: "$1,250.00" },
+        { unitPrice: "", extendedPrice: null },
+        { unitPrice: "12.5", extendedPrice: "$48" },
+      ]),
+    ).to.deep.equal(["12.50", "$1,250.00"]);
+  });
+
+  it("returns the same PDF bytes when the token list has no numeric prices", () => {
+    const bytes = pdfDocument(["Rate Amount 4 C9300-24P $not-a-price"]);
+    const stored = blackOutPricingColumns(bytes, ["Rate", "Amount", "4", ""]);
+    expect(stored).to.equal(bytes);
+    expect(extractPdfText(stored)).to.include("Rate Amount 4 C9300-24P");
+  });
+
+  it("masks a comma amount and leaves the quantity digit in place", () => {
+    const bytes = pdfDocument([
+      "MPN Description Qty Rate Amount",
+      "C9300-24P Catalyst 24 port 4 12.50 $1,250.00",
+    ]);
+    const stored = blackOutPricingColumns(bytes, pricingBlackoutTokens([
+      { unitPrice: "12.50", extendedPrice: "$1,250.00" },
+    ]));
+    const storedText = extractPdfText(stored);
+    expect(stored.byteLength).to.equal(bytes.byteLength);
+    expect(storedText).to.include("C9300-24P Catalyst 24 port 4 ##### #########");
+    expect(storedText).to.match(/\bRate\b/);
+    expect(storedText).to.match(/\bAmount\b/);
+    expect(storedText).to.not.include("12.50");
+    expect(storedText).to.not.include("$1,250.00");
+    expect(storedText).to.not.include("1,250");
   });
 
   it("drops Rate and Amount values when recognized lines are written to the inbound form", () => {
