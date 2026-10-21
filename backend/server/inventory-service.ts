@@ -41,7 +41,8 @@ import {
   upsertPurchaseOrder,
 } from "@/lib/purchase-orders";
 import { createId, nowIso } from "@/backend/server/helperUtils";
-import { deleteInboundEntry, updateInboundEntry } from "@/lib/inbound/entry";
+import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
+import { PersonNameSchema } from "@/lib/validation/fields";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
   addQuantity,
@@ -546,13 +547,15 @@ export async function saveBuyerPurchaseOrderRecord(
   );
 
   const now = nowIso();
-  return updateSystem((system) =>
-    saveBuyerPurchaseOrder(system.purchaseOrders, {
+  const receiver = PersonNameSchema.safeParse(parsed.data.createdBy);
+  return updateSystem((system) => {
+    const purchaseOrder = saveBuyerPurchaseOrder(system.purchaseOrders, {
       id: createId(),
       purchaseOrderNumber: parsed.data.purchaseOrderNumber,
       generatedAt: parsed.data.expectedArrivalAt,
       createdAt: now,
       projectId: parsed.data.projectId,
+      jobIdNumber: parsed.data.jobIdNumber,
       vendor: parsed.data.vendor,
       carrier: parsed.data.carrier,
       expectedArrivalAt: parsed.data.expectedArrivalAt,
@@ -568,8 +571,19 @@ export async function saveBuyerPurchaseOrderRecord(
         quantity: line.quantity,
       })),
       uploadedBy: parsed.data.createdBy,
-    }),
-  );
+    });
+    refreshExpectedLoad(system, {
+      purchaseOrderNumber: purchaseOrder.purchaseOrderNumber,
+      vendor: purchaseOrder.vendor?.trim() || "Unspecified vendor",
+      carrier: purchaseOrder.carrier?.trim() || "Unspecified carrier",
+      palletCount: purchaseOrder.expectedPalletCount ?? 0,
+      lines: purchaseOrder.lines ?? [],
+      now,
+      nextId: createId,
+      receiverName: receiver.success ? receiver.data : "Expected Receiver",
+    });
+    return purchaseOrder;
+  });
 }
 
 export async function updateInboundPurchaseOrderRecord(

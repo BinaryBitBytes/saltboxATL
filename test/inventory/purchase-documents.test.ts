@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it } from "mocha";
 import { expect } from "chai";
 import {
@@ -29,7 +31,10 @@ import {
 import {
   applyRecognizedPurchase,
   buyerLinesFromRecognition,
+  inboundReviewFromRecognition,
 } from "@/lib/documents/apply";
+import { readPdfGlyphs } from "@/lib/documents/pdf-layout";
+import { redactPositionedPrices } from "@/lib/documents/pdf-redact";
 import {
   buildExpectedInboundLoad,
   invoiceImportError,
@@ -741,6 +746,104 @@ describe("purchase document recognition", () => {
       text: null,
       failure: { kind: "missing-api-key", status: null, message: "COMPOSIO_API_KEY is missing." },
     });
+  });
+});
+
+describe("Graybar purchase order layout", () => {
+  const bytes = () =>
+    new Uint8Array(
+      readFileSync(path.join(process.cwd(), "test/fixtures/graybar-po-46867.pdf")),
+    );
+  const prices = [
+    "15.45",
+    "370.80",
+    "73.42",
+    "2,202.60",
+    "53.45",
+    "213.80",
+    "110.00",
+    "2,200.00",
+    "29.09",
+    "407.26",
+    "1.34",
+    "21.44",
+    "290.00",
+    "1,160.00",
+    "157.26",
+    "314.52",
+    "$6,890.42",
+  ];
+
+  it("reads the circled PO, vendor, job number, and item rows", async () => {
+    const recognized = await recognizePurchasePdf(bytes(), { vision: null });
+    expect(recognized.purchaseOrderNumber).to.equal("46867");
+    expect(recognized.vendor).to.equal("Graybar");
+    expect(recognized.jobIdNumber).to.equal("AMA3-11-0383");
+    expect(recognized.carrier).to.equal(null);
+    expect(recognized.expectedArrivalAt).to.equal(null);
+    expect(recognized.shipTo).to.include("MidPoint Technology Group");
+    expect(recognized.shipTo).to.include("1314 Chattahoochee Ave NW");
+    expect(recognized.lines.map((line) => line.sku)).to.deep.equal([
+      "31090",
+      "AF1ACL104",
+      "AF1ACL101",
+      "S200X225VATY",
+      "RMEH4BL",
+      "1700C",
+      "SM SRC-9-SCLC-KIT",
+      "WP400P/4500FT",
+    ]);
+    expect(recognized.lines[0]).to.deep.include({
+      description: "AWS FBN No:ATL068ROMP01 Velcro - Velcro Roll",
+      quantity: 24,
+      unitPrice: "15.45",
+      extendedPrice: "370.80",
+    });
+    expect(recognized.lines[2]).to.deep.include({
+      sku: "AF1ACL101",
+      description: "AFL - One-Click Cleaner MPO/MTP 500 cleans",
+      quantity: 4,
+    });
+    expect(recognized.lines[6]?.description).to.equal(
+      "Fluke - Test Reference Cord, OS2, LC-SC Simplex, 2m",
+    );
+    expect(JSON.stringify(recognized.lines.map((line) => line.sku))).to.not.include("AF1ACL...");
+    expect(recognized.lines.map((line) => line.quantity)).to.deep.equal([
+      24, 30, 4, 20, 14, 16, 4, 2,
+    ]);
+  });
+
+  it("puts the circled fields on the review form and leaves prices off it", async () => {
+    const recognized = await recognizePurchasePdf(bytes(), { vision: null });
+    const review = inboundReviewFromRecognition(recognized);
+    expect(review.purchaseOrderNumber).to.equal("46867");
+    expect(review.vendor).to.equal("Graybar");
+    expect(review.jobIdNumber).to.equal("AMA3-11-0383");
+    expect(review.lines).to.have.length(8);
+    expect(review.lines[6]?.sku).to.equal("SM-SRC-9-SCLC-KIT");
+    const visible = JSON.stringify(review);
+    for (const price of prices) expect(visible).to.not.include(price);
+    expect(visible).to.include("AF1ACL104");
+    expect(visible).to.include("Velcro - Velcro Roll");
+  });
+
+  it("blacks out only the Rate and Amount numbers", async () => {
+    const redacted = await redactPositionedPrices(bytes());
+    expect(redacted).to.not.equal(null);
+    if (!redacted) return;
+    const text = (await readPdfGlyphs(redacted)).map((glyph) => glyph.text).join("\n");
+    for (const price of prices) expect(text, price).to.not.include(price);
+    expect(text).to.include("Graybar");
+    expect(text).to.include("46867");
+    expect(text).to.include("AMA3-11-0383");
+    expect(text).to.include("AF1ACL104");
+    expect(text).to.include("WP400P/4500FT");
+    expect(text).to.match(/\bRate\b/);
+    expect(text).to.match(/\bAmount\b/);
+    expect(text).to.match(/\bQty\b/);
+    expect(text).to.include("24");
+    expect(text).to.include("Velcro - Velcro Roll");
+    expect(text).to.include("443-487-4067");
   });
 });
 

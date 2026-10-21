@@ -13,8 +13,7 @@ import {
 
 import { formatJobId } from "@/lib/purchase-orders";
 import type { PurchaseOrder } from "@/lib/inventory-schema";
-import { BuyerPoForm } from "@/frontend/client/buyer-po-form";
-import { PurchaseDocumentUpload } from "@/frontend/client/purchase-document-upload";
+import { InboundCapture } from "@/frontend/client/inbound-capture";
 import { PurchaseDocumentActions } from "@/frontend/client/purchase-document-actions";
 import { JobIdEditor } from "@/frontend/client/job-id-editor";
 import { purchaseDocumentView } from "@/lib/documents/view";
@@ -76,29 +75,7 @@ export default async function InboundPage() {
         </div>
       ) : null}
 
-      {canUpload ? (
-        <Card>
-          <CardHeader>
-            <CardTitle><T>Read purchase document</T></CardTitle>
-            <CardDescription><T>Read a purchase order or invoice PDF. Only the numbers in the Rate and Amount cells are masked before the file is saved. Vendor, buyer, job ID, and expected lines are filled from the matching columns, and the dock gets an expected receiving load.</T></CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PurchaseDocumentUpload />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {canUpload ? (
-        <Card>
-          <CardHeader>
-            <CardTitle><T>Upload buyer PO</T></CardTitle>
-            <CardDescription><T>Saving the same PO number updates the expected details and leaves the job ID assigned by the project manager in place.</T></CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BuyerPoForm />
-          </CardContent>
-        </Card>
-      ) : null}
+      {canUpload ? <InboundCapture /> : null}
 
       <div className="grid gap-3">
         {forecast.rows.length === 0 ? (

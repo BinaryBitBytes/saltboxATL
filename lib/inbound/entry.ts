@@ -93,7 +93,7 @@ export function updateInboundEntry(
     }));
   }
 
-  syncExpectedLoad(system, {
+  refreshExpectedLoad(system, {
     purchaseOrderNumber: nextNumber,
     vendor: input.vendor,
     carrier: input.carrier,
@@ -158,7 +158,7 @@ export function deleteUploadedPurchasePdf(
   return { ok: true, documentId: removed?.id ?? documentId };
 }
 
-function syncExpectedLoad(
+export function refreshExpectedLoad(
   system: InventorySystem,
   input: {
     purchaseOrderNumber: string;
@@ -168,6 +168,7 @@ function syncExpectedLoad(
     lines: BuyerPoLine[];
     now: string;
     nextId: () => string;
+    receiverName?: string;
   },
 ) {
   const receivable = receivableInvoiceLines(input.lines);
@@ -191,7 +192,7 @@ function syncExpectedLoad(
       vendor: input.vendor,
       carrier: input.carrier,
       palletCount: input.palletCount,
-      receiverName: "Expected Receiver",
+      receiverName: input.receiverName?.trim() || "Expected Receiver",
       lines: receivable,
       existingOrderNumbers: system.receivingOrders.map((order) => order.orderNumber),
     });

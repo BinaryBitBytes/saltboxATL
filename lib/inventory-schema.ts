@@ -277,6 +277,7 @@ export const SaveBuyerPurchaseOrderInputSchema = z
   .object({
     purchaseOrderNumber: NonEmptyStringSchema,
     projectId: JobIdNumberSchema.optional().default(null),
+    jobIdNumber: JobIdNumberSchema.optional().default(null),
     vendor: NonEmptyStringSchema,
     carrier: NonEmptyStringSchema,
     expectedArrivalAt: DateTimeSchema,
@@ -340,7 +341,6 @@ export const INBOUND_DELETE_CONFIRMATION = "DELETE";
 export const UpdateInboundPurchaseOrderInputSchema =
   SaveBuyerPurchaseOrderInputSchema.safeExtend({
     id: UuidSchema,
-    jobIdNumber: JobIdNumberSchema.optional().default(null),
   });
 export type UpdateInboundPurchaseOrderInput = z.infer<
   typeof UpdateInboundPurchaseOrderInputSchema

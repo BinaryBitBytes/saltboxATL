@@ -3,6 +3,8 @@ import { LIMITS } from "@/lib/validation/limits";
 import { hasControlChars, hasHtmlMarkup } from "@/lib/validation/sanitize";
 import { PersonNameSchema } from "@/lib/validation/fields";
 import { extractPdfText } from "@/lib/documents/pdf-text";
+import { readPdfGlyphs } from "@/lib/documents/pdf-layout";
+import { parsePositionedPurchase } from "@/lib/documents/positioned-po";
 
 export const COMPOSIO_NOTE = "Read with Composio image recognition.";
 export const EMBEDDED_NOTE = "Read from text embedded in the PDF.";
@@ -133,6 +135,7 @@ export async function recognizePurchasePdf(
   },
 ): Promise<RecognizedPurchase> {
   const embedded = parsePurchaseFields(extractPdfText(bytes));
+  const positioned = await readPositionedFields(bytes);
   let visionText: string | null = null;
   let failureMessage: string | null = null;
   if (options?.vision) {
@@ -152,7 +155,7 @@ export async function recognizePurchasePdf(
     : emptyRecognition();
   const merged = mergeFields(
     visionText?.trim() ? fromVision : emptyRecognition(),
-    embedded,
+    mergeFields(positioned ?? emptyRecognition(), embedded),
   );
   const override = codeToken(options?.purchaseOrderNumber ?? null, LIMITS.text);
   if (override) merged.purchaseOrderNumber = override;
@@ -162,6 +165,25 @@ export async function recognizePurchasePdf(
     source: usedVision ? "composio" : "embedded-text",
     note: recognitionNote(usedVision, failureMessage),
   };
+}
+
+function hasCompressedPdfText(bytes: Uint8Array): boolean {
+  const raw = Buffer.from(bytes).toString("latin1");
+  return raw.includes("startxref") && raw.includes("/FlateDecode");
+}
+
+async function readPositionedFields(
+  bytes: Uint8Array,
+): Promise<Omit<RecognizedPurchase, "source" | "note"> | null> {
+  if (!hasCompressedPdfText(bytes)) return null;
+  try {
+    return parsePositionedPurchase(await readPdfGlyphs(bytes));
+  } catch (error) {
+    console.log("[pdf] positioned read failed", {
+      message: error instanceof Error ? error.message : "PDF text could not be positioned.",
+    });
+    return null;
+  }
 }
 
 function readVisionResult(value: string | null | VisionReadResult): {

@@ -89,6 +89,7 @@ export function saveBuyerPurchaseOrder(
     expectedPalletCount: number;
     lines: BuyerPoLine[];
     uploadedBy?: string;
+    jobIdNumber?: string | null;
   },
 ): PurchaseOrder {
   const existing = findPurchaseOrder(purchaseOrders, input.purchaseOrderNumber);
@@ -98,7 +99,7 @@ export function saveBuyerPurchaseOrder(
       purchaseOrderNumber: input.purchaseOrderNumber,
       generatedAt: input.generatedAt,
       createdAt: input.createdAt ?? input.generatedAt,
-      jobIdNumber: null,
+      jobIdNumber: input.jobIdNumber ?? null,
       projectId: input.projectId,
       vendor: input.vendor,
       carrier: input.carrier,
@@ -126,6 +127,9 @@ export function saveBuyerPurchaseOrder(
   existing.lines = input.lines;
   existing.uploadedBy = input.uploadedBy ?? existing.uploadedBy;
   existing.source = "coordinator";
+  if (!existing.jobIdNumber && input.jobIdNumber) {
+    existing.jobIdNumber = input.jobIdNumber;
+  }
   return existing;
 }
 
