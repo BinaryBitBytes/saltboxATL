@@ -56,7 +56,12 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "scanLookup",
     "viewInboundForecast",
   ],
-  coordinator: ["viewDashboard", "uploadBuyerOrders", "viewInboundForecast"],
+  coordinator: [
+    "viewDashboard",
+    "uploadBuyerOrders",
+    "viewInboundForecast",
+    "viewPurchaseDocuments",
+  ],
   "project-manager": [
     "viewDashboard",
     "viewInventory",
@@ -247,6 +252,7 @@ describe("role permission scope", () => {
       "viewDashboard",
       "uploadBuyerOrders",
       "viewInboundForecast",
+      "viewPurchaseDocuments",
     ]);
     expect(SCOPE["project-manager"]).to.not.include("uploadBuyerOrders");
     expect(SCOPE["project-manager"]).to.not.include("receive");

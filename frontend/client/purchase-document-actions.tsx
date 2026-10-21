@@ -112,7 +112,7 @@ export function PurchaseDocumentActions({
           </Button>
         ) : (
           <p className="text-xs text-muted-foreground">
-            <T>PDF saved for project managers</T>
+            <T>PDF saved for managers, project managers, and coordinators</T>
           </p>
         )}
       </div>

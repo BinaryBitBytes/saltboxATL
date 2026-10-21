@@ -45,7 +45,7 @@ export default async function InboundPage() {
       <div>
         <h1 className="font-heading text-xl font-semibold"><T>Inbound forecast</T></h1>
         <p className="text-sm text-muted-foreground"><T>Buyer purchase orders describe the carrier, vendor, and lines expected before the dock receives them. Project managers assign the internal job ID. Warehouse roles can read this board and cannot change it.</T></p>
-        <p className="text-sm text-muted-foreground"><T>The PDF file is saved for project managers.</T></p>
+        <p className="text-sm text-muted-foreground"><T>The PDF can be opened by managers, security managers, project managers, and coordinators.</T></p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

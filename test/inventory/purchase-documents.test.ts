@@ -676,19 +676,19 @@ describe("purchase document recognition", () => {
     expect(uploadedOrder.lines[0].unitPrice).to.equal(null);
   });
 
-  it("keeps the PDF file itself to project managers", () => {
+  it("opens the inbound PDF only for coordinators, project managers, managers, and security managers", () => {
+    for (const role of ["coordinator", "project-manager", "manager", "security-manager"] as const) {
+      expect(canAccessPath(role, `/api/purchase-documents/${DOC_ID}`, "GET"), role).to.equal(
+        true,
+      );
+    }
+    for (const role of ["associate", "security-associate", "threepl", "driver", "user"] as const) {
+      expect(canAccessPath(role, `/api/purchase-documents/${DOC_ID}`, "GET"), role).to.equal(
+        false,
+      );
+    }
     expect(canAccessPath("coordinator", "/api/purchase-documents", "POST")).to.equal(true);
-    expect(canAccessPath("coordinator", `/api/purchase-documents/${DOC_ID}`, "GET")).to.equal(
-      false,
-    );
-    expect(canAccessPath("associate", `/api/purchase-documents/${DOC_ID}`, "GET")).to.equal(
-      false,
-    );
-    expect(canAccessPath("project-manager", `/api/purchase-documents/${DOC_ID}`, "GET")).to.equal(
-      true,
-    );
     expect(canAccessPath("project-manager", "/api/purchase-documents", "POST")).to.equal(false);
-    expect(canAccessPath("manager", `/api/purchase-documents/${DOC_ID}`, "GET")).to.equal(true);
   });
 
   it("asks Composio for document text detection and reads the vision payload", async () => {

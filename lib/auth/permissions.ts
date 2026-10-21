@@ -54,7 +54,11 @@ export const PERMISSIONS = {
     "manager",
   ]),
   assignJobId: withSecurityRoles(["project-manager", "manager"]),
-  viewPurchaseDocuments: withSecurityRoles(["project-manager", "manager"]),
+  viewPurchaseDocuments: withSecurityRoles([
+    "coordinator",
+    "project-manager",
+    "manager",
+  ]),
   viewDriverLoad: withSecurityRoles(["driver", "manager"]),
   confirmDelivery: withSecurityRoles(["driver", "manager"]),
 } as const;
