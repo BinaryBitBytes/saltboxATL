@@ -4,6 +4,7 @@ import {
   DeleteInboundPurchaseOrderInputSchema,
   DeletePurchaseDocumentInputSchema,
   INBOUND_DELETE_CONFIRMATION,
+  INBOUND_DOCK_DELETE_CONFIRMATION,
   InventorySystemSchema,
   PurchaseDocumentSchema,
   UpdateInboundPurchaseOrderInputSchema,
@@ -14,6 +15,7 @@ import { buildExpectedInboundLoad } from "@/lib/documents/inbound-load";
 import {
   deleteInboundEntry,
   deleteUploadedPurchasePdf,
+  dockFreightDeletesOnDay,
   updateInboundEntry,
 } from "@/lib/inbound/entry";
 import { saveBuyerPurchaseOrder } from "@/lib/purchase-orders";
@@ -26,6 +28,10 @@ const DOC_ID = "44444444-4444-4444-8444-444444444444";
 const OTHER_DOC_ID = "55555555-5555-4555-8555-555555555555";
 const EXTRA_DOC_ID = "99999999-9999-4999-8999-999999999992";
 const MISSING_ID = "12121212-1212-4212-8212-121212121212";
+const ACTOR_ID = "12121212-1212-4212-8212-121212121213";
+const ITEM_ID = "99999999-9999-4999-8999-999999999981";
+const LOC_ID = "99999999-9999-4999-8999-999999999982";
+const TXN_ID = "99999999-9999-4999-8999-999999999983";
 const LOAD_ID = "66666666-6666-4666-8666-666666666666";
 const PALLET_ID = "77777777-7777-4777-8777-777777777777";
 const CASE_ID = "88888888-8888-4888-8888-888888888888";
@@ -43,6 +49,8 @@ function system(partial: {
   purchaseOrders?: PurchaseOrder[];
   receivingOrders?: InventorySystem["receivingOrders"];
   purchaseDocuments?: InventorySystem["purchaseDocuments"];
+  inventoryItems?: Array<Record<string, unknown>>;
+  transactions?: Array<Record<string, unknown>>;
 }): InventorySystem {
   return InventorySystemSchema.parse(partial);
 }
@@ -99,6 +107,19 @@ function document(purchaseOrderNumber: string, id: string) {
     ],
     createdAt: NOW,
   });
+}
+
+function dockOptions(
+  overrides: Parameters<typeof deleteInboundEntry>[2] = {},
+): Parameters<typeof deleteInboundEntry>[2] {
+  return {
+    actorRole: "coordinator",
+    actorId: ACTOR_ID,
+    now: NOW,
+    dockConfirmText: INBOUND_DOCK_DELETE_CONFIRMATION,
+    nextId: nextIdFactory(),
+    ...overrides,
+  };
 }
 
 function correction(
@@ -547,7 +568,11 @@ describe("inbound purchase order corrections", () => {
       ],
     });
     const result = deleteInboundEntry(stored, PO_ID);
-    expect(result).to.deep.equal({ ok: true, documentIds: [DOC_ID, EXTRA_DOC_ID] });
+    expect(result).to.deep.equal({
+      ok: true,
+      documentIds: [DOC_ID, EXTRA_DOC_ID],
+      reversedUnits: 0,
+    });
     expect(stored.purchaseOrders.map((order) => order.purchaseOrderNumber)).to.deep.equal([
       "PO-200",
     ]);
@@ -647,6 +672,193 @@ describe("inbound purchase order corrections", () => {
     expect(stored.purchaseOrders).to.have.length(1);
     expect(stored.receivingOrders).to.have.length(1);
     expect(stored.purchaseDocuments?.map((entry) => entry.id)).to.deep.equal([DOC_ID]);
+  });
+
+  it("lets a coordinator delete docked freight and balance the putaway", () => {
+    const load = expectedLoad();
+    load.status = "received";
+    load.intake = "dock";
+    const stored = system({
+      purchaseOrders: [buyer()],
+      receivingOrders: [load],
+      purchaseDocuments: [document("PO-100", DOC_ID)],
+      inventoryItems: [
+        {
+          id: ITEM_ID,
+          sku: "BAD-SKU",
+          upc: "NA",
+          batch: null,
+          locationId: LOC_ID,
+          quantity: 4,
+        },
+      ],
+      transactions: [
+        {
+          id: TXN_ID,
+          type: "putaway",
+          occurredAt: NOW,
+          sku: "BAD-SKU",
+          upc: "NA",
+          batch: null,
+          inventoryItemId: ITEM_ID,
+          locationId: LOC_ID,
+          quantityDelta: 4,
+          referenceType: "receiving-order",
+          referenceId: LOAD_ID,
+        },
+      ],
+    });
+    const refused = deleteInboundEntry(stored, PO_ID, dockOptions({ dockConfirmText: "delete this meow" }));
+    expect(refused).to.deep.equal({
+      ok: false,
+      error:
+        "Type DeleteThisMeow to confirm deleting a purchase order that has freight on the dock.",
+    });
+    expect(stored.inventoryItems[0].quantity).to.equal(4);
+    expect(stored.purchaseOrders).to.have.length(1);
+
+    const result = deleteInboundEntry(stored, PO_ID, dockOptions());
+    expect(result).to.deep.include({ ok: true, documentIds: [DOC_ID], reversedUnits: 4 });
+    expect(stored.purchaseOrders).to.have.length(0);
+    expect(stored.receivingOrders).to.have.length(0);
+    expect(stored.purchaseDocuments).to.have.length(0);
+    expect(stored.inventoryItems[0].quantity).to.equal(0);
+    const reversal = stored.transactions.find((entry) => entry.quantityDelta === -4);
+    expect(reversal).to.include({
+      sku: "BAD-SKU",
+      inventoryItemId: ITEM_ID,
+      quantityAfter: 0,
+      referenceType: "purchase-order",
+      referenceId: PO_ID,
+    });
+    expect(dockFreightDeletesOnDay(stored, NOW)).to.equal(1);
+  });
+
+  it("balances only the quantity still on hand", () => {
+    const load = expectedLoad();
+    load.status = "completed";
+    load.intake = "dock";
+    const stored = system({
+      purchaseOrders: [buyer()],
+      receivingOrders: [load],
+      inventoryItems: [
+        {
+          id: ITEM_ID,
+          sku: "BAD-SKU",
+          upc: "NA",
+          batch: null,
+          locationId: LOC_ID,
+          quantity: 1,
+        },
+      ],
+      transactions: [
+        {
+          id: TXN_ID,
+          type: "putaway",
+          occurredAt: NOW,
+          sku: "BAD-SKU",
+          batch: null,
+          inventoryItemId: ITEM_ID,
+          locationId: LOC_ID,
+          quantityDelta: 4,
+          referenceType: "receiving-order",
+          referenceId: LOAD_ID,
+        },
+      ],
+    });
+    const result = deleteInboundEntry(stored, PO_ID, dockOptions());
+    expect(result).to.deep.include({ ok: true, reversedUnits: 1 });
+    expect(stored.inventoryItems[0].quantity).to.equal(0);
+  });
+
+  it("refuses a manager and a wrong second confirmation for docked freight", () => {
+    const load = expectedLoad();
+    load.status = "in-progress";
+    load.intake = "dock";
+    const stored = system({
+      purchaseOrders: [buyer()],
+      receivingOrders: [load],
+    });
+    const manager = deleteInboundEntry(
+      stored,
+      PO_ID,
+      dockOptions({ actorRole: "manager" }),
+    );
+    expect(manager).to.deep.equal({
+      ok: false,
+      error: "Only a coordinator can delete a purchase order that already has freight on the dock.",
+    });
+    for (const dockConfirmText of ["DeleteThisMeow ", "deletethismeow", ""]) {
+      const rejected = deleteInboundEntry(
+        stored,
+        PO_ID,
+        dockOptions({ dockConfirmText }),
+      );
+      expect(rejected.ok, JSON.stringify(dockConfirmText)).to.equal(false);
+    }
+    expect(stored.purchaseOrders).to.have.length(1);
+    expect(stored.receivingOrders).to.have.length(1);
+    expect(dockFreightDeletesOnDay(stored, NOW)).to.equal(0);
+  });
+
+  it("allows five docked deletes in a day and refuses the sixth until the next day", () => {
+    const orders = [];
+    const loads = [];
+    for (let number = 1; number <= 6; number += 1) {
+      const purchaseOrder = buyer({
+        id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(number).padStart(12, "0")}`,
+        purchaseOrderNumber: `PO-${number}`,
+      });
+      const load = expectedLoad(`PO-${number}`);
+      load.id = `bbbbbbbb-bbbb-4bbb-8bbb-${String(number).padStart(12, "0")}`;
+      load.status = "in-progress";
+      load.intake = "dock";
+      load.workingPalletId = `cccccccc-cccc-4ccc-8ccc-${String(number).padStart(12, "0")}`;
+      load.pallets[0].id = load.workingPalletId;
+      load.pallets[0].cases[0].id = `dddddddd-dddd-4ddd-8ddd-${String(number).padStart(12, "0")}`;
+      orders.push(purchaseOrder);
+      loads.push(load);
+    }
+    const stored = system({ purchaseOrders: orders, receivingOrders: loads });
+    for (let number = 1; number <= 5; number += 1) {
+      const result = deleteInboundEntry(
+        stored,
+        `aaaaaaaa-aaaa-4aaa-8aaa-${String(number).padStart(12, "0")}`,
+        dockOptions(),
+      );
+      expect(result.ok, `PO-${number}`).to.equal(true);
+    }
+    expect(dockFreightDeletesOnDay(stored, NOW)).to.equal(5);
+    const blocked = deleteInboundEntry(
+      stored,
+      "aaaaaaaa-aaaa-4aaa-8aaa-000000000006",
+      dockOptions(),
+    );
+    expect(blocked).to.deep.equal({
+      ok: false,
+      error:
+        "A coordinator can delete 5 purchase orders with freight on the dock per day. That limit is already used.",
+    });
+    expect(stored.purchaseOrders.map((order) => order.purchaseOrderNumber)).to.deep.equal([
+      "PO-6",
+    ]);
+    const nextDay = deleteInboundEntry(
+      stored,
+      "aaaaaaaa-aaaa-4aaa-8aaa-000000000006",
+      dockOptions({ now: "2026-10-22T15:00:00.000Z" }),
+    );
+    expect(nextDay.ok).to.equal(true);
+    expect(stored.purchaseOrders).to.have.length(0);
+  });
+
+  it("does not count an ordinary delete toward the docked-freight limit", () => {
+    const stored = system({
+      purchaseOrders: [buyer()],
+      receivingOrders: [expectedLoad()],
+    });
+    const result = deleteInboundEntry(stored, PO_ID, dockOptions());
+    expect(result.ok).to.equal(true);
+    expect(dockFreightDeletesOnDay(stored, NOW)).to.equal(0);
   });
 
   it("requires the exact word DELETE before an uploaded PDF can be removed", () => {

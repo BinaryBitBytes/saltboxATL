@@ -628,13 +628,22 @@ export async function updateInboundPurchaseOrderRecord(
   });
 }
 
-export async function deleteInboundPurchaseOrderRecord(rawData: unknown): Promise<string[]> {
+export async function deleteInboundPurchaseOrderRecord(
+  rawData: unknown,
+  actor: { role: string; id: string },
+): Promise<string[]> {
   const parsed = parseWithSchema(DeleteInboundPurchaseOrderInputSchema, rawData);
   if (!parsed.success) {
     throw new ServiceError(parsed.error);
   }
   return updateSystem((system) => {
-    const result = deleteInboundEntry(system, parsed.data.id);
+    const result = deleteInboundEntry(system, parsed.data.id, {
+      actorRole: actor.role,
+      actorId: actor.id,
+      now: nowIso(),
+      dockConfirmText: parsed.data.dockConfirmText,
+      nextId: createId,
+    });
     if (!result.ok) throw new ServiceError(result.error);
     return result.documentIds;
   });

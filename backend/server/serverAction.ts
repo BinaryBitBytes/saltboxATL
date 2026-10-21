@@ -207,12 +207,15 @@ export async function deleteInboundPurchaseOrder(
   rawData: unknown,
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    await requireApiPermission("uploadBuyerOrders");
+    const user = await requireApiPermission("uploadBuyerOrders");
     const id =
       rawData && typeof rawData === "object" && !Array.isArray(rawData)
         ? String((rawData as { id?: unknown }).id ?? "")
         : "";
-    const documentIds = await deleteInboundPurchaseOrderRecord(rawData);
+    const documentIds = await deleteInboundPurchaseOrderRecord(rawData, {
+      role: user.role,
+      id: user.id,
+    });
     await Promise.all(
       documentIds.flatMap((documentId) => [
         deletePurchaseDocumentFile(documentId, false),

@@ -16,7 +16,10 @@ import {
   largeInputPayload,
 } from "@/frontend/client/large-input-confirm";
 import { localDateTimeValue, toIsoDateTime } from "@/lib/format";
-import { INBOUND_DELETE_CONFIRMATION } from "@/lib/inventory-schema";
+import {
+  INBOUND_DELETE_CONFIRMATION,
+  INBOUND_DOCK_DELETE_CONFIRMATION,
+} from "@/lib/inventory-schema";
 import { LIMITS } from "@/lib/validation/limits";
 
 export type InboundPoDraft = {
@@ -76,7 +79,15 @@ function linesFromOrder(order: InboundPoDraft): LineDraft[] {
   }));
 }
 
-export function InboundPoActions({ order }: { order: InboundPoDraft }) {
+export function InboundPoActions({
+  order,
+  freightOnDock = false,
+  canDeleteDockFreight = false,
+}: {
+  order: InboundPoDraft;
+  freightOnDock?: boolean;
+  canDeleteDockFreight?: boolean;
+}) {
   const router = useRouter();
   const t = useT();
   const [pending, startTransition] = useTransition();
@@ -84,6 +95,7 @@ export function InboundPoActions({ order }: { order: InboundPoDraft }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState("");
+  const [dockConfirmText, setDockConfirmText] = useState("");
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState(order.purchaseOrderNumber);
   const [projectId, setProjectId] = useState(order.projectId);
   const [jobIdNumber, setJobIdNumber] = useState(order.jobIdNumber);
@@ -177,11 +189,18 @@ export function InboundPoActions({ order }: { order: InboundPoDraft }) {
   function remove(event: React.FormEvent) {
     event.preventDefault();
     if (confirmText !== INBOUND_DELETE_CONFIRMATION) return;
+    if (
+      freightOnDock &&
+      (!canDeleteDockFreight || dockConfirmText !== INBOUND_DOCK_DELETE_CONFIRMATION)
+    ) {
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const result = await deleteInboundPurchaseOrder({
         id: order.id,
         confirmText,
+        dockConfirmText: freightOnDock ? dockConfirmText : undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -206,6 +225,7 @@ export function InboundPoActions({ order }: { order: InboundPoDraft }) {
             setEditing(false);
             setError(null);
             setConfirmText("");
+            setDockConfirmText("");
             setDeleting(true);
           }}
           disabled={pending}
@@ -431,30 +451,66 @@ export function InboundPoActions({ order }: { order: InboundPoDraft }) {
             {t("You are deleting PO {{po}}.", { po: order.purchaseOrderNumber })}
           </p>
           <p className="text-sm text-muted-foreground">
-            <T>
-              This removes this inbound card, its saved PDF, and the expected receiving load. It does not remove freight the dock has already started. This cannot be undone.
-            </T>
+            {freightOnDock ? (
+              canDeleteDockFreight ? (
+                <T>
+                  This purchase order has freight on the dock. Deleting it removes the dock receipt and balances any inventory that was put away from it. A coordinator can do this 5 times per day. This cannot be undone.
+                </T>
+              ) : (
+                <T>
+                  This purchase order has freight on the dock. Only a coordinator can delete it.
+                </T>
+              )
+            ) : (
+              <T>
+                This removes this inbound card, its saved PDF, and the expected receiving load. It does not remove freight the dock has already started. This cannot be undone.
+              </T>
+            )}
           </p>
-          <Field label="Type DELETE to confirm." htmlFor={fieldId("delete-confirm")}>
-            <Input
-              id={fieldId("delete-confirm")}
-              value={confirmText}
-              onChange={(event) => setConfirmText(event.target.value)}
-              autoComplete="off"
-              autoCapitalize="characters"
-              spellCheck={false}
-              aria-label={t("Type DELETE to confirm.")}
-            />
-          </Field>
+          {freightOnDock && !canDeleteDockFreight ? null : (
+            <Field label="Type DELETE to confirm." htmlFor={fieldId("delete-confirm")}>
+              <Input
+                id={fieldId("delete-confirm")}
+                value={confirmText}
+                onChange={(event) => setConfirmText(event.target.value)}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                aria-label={t("Type DELETE to confirm.")}
+              />
+            </Field>
+          )}
+          {freightOnDock && canDeleteDockFreight && confirmText === INBOUND_DELETE_CONFIRMATION ? (
+            <Field label="Type DeleteThisMeow to confirm." htmlFor={fieldId("dock-delete-confirm")}>
+              <Input
+                id={fieldId("dock-delete-confirm")}
+                value={dockConfirmText}
+                onChange={(event) => setDockConfirmText(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                aria-label={t("Type DeleteThisMeow to confirm.")}
+              />
+            </Field>
+          ) : null}
           {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="submit"
-              variant="destructive"
-              disabled={pending || confirmText !== INBOUND_DELETE_CONFIRMATION}
-            >
-              {pending ? "Deleting…" : "Delete this entry"}
-            </Button>
+            {freightOnDock && !canDeleteDockFreight ? null : (
+              <Button
+                type="submit"
+                variant="destructive"
+                disabled={
+                  pending ||
+                  confirmText !== INBOUND_DELETE_CONFIRMATION ||
+                  (freightOnDock && dockConfirmText !== INBOUND_DOCK_DELETE_CONFIRMATION)
+                }
+              >
+                {pending
+                  ? "Deleting…"
+                  : freightOnDock
+                    ? "Delete this docked PO"
+                    : "Delete this entry"}
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -462,6 +518,7 @@ export function InboundPoActions({ order }: { order: InboundPoDraft }) {
               onClick={() => {
                 setDeleting(false);
                 setConfirmText("");
+                setDockConfirmText("");
                 setError(null);
               }}
             >

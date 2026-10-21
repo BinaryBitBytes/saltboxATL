@@ -337,6 +337,8 @@ export type SaveBuyerPurchaseOrderInput = z.infer<
 >;
 
 export const INBOUND_DELETE_CONFIRMATION = "DELETE";
+export const INBOUND_DOCK_DELETE_CONFIRMATION = "DeleteThisMeow";
+export const INBOUND_DOCK_DELETE_DAILY_LIMIT = 5;
 
 export const UpdateInboundPurchaseOrderInputSchema =
   SaveBuyerPurchaseOrderInputSchema.safeExtend({
@@ -350,6 +352,7 @@ export const DeleteInboundPurchaseOrderInputSchema = z
   .object({
     id: UuidSchema,
     confirmText: z.string(),
+    dockConfirmText: z.string().max(64).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.confirmText !== INBOUND_DELETE_CONFIRMATION) {

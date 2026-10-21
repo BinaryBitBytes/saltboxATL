@@ -11,6 +11,7 @@ import {
   inboundStatusLabel,
 } from "@/lib/inbound/forecast";
 
+import { inboundReceivingHasStarted } from "@/lib/inbound/entry";
 import { formatJobId } from "@/lib/purchase-orders";
 import type { PurchaseOrder } from "@/lib/inventory-schema";
 import { InboundCapture } from "@/frontend/client/inbound-capture";
@@ -117,6 +118,11 @@ export default async function InboundPage() {
                       system.purchaseOrders.find((order) => order.id === row.id),
                       row,
                     )}
+                    freightOnDock={inboundReceivingHasStarted(
+                      system.receivingOrders,
+                      row.purchaseOrderNumber,
+                    )}
+                    canDeleteDockFreight={user.role === "coordinator"}
                   />
                 ) : null}
                 {canAssign ? (

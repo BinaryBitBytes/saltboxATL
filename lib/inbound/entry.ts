@@ -1,8 +1,10 @@
-import type {
-  BuyerPoLine,
-  ExpectationStatus,
-  InventorySystem,
-  PurchaseOrder,
+import {
+  INBOUND_DOCK_DELETE_CONFIRMATION,
+  INBOUND_DOCK_DELETE_DAILY_LIMIT,
+  type BuyerPoLine,
+  type ExpectationStatus,
+  type InventorySystem,
+  type PurchaseOrder,
 } from "@/lib/inventory-schema";
 import {
   buildExpectedInboundLoad,
@@ -105,10 +107,29 @@ export function updateInboundEntry(
   return { ok: true, purchaseOrder: existing };
 }
 
+export type DeleteInboundEntryOptions = {
+  actorRole?: string;
+  actorId?: string;
+  now?: string;
+  dockConfirmText?: string;
+  nextId?: () => string;
+};
+
+const DOCK_DELETE_REFERENCE = "dock-freight-delete";
+
+export function dockFreightDeletesOnDay(system: InventorySystem, now: string): number {
+  const day = now.slice(0, 10);
+  return system.transactions.filter(
+    (entry) =>
+      entry.referenceType === DOCK_DELETE_REFERENCE && entry.occurredAt.slice(0, 10) === day,
+  ).length;
+}
+
 export function deleteInboundEntry(
   system: InventorySystem,
   id: string,
-): { ok: true; documentIds: string[] } | { ok: false; error: string } {
+  options?: DeleteInboundEntryOptions,
+): { ok: true; documentIds: string[]; reversedUnits: number } | { ok: false; error: string } {
   const index = system.purchaseOrders.findIndex((order) => order.id === id);
   if (index < 0) {
     return { ok: false, error: "That inbound purchase order was not found." };
@@ -117,29 +138,184 @@ export function deleteInboundEntry(
   if (!existing) {
     return { ok: false, error: "That inbound purchase order was not found." };
   }
-  if (inboundReceivingHasStarted(system.receivingOrders, existing.purchaseOrderNumber)) {
-    return {
-      ok: false,
-      error: "This purchase order already has freight on the dock, so it cannot be deleted.",
-    };
+  const docked = inboundReceivingHasStarted(
+    system.receivingOrders,
+    existing.purchaseOrderNumber,
+  );
+  let reversedUnits = 0;
+  if (docked) {
+    if (options?.actorRole !== "coordinator") {
+      return {
+        ok: false,
+        error: options?.actorRole
+          ? "Only a coordinator can delete a purchase order that already has freight on the dock."
+          : "This purchase order already has freight on the dock, so it cannot be deleted.",
+      };
+    }
+    if (options.dockConfirmText !== INBOUND_DOCK_DELETE_CONFIRMATION) {
+      return {
+        ok: false,
+        error:
+          "Type DeleteThisMeow to confirm deleting a purchase order that has freight on the dock.",
+      };
+    }
+    const now = options.now ?? new Date().toISOString();
+    if (dockFreightDeletesOnDay(system, now) >= INBOUND_DOCK_DELETE_DAILY_LIMIT) {
+      return {
+        ok: false,
+        error:
+          "A coordinator can delete 5 purchase orders with freight on the dock per day. That limit is already used.",
+      };
+    }
+    const nextId = options.nextId ?? (() => crypto.randomUUID());
+    reversedUnits = balanceDockInventory(system, existing, now, nextId);
+    system.receivingOrders = system.receivingOrders.filter(
+      (order) => order.poNumber !== existing.purchaseOrderNumber,
+    );
+    system.transactions.unshift({
+      id: nextId(),
+      type: "dock-freight-delete",
+      occurredAt: now,
+      sku: existing.purchaseOrderNumber,
+      batch: null,
+      inventoryItemId: null,
+      locationId: null,
+      destinationLocationId: null,
+      quantityDelta: 0,
+      reason: "Coordinator deleted an inbound purchase order that had freight on the dock.",
+      referenceType: DOCK_DELETE_REFERENCE,
+      referenceId: existing.id,
+      createdBy: options.actorId,
+      notes: existing.purchaseOrderNumber,
+    });
   }
   const documentIds = (system.purchaseDocuments ?? [])
     .filter((document) => document.purchaseOrderNumber === existing.purchaseOrderNumber)
     .map((document) => document.id);
   system.purchaseOrders.splice(index, 1);
-  system.receivingOrders = system.receivingOrders.filter(
-    (order) =>
-      !(
-        order.poNumber === existing.purchaseOrderNumber &&
-        isUncheckedExpectedLoad(order)
-      ),
-  );
+  if (!docked) {
+    system.receivingOrders = system.receivingOrders.filter(
+      (order) =>
+        !(
+          order.poNumber === existing.purchaseOrderNumber &&
+          isUncheckedExpectedLoad(order)
+        ),
+    );
+  }
   if (system.purchaseDocuments) {
     system.purchaseDocuments = system.purchaseDocuments.filter(
       (document) => document.purchaseOrderNumber !== existing.purchaseOrderNumber,
     );
   }
-  return { ok: true, documentIds };
+  return { ok: true, documentIds, reversedUnits };
+}
+
+function balanceDockInventory(
+  system: InventorySystem,
+  purchaseOrder: PurchaseOrder,
+  now: string,
+  nextId: () => string,
+): number {
+  const orders = system.receivingOrders.filter(
+    (order) => order.poNumber === purchaseOrder.purchaseOrderNumber,
+  );
+  const orderIds = new Set(orders.map((order) => order.id));
+  const posted = system.transactions.filter(
+    (entry) =>
+      entry.referenceType === "receiving-order" &&
+      entry.referenceId != null &&
+      orderIds.has(entry.referenceId) &&
+      entry.type === "putaway" &&
+      entry.quantityDelta > 0,
+  );
+  const groups = new Map<
+    string,
+    {
+      sku: string;
+      upc?: string;
+      batch: string | null;
+      locationId: string | null;
+      inventoryItemId: string | null;
+      quantity: number;
+    }
+  >();
+  const addGroup = (input: {
+    sku: string;
+    upc?: string;
+    batch: string | null;
+    locationId: string | null;
+    inventoryItemId: string | null;
+    quantity: number;
+  }) => {
+    const key = `${input.inventoryItemId ?? ""}|${input.sku}|${input.batch ?? ""}|${input.locationId ?? ""}`;
+    const current = groups.get(key);
+    if (current) current.quantity += input.quantity;
+    else groups.set(key, { ...input });
+  };
+  if (posted.length > 0) {
+    for (const entry of posted) {
+      addGroup({
+        sku: entry.sku,
+        upc: entry.upc,
+        batch: entry.batch ?? null,
+        locationId: entry.locationId ?? null,
+        inventoryItemId: entry.inventoryItemId ?? null,
+        quantity: entry.quantityDelta,
+      });
+    }
+  } else {
+    for (const order of orders) {
+      for (const pallet of order.pallets) {
+        for (const item of pallet.cases) {
+          if (!item.putawayPostedAt || !item.putawayLocationId) continue;
+          addGroup({
+            sku: item.sku,
+            upc: item.upc,
+            batch: item.batch ?? null,
+            locationId: item.putawayLocationId,
+            inventoryItemId: null,
+            quantity: item.quantityInCase,
+          });
+        }
+      }
+    }
+  }
+
+  let reversed = 0;
+  for (const group of groups.values()) {
+    const item = system.inventoryItems.find(
+      (entry) =>
+        (group.inventoryItemId && entry.id === group.inventoryItemId) ||
+        (!group.inventoryItemId &&
+          entry.sku === group.sku &&
+          (entry.batch ?? null) === group.batch &&
+          entry.locationId === group.locationId),
+    );
+    if (!item || item.quantity < 1 || group.quantity < 1) continue;
+    const remove = Math.min(item.quantity, group.quantity);
+    const quantityBefore = item.quantity;
+    item.quantity -= remove;
+    item.updatedAt = now;
+    reversed += remove;
+    system.transactions.unshift({
+      id: nextId(),
+      type: "putaway",
+      occurredAt: now,
+      sku: item.sku,
+      upc: item.upc,
+      batch: item.batch ?? null,
+      inventoryItemId: item.id,
+      locationId: item.locationId,
+      destinationLocationId: null,
+      quantityDelta: -remove,
+      quantityBefore,
+      quantityAfter: item.quantity,
+      reason: `Balanced inventory after deleting inbound PO ${purchaseOrder.purchaseOrderNumber}.`,
+      referenceType: "purchase-order",
+      referenceId: purchaseOrder.id,
+    });
+  }
+  return reversed;
 }
 
 /** Remove one uploaded PDF. The purchase order and receiving loads stay. */
