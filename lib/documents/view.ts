@@ -2,6 +2,7 @@ import type {
   PurchaseDocument,
   PurchaseDocumentKind,
 } from "@/lib/inventory-schema";
+import { hydrateForDom } from "@/lib/validation/dom-hydration";
 
 export type PurchaseDocumentLineView = {
   sku: string;
@@ -35,7 +36,7 @@ export function purchaseDocumentView(
     access.canSeePrices &&
     document.kind === "invoice" &&
     !document.pricesRedacted;
-  return {
+  return hydrateForDom({
     id: document.id,
     purchaseOrderNumber: document.purchaseOrderNumber,
     kind: document.kind,
@@ -59,5 +60,5 @@ export function purchaseDocumentView(
       unitPrice: showPrices ? line.unitPrice : null,
       extendedPrice: showPrices ? line.extendedPrice : null,
     })),
-  };
+  });
 }

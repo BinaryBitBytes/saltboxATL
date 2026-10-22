@@ -74,8 +74,9 @@ Installed windows open in standalone mode (no browser chrome) and still use the 
 Input is checked with Zod plus inventory/auth safeguards:
 
 - User records never return `passwordHash`; create/update payloads reject secret fields
+- `passwordHash` and invoice prices stay on the Zod schema. Page data, server actions, and JSON responses are hydrated before they reach the browser, which drops credential keys and strips HTML from text
 - Passwords need 8+ characters with a letter and a number; sign-in locks after 5 failures
-- HTML/control characters, oversized fields, and unsafe SKU/UPC values are rejected
+- HTML/control characters, oversized fields, and unsafe SKU/UPC values are rejected. Location, room, cube, adjustment, and case-item text rejects markup on the way in
 - Shipping, shortages, and damage cannot take more than on-hand stock or use inactive locations
 - Quantities at or above 500 units (200 for shipments, 20 pallets on a receiving header) require a confirmation checkbox and a matching re-entered amount
 - Spreadsheet import is atomic: invalid rows block the whole file, and unknown or inactive locations are rejected

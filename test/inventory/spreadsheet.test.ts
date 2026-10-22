@@ -325,7 +325,6 @@ describe("inventory spreadsheet import and export", () => {
       purchaseOrders: [],
       transactions: [],
       photos: [],
-      users: [],
       itemCubes: [],
       purchaseDocuments: [],
     });

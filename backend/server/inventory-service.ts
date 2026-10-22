@@ -23,6 +23,7 @@ import {
   type ItemCube,
   type InventoryRow,
   type InventorySystem,
+  type WarehouseSnapshot,
   type InventoryTransaction,
   type InventoryTransactionRow,
   type Location,
@@ -121,7 +122,7 @@ export class ServiceError extends Error {
 }
 
 export function enrichInventory(
-  system: InventorySystem,
+  system: WarehouseSnapshot,
 ): InventoryRow[] {
   const rooms = new Map(system.rooms.map((room) => [room.id, room]));
   const locations = new Map(
@@ -144,7 +145,7 @@ export function enrichInventory(
 }
 
 export function enrichTransactions(
-  system: InventorySystem,
+  system: WarehouseSnapshot,
 ): InventoryTransactionRow[] {
   const rooms = new Map(system.rooms.map((room) => [room.id, room]));
   const locations = new Map(

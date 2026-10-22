@@ -32,3 +32,18 @@ export function isUpc(value: string): boolean {
 export function stripNullBytes(value: string): string {
   return value.replace(/\u0000/g, "");
 }
+
+/**
+ * Plain text safe to embed in HTML or RSC flight data. Tags and control
+ * characters are removed. The result is not HTML-escaped, so React can render
+ * it as text without showing entities.
+ */
+export function sanitizeDomText(value: string): string {
+  let current = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+  let previous = "";
+  while (current !== previous) {
+    previous = current;
+    current = current.replace(/<\/?[a-z][^>]*>/gi, "");
+  }
+  return current;
+}

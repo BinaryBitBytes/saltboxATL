@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { flattenError, ZodError } from "zod";
 import { ServiceError } from "@/backend/server/inventory-service";
+import { hydrateForDom, sanitizeDomStrings } from "@/lib/validation/dom-hydration";
 import { ValidationError } from "@/lib/validation/errors";
 
 export function jsonOk<T>(data: T, status = 200) {
-  return NextResponse.json({ success: true, data }, { status });
+  return NextResponse.json({ success: true, data: hydrateForDom(data) }, { status });
 }
 
 export function jsonError(error: unknown, fallbackStatus = 500) {
   if (error instanceof ServiceError || error instanceof ValidationError) {
     return NextResponse.json(
-      { success: false, error: error.message, code: "code" in error ? error.code : undefined },
+      sanitizeDomStrings({
+        success: false,
+        error: error.message,
+        code: "code" in error ? error.code : undefined,
+      }),
       { status: error.status },
     );
   }
@@ -18,7 +23,11 @@ export function jsonError(error: unknown, fallbackStatus = 500) {
   if (error instanceof ZodError) {
     const message = error.issues[0]?.message || "The inventory record could not be saved.";
     return NextResponse.json(
-      { success: false, error: message, errors: flattenError(error) },
+      sanitizeDomStrings({
+        success: false,
+        error: message,
+        errors: flattenError(error),
+      }),
       { status: 400 },
     );
   }

@@ -15,6 +15,8 @@ import {
 import { requireApiPermission } from "@/backend/server/dal";
 import { deleteSession, createSession } from "@/backend/server/session";
 import { safeRedirectPath } from "@/lib/auth/permissions";
+import { hydrateForDom } from "@/lib/validation/dom-hydration";
+import { sanitizeDomText } from "@/lib/validation/sanitize";
 import {
   LoginInputSchema,
   RecoverUsernameInputSchema,
@@ -113,7 +115,7 @@ export async function loginAction(
   } catch (error) {
     const message = asAuthError(error);
     if (message) {
-      return { error: message };
+      return { error: sanitizeDomText(message) };
     }
     return { error: "Unable to sign in." };
   }
@@ -154,7 +156,7 @@ export async function registerAction(
   } catch (error) {
     const message = asAuthError(error);
     if (message) {
-      return { error: message };
+      return { error: sanitizeDomText(message) };
     }
     return { error: "Unable to create your account." };
   }
@@ -184,11 +186,11 @@ export async function recoverUsernameAction(
 
   try {
     const result = await recoverUsername(parsed.data);
-    return { username: result.username };
+    return { username: sanitizeDomText(result.username) };
   } catch (error) {
     const message = asAuthError(error);
     if (message) {
-      return { error: message };
+      return { error: sanitizeDomText(message) };
     }
     return { error: "Unable to recover that username." };
   }
@@ -226,7 +228,7 @@ export async function resetPasswordAction(
   } catch (error) {
     const message = asAuthError(error);
     if (message) {
-      return { error: message };
+      return { error: sanitizeDomText(message) };
     }
     return { error: "Unable to reset that password." };
   }
@@ -244,11 +246,11 @@ export async function createManagedUser(
     const actor = await requireApiPermission("manageUsers");
     const data = await createUserRecord(rawData, actor);
     revalidatePath("/users");
-    return { ok: true, data };
+    return { ok: true, data: hydrateForDom(data) };
   } catch (error) {
     const message = asAuthError(error);
     if (message) {
-      return { ok: false, error: message };
+      return { ok: false, error: sanitizeDomText(message) };
     }
     return { ok: false, error: "Unable to create user." };
   }
@@ -261,11 +263,11 @@ export async function updateManagedUser(
     const actor = await requireApiPermission("manageUsers");
     const data = await updateUserRecord(rawData, actor);
     revalidatePath("/users");
-    return { ok: true, data };
+    return { ok: true, data: hydrateForDom(data) };
   } catch (error) {
     const message = asAuthError(error);
     if (message) {
-      return { ok: false, error: message };
+      return { ok: false, error: sanitizeDomText(message) };
     }
     return { ok: false, error: "Unable to update user." };
   }

@@ -9,6 +9,10 @@ import {
   mergeDivision,
   scopeSystem,
 } from "@/lib/divisions";
+import {
+  hydrateInventoryForDom,
+  type DomSafeInventorySystem,
+} from "@/lib/validation/dom-hydration";
 
 let writeChain: Promise<unknown> = Promise.resolve();
 
@@ -37,9 +41,9 @@ async function readScopedSystem(): Promise<InventorySystem> {
   return scoped;
 }
 
-export async function getSystem(): Promise<InventorySystem> {
+export async function getSystem(): Promise<DomSafeInventorySystem> {
   await connection();
-  return readScopedSystem();
+  return hydrateInventoryForDom(await readScopedSystem());
 }
 
 export async function readSystem(): Promise<InventorySystem> {
