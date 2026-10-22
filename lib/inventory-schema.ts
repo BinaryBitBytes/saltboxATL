@@ -19,6 +19,14 @@ import {
   UsernameSchema,
 } from "@/lib/validation/fields";
 import { hasControlChars, hasHtmlMarkup } from "@/lib/validation/sanitize";
+
+function allowsDomText(value: string): boolean {
+  return !hasControlChars(value) && !hasHtmlMarkup(value);
+}
+
+const unsafeDomText = {
+  error: "Control characters and HTML markup are not allowed.",
+} as const;
 import { LIMITS } from "@/lib/validation/limits";
 import {
   refineConfirmPassword,
@@ -120,6 +128,7 @@ export const CaseItemInputSchema = CaseItemSchema.omit({
     .string()
     .trim()
     .max(LIMITS.code)
+    .refine(allowsDomText, unsafeDomText)
     .nullable()
     .optional()
     .transform((value) => (value === "" || value === undefined ? null : value)),
@@ -128,6 +137,7 @@ export const CaseItemInputSchema = CaseItemSchema.omit({
     .string()
     .trim()
     .max(LIMITS.code)
+    .refine(allowsDomText, unsafeDomText)
     .nullable()
     .optional()
     .transform((value) => (value === "" || value === undefined ? null : value)),
@@ -688,14 +698,25 @@ export const CreateAdjustmentInputSchema = z.object({
     .string()
     .trim()
     .max(LIMITS.code)
+    .refine(allowsDomText, unsafeDomText)
     .nullable()
     .optional()
     .transform((value) => (value === "" || value === undefined ? null : value)),
   locationId: UuidSchema.optional(),
-  description: z.string().optional(),
+  description: z
+    .string()
+    .trim()
+    .max(LIMITS.description)
+    .refine(allowsDomText, unsafeDomText)
+    .optional(),
   notes: OptionalNotesSchema,
   createdBy: z.string().optional(),
-  scannedCode: z.string().max(LIMITS.notes).optional(),
+  scannedCode: z
+    .string()
+    .trim()
+    .max(LIMITS.notes)
+    .refine(allowsDomText, unsafeDomText)
+    .optional(),
   moveDamagedToLocationId: UuidSchema.optional(),
   confirmLargeInput: z.boolean().optional().default(false),
   confirmationQuantity: z.coerce.number().int().optional(),
@@ -725,7 +746,12 @@ export type Location = z.infer<typeof LocationSchema>;
 export const CreateLocationInputSchema = z.object({
   code: LocationCodeSchema,
   roomId: UuidSchema,
-  description: z.string().optional(),
+  description: z
+    .string()
+    .trim()
+    .max(LIMITS.text)
+    .refine(allowsDomText, unsafeDomText)
+    .optional(),
   storageClass: StorageClassSchema,
   cubeCapacityCubicInches: z.number().positive().max(10_000_000).optional(),
 });
@@ -741,7 +767,12 @@ export type Room = z.infer<typeof RoomSchema>;
 
 export const CreateRoomInputSchema = z.object({
   name: NonEmptyStringSchema,
-  description: z.string().optional(),
+  description: z
+    .string()
+    .trim()
+    .max(LIMITS.text)
+    .refine(allowsDomText, unsafeDomText)
+    .optional(),
 });
 export type CreateRoomInput = z.infer<typeof CreateRoomInputSchema>;
 
@@ -764,7 +795,7 @@ export const UserSchema = z.object({
   name: PersonNameSchema,
   username: UsernameSchema,
   email: EmailSchema,
-  passwordHash: z.string().min(1).max(512),
+  passwordHash: z.string().min(1).max(512).meta({ scope: "private" }),
   role: UserRoleSchema,
   division: DivisionSchema.optional(),
   isActive: z.boolean().default(true),
@@ -884,7 +915,13 @@ export type ItemCube = z.infer<typeof ItemCubeSchema>;
 
 export const CubeItemInputSchema = z.object({
   sku: SkuSchema,
-  description: z.string().trim().max(LIMITS.description).optional().default(""),
+  description: z
+    .string()
+    .trim()
+    .max(LIMITS.description)
+    .refine(allowsDomText, unsafeDomText)
+    .optional()
+    .default(""),
   lengthInches: z.coerce.number().positive().max(500),
   widthInches: z.coerce.number().positive().max(500),
   heightInches: z.coerce.number().positive().max(500),
@@ -1039,8 +1076,8 @@ export const PurchaseDocumentLineSchema = z.object({
   upc: z.string().trim().max(LIMITS.upc).default(""),
   description: z.string().trim().max(LIMITS.description).default(""),
   quantity: QuantitySchema,
-  unitPrice: PriceTextSchema.default(null),
-  extendedPrice: PriceTextSchema.default(null),
+  unitPrice: PriceTextSchema.default(null).meta({ scope: "private" }),
+  extendedPrice: PriceTextSchema.default(null).meta({ scope: "private" }),
 });
 export type PurchaseDocumentLine = z.infer<typeof PurchaseDocumentLineSchema>;
 
@@ -1078,6 +1115,9 @@ export const InventorySystemSchema = z.object({
   itemCubes: z.array(ItemCubeSchema).default([]),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
+
+/** Page and API projection. Credential fields stay on `InventorySystem`. */
+export type WarehouseSnapshot = Omit<InventorySystem, "users">;
 
 export const PartialReceivingOrderSchema = ReceivingOrderSchema.partial();
 export type PartialReceivingOrder = z.infer<typeof PartialReceivingOrderSchema>;

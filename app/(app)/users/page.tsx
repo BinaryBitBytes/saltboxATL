@@ -3,6 +3,7 @@ import { requirePermission } from "@/backend/server/dal";
 import { listPublicUsers } from "@/backend/server/auth-service";
 import { UserAdmin } from "@/frontend/client/user-admin";
 import { assignableRoles } from "@/lib/divisions";
+import { hydrateForDom } from "@/lib/validation/dom-hydration";
 
 export default async function UsersPage() {
   const currentUser = await requirePermission("manageUsers");
@@ -16,7 +17,7 @@ export default async function UsersPage() {
         <p className="text-sm text-muted-foreground"><T>Managers create and deactivate warehouse logins. The admin manager can open both divisions. A Security manager only administers Security logins.</T></p>
       </div>
       <UserAdmin
-        users={users}
+        users={hydrateForDom(users)}
         currentUserId={currentUser.id}
         assignableRoles={roles}
       />

@@ -52,6 +52,8 @@ import {
   type SpreadsheetFormText,
 } from "@/lib/inventory/spreadsheet-source";
 import { ValidationError } from "@/lib/validation/errors";
+import { hydrateForDom } from "@/lib/validation/dom-hydration";
+import { sanitizeDomText } from "@/lib/validation/sanitize";
 import {
   deletePurchaseDocumentRecord,
   importInvoiceLoadRecord,
@@ -70,12 +72,16 @@ export type ActionResult<T> =
   | { ok: true; data: T }
   | ActionFailure;
 
+function clientPayload<T>(data: T): T {
+  return hydrateForDom(data);
+}
+
 function fail(error: unknown): ActionFailure {
   if (error instanceof ServiceError || error instanceof ValidationError) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: sanitizeDomText(error.message) };
   }
   if (error instanceof Error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: sanitizeDomText(error.message) };
   }
   return { ok: false, error: "Unexpected server error" };
 }
@@ -106,7 +112,7 @@ export async function createReceivingOrder(
     const data = await createReceivingOrderRecord(payload);
     revalidateInventory();
     revalidatePath(`/receiving/${data.id}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -119,7 +125,7 @@ export async function setPurchaseOrderJobId(
     await requireApiPermission("assignJobId");
     const data = await setPurchaseOrderJobIdRecord(rawData);
     revalidateInventory();
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -136,7 +142,7 @@ export async function deletePurchaseDocument(
       deletePurchaseDocumentFile(documentId, true),
     ]);
     revalidateInventory();
-    return { ok: true, data: { id: documentId } };
+    return { ok: true, data: clientPayload({ id: documentId }) };
   } catch (error) {
     return fail(error);
   }
@@ -149,7 +155,7 @@ export async function redactInvoicePrices(
     await requireApiPermission("uploadBuyerOrders");
     const data = await redactPurchaseDocumentRecord(documentId);
     revalidateInventory();
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -171,7 +177,7 @@ export async function importInvoiceInboundLoad(
     const data = await importInvoiceLoadRecord(documentId, record, user.name);
     revalidateInventory();
     if (data.id) revalidatePath(`/receiving/${data.id}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -184,7 +190,7 @@ export async function saveBuyerPurchaseOrder(
     const user = await requireApiPermission("uploadBuyerOrders");
     const data = await saveBuyerPurchaseOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -197,7 +203,7 @@ export async function updateInboundPurchaseOrder(
     const user = await requireApiPermission("uploadBuyerOrders");
     const data = await updateInboundPurchaseOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -223,7 +229,7 @@ export async function deleteInboundPurchaseOrder(
       ]),
     );
     revalidateInventory();
-    return { ok: true, data: { id } };
+    return { ok: true, data: clientPayload({ id }) };
   } catch (error) {
     return fail(error);
   }
@@ -242,7 +248,7 @@ export async function recordDeliveryScan(
     revalidateInventory();
     revalidatePath("/loads");
     revalidatePath("/shipping");
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -260,7 +266,7 @@ export async function saveDeliveryNotes(
     const data = await saveDeliveryNotesRecord(payload);
     revalidateInventory();
     revalidatePath("/loads");
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -275,7 +281,7 @@ export async function addReceivingPallet(
     const data = await addPalletToOrder(orderId, rawData);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -289,7 +295,7 @@ export async function selectWorkingPallet(
     await requireApiPermission("receive");
     const data = await setWorkingPallet(orderId, palletId);
     revalidatePath(`/receiving/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -305,7 +311,7 @@ export async function addReceivingCase(
     const data = await addCaseToPallet(orderId, palletId, rawData);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -322,7 +328,7 @@ export async function updateReceivingCase(
     const data = await updateCaseOnPallet(orderId, palletId, caseId, rawData);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -338,7 +344,7 @@ export async function removeReceivingCase(
     const data = await removeCaseFromPallet(orderId, palletId, caseId);
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -354,7 +360,7 @@ export async function completeReceiving(
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -370,7 +376,7 @@ export async function reopenReceiving(
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -419,7 +425,7 @@ export async function cancelReceiving(
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -437,7 +443,7 @@ export async function assignReceivingPutawayLocation(
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -453,7 +459,7 @@ export async function completePutaway(
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -471,7 +477,7 @@ export async function createCustomerOrder(
     revalidateInventory();
     revalidatePath(`/orders/${data.id}`);
     revalidatePath("/orders/printer");
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -486,7 +492,7 @@ export async function cancelCustomerOrder(
     revalidateInventory();
     revalidatePath(`/orders/${orderId}`);
     revalidatePath("/orders/printer");
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -500,7 +506,7 @@ export async function completeCustomerOrderPick(
     const data = await completeCustomerOrderPickRecord(orderId, user.name);
     revalidateInventory();
     revalidatePath(`/orders/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -517,7 +523,7 @@ export async function acknowledgeWarehousePrints(
     for (const orderId of orderIds) {
       revalidatePath(`/orders/${orderId}`);
     }
-    return { ok: true, data: { count } };
+    return { ok: true, data: clientPayload({ count }) };
   } catch (error) {
     return fail(error);
   }
@@ -531,7 +537,7 @@ export async function createShippingOrder(
     const data = await createShippingOrderRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     revalidatePath(`/shipping/${data.id}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -542,7 +548,7 @@ export async function createRoom(rawData: unknown): Promise<ActionResult<{ id: s
     await requireApiPermission("manageLocations");
     const data = await createRoomRecord(rawData);
     revalidatePath("/locations");
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -558,7 +564,7 @@ export async function breakDownReceivingPallet(
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -571,7 +577,7 @@ export async function saveItemCube(
     const user = await requireApiPermission("cube");
     const data = await saveItemCubeRecord(withCreatedBy(rawData, user));
     revalidateInventory();
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -586,7 +592,7 @@ export async function updateLocationCapacity(
     revalidateInventory();
     revalidatePath("/locations");
     revalidatePath("/cubing");
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -599,7 +605,7 @@ export async function createLocation(
     await requireApiPermission("manageLocations");
     const data = await createLocationRecord(rawData);
     revalidatePath("/locations");
-    return { ok: true, data };
+    return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
@@ -680,12 +686,12 @@ export async function importInventoryForm(
     }
     return {
       ok: true,
-      data: { ...data, sourceText: replaySpreadsheetText(source, false) },
+      data: clientPayload({ ...data, sourceText: replaySpreadsheetText(source, false) }),
     };
   } catch (error) {
     return {
       ...fail(error),
-      sourceText: replaySpreadsheetText(source, true),
+      sourceText: sanitizeDomText(replaySpreadsheetText(source, true)),
     };
   }
 }

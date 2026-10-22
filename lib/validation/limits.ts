@@ -28,6 +28,7 @@ export const LIMITS = {
   spreadsheetMaxRows: 5000,
 } as const;
 
+/** Credential key names. Enforcement lives in `lib/validation/schema-privacy.ts`. */
 export const SENSITIVE_USER_KEYS = [
   "passwordHash",
   "password_hash",
@@ -35,4 +36,8 @@ export const SENSITIVE_USER_KEYS = [
   "session",
   "token",
   "secret",
+  "apiKey",
+  "accessToken",
+  "refreshToken",
+  "sessionSecret",
 ] as const;

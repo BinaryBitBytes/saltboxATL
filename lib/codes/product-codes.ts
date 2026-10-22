@@ -1,4 +1,4 @@
-import type { InventorySystem } from "@/lib/inventory-schema";
+import type { WarehouseSnapshot } from "@/lib/inventory-schema";
 import { SkuSchema, UpcSchema } from "@/lib/validation/fields";
 import { ValidationError } from "@/lib/validation/errors";
 import { isSku, isUpc } from "@/lib/validation/sanitize";
@@ -56,7 +56,7 @@ export function generateSkuCandidate(description: string, attempt: number): stri
 }
 
 export function collectKnownProducts(
-  system: InventorySystem,
+  system: WarehouseSnapshot,
   options: { excludeCaseId?: string } = {},
 ): KnownProduct[] {
   const products: KnownProduct[] = [];
