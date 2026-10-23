@@ -59,6 +59,16 @@ import {
   importInvoiceLoadRecord,
   redactPurchaseDocumentRecord,
 } from "@/backend/server/document-service";
+import {
+  createAisleRecord,
+  createBayRecord,
+  createBuildingRecord,
+  createContainerRecord,
+  createLicensePlateRecord,
+  createSiteRecord,
+  createTrailerRecord,
+  createZoneRecord,
+} from "@/backend/server/nomenclature-service";
 import { deletePurchaseDocumentFile } from "@/backend/server/document-store";
 
 export type ActionFailure = {
@@ -605,10 +615,59 @@ export async function createLocation(
     await requireApiPermission("manageLocations");
     const data = await createLocationRecord(rawData);
     revalidatePath("/locations");
+    revalidatePath("/inventory");
     return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);
   }
+}
+
+async function saveNomenclature<T extends { id: string }>(
+  work: () => Promise<T>,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireApiPermission("manageLocations");
+    const data = await work();
+    revalidatePath("/locations");
+    revalidatePath("/inventory");
+    return { ok: true, data: clientPayload({ id: data.id }) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function createSite(rawData: unknown): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createSiteRecord(rawData));
+}
+
+export async function createBuilding(rawData: unknown): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createBuildingRecord(rawData));
+}
+
+export async function createZone(rawData: unknown): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createZoneRecord(rawData));
+}
+
+export async function createAisle(rawData: unknown): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createAisleRecord(rawData));
+}
+
+export async function createBay(rawData: unknown): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createBayRecord(rawData));
+}
+
+export async function createTrailer(rawData: unknown): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createTrailerRecord(rawData));
+}
+
+export async function createLicensePlate(
+  rawData: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createLicensePlateRecord(rawData));
+}
+
+export async function createContainer(rawData: unknown): Promise<ActionResult<{ id: string }>> {
+  return saveNomenclature(() => createContainerRecord(rawData));
 }
 
 export async function createAdjustment(

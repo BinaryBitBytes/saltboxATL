@@ -93,7 +93,7 @@ function LocationForm({ rooms }: { rooms: Room[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle><T>Add location</T></CardTitle>
+        <CardTitle><T>Legacy location</T></CardTitle>
       </CardHeader>
       <CardContent>
         <form

@@ -1,5 +1,10 @@
 import type { Location, ReceivingOrder, Room, ShippingOrder } from "@/lib/inventory-schema";
-import { encodeLocationPayload, encodeScanPayload } from "@/lib/scan-code";
+import { parseBinCode } from "@/lib/locations/nomenclature";
+import {
+  encodeHandlingPayload,
+  encodeLocationPayload,
+  encodeScanPayload,
+} from "@/lib/scan-code";
 
 export type WarehouseLabelKind = "inbound" | "outbound" | "location" | "order";
 
@@ -89,23 +94,62 @@ export function buildOutboundLabels(
 export function buildLocationLabels(
   locations: Array<Location & { roomName: string }>,
 ): WarehouseLabel[] {
-  return locations.map((location) => ({
-    id: location.id,
-    kind: "location" as const,
-    heading: "Location",
-    title: location.code,
-    barcodeValue: location.code,
-    qrValue: encodeLocationPayload({
-      code: location.code,
-      room: location.roomName,
-    }),
+  return locations.map((location) => {
+    const bin = parseBinCode(location.code);
+    return {
+      id: location.id,
+      kind: "location" as const,
+      heading: "Location",
+      title: location.code,
+      barcodeValue: location.code,
+      qrValue: encodeLocationPayload({
+        code: location.code,
+        room: location.roomName,
+        bin,
+      }),
+      fields: [
+        { label: "Room", value: location.roomName },
+        { label: "Code", value: location.code },
+        ...(bin
+          ? [
+              { label: "Site", value: bin.codename },
+              { label: "Building", value: String(bin.building).padStart(3, "0") },
+              { label: "Zone", value: bin.zone },
+              { label: "Aisle", value: String(bin.aisle).padStart(2, "0") },
+              { label: "Bay", value: String(bin.bay).padStart(2, "0") },
+            ]
+          : []),
+        { label: "Status", value: location.isActive ? "Active" : "Inactive" },
+        { label: "Notes", value: location.description || "—" },
+      ],
+    };
+  });
+}
+
+export function buildHandlingLabel(input: {
+  id: string;
+  kind: "trailer" | "license-plate" | "container";
+  code: string;
+  detail?: string;
+}): WarehouseLabel {
+  const heading =
+    input.kind === "trailer"
+      ? "Trailer"
+      : input.kind === "license-plate"
+        ? "License plate"
+        : "Container";
+  return {
+    id: input.id,
+    kind: "location",
+    heading,
+    title: input.code,
+    barcodeValue: input.code,
+    qrValue: encodeHandlingPayload({ kind: input.kind, code: input.code }),
     fields: [
-      { label: "Room", value: location.roomName },
-      { label: "Code", value: location.code },
-      { label: "Status", value: location.isActive ? "Active" : "Inactive" },
-      { label: "Notes", value: location.description || "—" },
+      { label: heading, value: input.code },
+      { label: "Detail", value: input.detail || "—" },
     ],
-  }));
+  };
 }
 
 export function locationsWithRooms(
