@@ -10,8 +10,13 @@ import { readJsonFile } from "@/backend/server/json-store";
 import { asDivision, divisionForRole } from "@/lib/divisions";
 import {
   assembleSystem,
+  mapAisle,
+  mapBay,
+  mapBuilding,
+  mapContainer,
   mapItem,
   mapItemCube,
+  mapLicensePlate,
   mapLocation,
   mapPhoto,
   mapPurchaseDocument,
@@ -20,8 +25,11 @@ import {
   mapRoom,
   mapCustomerOrder,
   mapShippingOrder,
+  mapSite,
+  mapTrailer,
   mapTransaction,
   mapUser,
+  mapZone,
 } from "@/backend/server/pg-mapper";
 
 export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
@@ -49,6 +57,14 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
     "SELECT * FROM customer_orders ORDER BY submitted_at, id",
   );
   const itemCubes = await client.query("SELECT * FROM item_cubes ORDER BY sku");
+  const sites = await client.query("SELECT * FROM sites ORDER BY codename");
+  const buildings = await client.query("SELECT * FROM buildings ORDER BY number");
+  const zones = await client.query("SELECT * FROM zones ORDER BY letter");
+  const aisles = await client.query("SELECT * FROM aisles ORDER BY number");
+  const bays = await client.query("SELECT * FROM bays ORDER BY number");
+  const trailers = await client.query("SELECT * FROM trailers ORDER BY code");
+  const licensePlates = await client.query("SELECT * FROM license_plates ORDER BY code");
+  const containers = await client.query("SELECT * FROM containers ORDER BY code");
 
   return InventorySystemSchema.parse(
     assembleSystem({
@@ -64,6 +80,14 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       shippingOrders: shippingOrders.rows.map(mapShippingOrder),
       customerOrders: customerOrders.rows.map(mapCustomerOrder),
       itemCubes: itemCubes.rows.map(mapItemCube),
+      sites: sites.rows.map(mapSite),
+      buildings: buildings.rows.map(mapBuilding),
+      zones: zones.rows.map(mapZone),
+      aisles: aisles.rows.map(mapAisle),
+      bays: bays.rows.map(mapBay),
+      trailers: trailers.rows.map(mapTrailer),
+      licensePlates: licensePlates.rows.map(mapLicensePlate),
+      containers: containers.rows.map(mapContainer),
     }),
   );
 }
@@ -81,7 +105,15 @@ export async function saveSystem(
   await client.query("DELETE FROM purchase_documents");
   await client.query("DELETE FROM purchase_orders");
   await client.query("DELETE FROM item_cubes");
+  await client.query("DELETE FROM containers");
+  await client.query("DELETE FROM license_plates");
   await client.query("DELETE FROM locations");
+  await client.query("DELETE FROM bays");
+  await client.query("DELETE FROM aisles");
+  await client.query("DELETE FROM zones");
+  await client.query("DELETE FROM buildings");
+  await client.query("DELETE FROM trailers");
+  await client.query("DELETE FROM sites");
   await client.query("DELETE FROM rooms");
   await client.query("DELETE FROM users");
 
@@ -91,12 +123,91 @@ export async function saveSystem(
       [room.id, room.name, room.description ?? null, asDivision(room.division)],
     );
   }
+  for (const site of system.sites) {
+    await client.query(
+      `INSERT INTO sites (id, division, codename, state, city, name)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        site.id,
+        asDivision(site.division),
+        site.codename,
+        site.state,
+        site.city,
+        site.name,
+      ],
+    );
+  }
+  for (const building of system.buildings) {
+    await client.query(
+      `INSERT INTO buildings (id, division, site_id, number, room_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        building.id,
+        asDivision(building.division),
+        building.siteId,
+        building.number,
+        building.roomId,
+      ],
+    );
+  }
+  for (const zone of system.zones) {
+    await client.query(
+      `INSERT INTO zones (
+         id, division, building_id, letter, item_type, cube_size, project_id, po_number,
+         inbound_velocity, outbound_velocity
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        zone.id,
+        asDivision(zone.division),
+        zone.buildingId,
+        zone.letter,
+        zone.itemType,
+        zone.cubeSize,
+        zone.projectId,
+        zone.poNumber,
+        zone.inboundVelocity,
+        zone.outboundVelocity,
+      ],
+    );
+  }
+  for (const aisle of system.aisles) {
+    await client.query(
+      `INSERT INTO aisles (id, division, zone_id, number) VALUES ($1, $2, $3, $4)`,
+      [aisle.id, asDivision(aisle.division), aisle.zoneId, aisle.number],
+    );
+  }
+  for (const bay of system.bays) {
+    await client.query(
+      `INSERT INTO bays (id, division, aisle_id, number, cube_budget_cubic_inches)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        bay.id,
+        asDivision(bay.division),
+        bay.aisleId,
+        bay.number,
+        bay.cubeBudgetCubicInches,
+      ],
+    );
+  }
+  for (const trailer of system.trailers) {
+    await client.query(
+      `INSERT INTO trailers (id, division, site_id, code, status)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        trailer.id,
+        asDivision(trailer.division),
+        trailer.siteId,
+        trailer.code,
+        trailer.status,
+      ],
+    );
+  }
   for (const location of system.locations) {
     await client.query(
       `INSERT INTO locations (
          id, code, room_id, description, is_active, storage_class, cube_capacity_cubic_inches,
-         division
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         division, bay_id, slot_kind, height, position, side
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         location.id,
         location.code,
@@ -106,6 +217,36 @@ export async function saveSystem(
         location.storageClass,
         location.cubeCapacityCubicInches,
         asDivision(location.division),
+        location.bayId ?? null,
+        location.slotKind ?? null,
+        location.height ?? null,
+        location.position ?? null,
+        location.side ?? null,
+      ],
+    );
+  }
+  for (const plate of system.licensePlates) {
+    await client.query(
+      `INSERT INTO license_plates (id, division, code, location_id, trailer_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        plate.id,
+        asDivision(plate.division),
+        plate.code,
+        plate.locationId,
+        plate.trailerId,
+      ],
+    );
+  }
+  for (const container of system.containers) {
+    await client.query(
+      `INSERT INTO containers (id, division, license_plate_id, code)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        container.id,
+        asDivision(container.division),
+        container.licensePlateId,
+        container.code,
       ],
     );
   }
@@ -137,8 +278,8 @@ export async function saveSystem(
       `INSERT INTO inventory_items (
          id, sku, upc, batch, location_id, quantity, description,
          manufacturer, color, is_fiber, connection_type, strand_count, length_meters,
-         last_moved_at, updated_at, division
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+         last_moved_at, updated_at, division, license_plate_id, container_id
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
       [
         item.id,
         item.sku,
@@ -156,6 +297,8 @@ export async function saveSystem(
         item.lastMovedAt ?? null,
         item.updatedAt ?? null,
         asDivision(item.division),
+        item.licensePlateId ?? null,
+        item.containerId ?? null,
       ],
     );
   }

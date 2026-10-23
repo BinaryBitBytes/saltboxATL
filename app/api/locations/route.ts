@@ -14,6 +14,14 @@ export async function GET() {
     return jsonOk({
       rooms: system.rooms,
       locations: system.locations,
+      sites: system.sites,
+      buildings: system.buildings,
+      zones: system.zones,
+      aisles: system.aisles,
+      bays: system.bays,
+      trailers: system.trailers,
+      licensePlates: system.licensePlates,
+      containers: system.containers,
     });
   } catch (error) {
     return jsonError(error);
