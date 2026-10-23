@@ -21,6 +21,7 @@ import {
   createCustomerOrderRecord,
   createShippingOrderRecord,
   createAdjustmentRecord,
+  moveInventoryRecord,
   addCaseToPallet,
   addPalletToOrder,
   setWorkingPallet,
@@ -90,6 +91,7 @@ function revalidateInventory() {
   revalidatePath("/");
   revalidatePath("/receiving");
   revalidatePath("/putaway");
+  revalidatePath("/moves");
   revalidatePath("/inventory");
   revalidatePath("/cubing");
   revalidatePath("/shipping");
@@ -605,6 +607,27 @@ export async function createLocation(
     await requireApiPermission("manageLocations");
     const data = await createLocationRecord(rawData);
     revalidatePath("/locations");
+    return { ok: true, data: clientPayload(data) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function moveInventory(
+  rawData: unknown,
+): Promise<
+  ActionResult<{
+    sku: string;
+    quantity: number;
+    sourceLocationCode: string;
+    destinationLocationCode: string;
+    referenceId: string;
+  }>
+> {
+  try {
+    const user = await requireApiPermission("moveInventory");
+    const data = await moveInventoryRecord(withCreatedBy(rawData, user));
+    revalidateInventory();
     return { ok: true, data: clientPayload(data) };
   } catch (error) {
     return fail(error);

@@ -100,6 +100,7 @@ const transactionVariant: Record<
 > = {
   receiving: "secondary",
   putaway: "default",
+  move: "default",
   shipping: "outline",
   pick: "secondary",
   overage: "default",

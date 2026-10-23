@@ -23,7 +23,7 @@ export function assertAvailableQuantity(
   reserved: number,
   requested: number,
   sku: string,
-  purpose: "order" | "ship",
+  purpose: "order" | "ship" | "move",
 ): void {
   const available = availableToOrder(onHand, reserved);
   if (requested <= available) return;
@@ -31,7 +31,9 @@ export function assertAvailableQuantity(
     throw new ValidationError(
       purpose === "ship"
         ? `Not enough unreserved quantity for ${sku}. On hand ${onHand}, reserved for open orders ${reserved}.`
-        : `Not enough available quantity for ${sku}. On hand ${onHand}, reserved for open orders ${reserved}.`,
+        : purpose === "move"
+          ? `Not enough unreserved quantity to move ${sku}. On hand ${onHand}, reserved for open orders ${reserved}.`
+          : `Not enough available quantity for ${sku}. On hand ${onHand}, reserved for open orders ${reserved}.`,
     );
   }
   throw new ValidationError(

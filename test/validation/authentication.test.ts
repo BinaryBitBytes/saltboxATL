@@ -84,6 +84,10 @@ describe("user authentication safeguards", () => {
     expect(hasPermission("user", "receive")).to.equal(false);
     expect(hasPermission("user", "putaway")).to.equal(false);
     expect(hasPermission("associate", "putaway")).to.equal(true);
+    expect(hasPermission("associate", "moveInventory")).to.equal(true);
+    expect(hasPermission("manager", "moveInventory")).to.equal(true);
+    expect(hasPermission("user", "moveInventory")).to.equal(false);
+    expect(hasPermission("threepl", "moveInventory")).to.equal(false);
     expect(hasPermission("associate", "cube")).to.equal(true);
     expect(hasPermission("user", "cube")).to.equal(false);
     expect(canAccessPath("associate", "/cubing")).to.equal(true);
