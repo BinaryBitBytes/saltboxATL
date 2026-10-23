@@ -3,6 +3,7 @@ import {
   CreateAdjustmentInputSchema,
   MoveInventoryInputSchema,
   CreateLocationInputSchema,
+  CreateStructuredLocationInputSchema,
   CreateReceivingOrderInputSchema,
   CreateRoomInputSchema,
   CreateCustomerOrderInputSchema,
@@ -58,6 +59,10 @@ import {
 } from "@/backend/server/inventory-ops";
 import { readSystem, updateSystem } from "@/backend/server/store";
 import { matchesScan, parseScanCode } from "@/lib/scan-code";
+import {
+  addStructuredLocation,
+  NomenclatureError,
+} from "@/lib/locations/hierarchy";
 import { photosForReference } from "@/lib/photos/query";
 import { LIMITS } from "@/lib/validation/limits";
 import {
@@ -131,9 +136,18 @@ export function enrichInventory(
     system.locations.map((location) => [location.id, location]),
   );
 
+  const plates = new Map((system.licensePlates ?? []).map((plate) => [plate.id, plate]));
+  const containers = new Map(
+    (system.containers ?? []).map((container) => [container.id, container]),
+  );
+  const trailers = new Map((system.trailers ?? []).map((trailer) => [trailer.id, trailer]));
+
   return system.inventoryItems.map((item) => {
     const location = locations.get(item.locationId);
     const room = location ? rooms.get(location.roomId) : undefined;
+    const plate = item.licensePlateId ? plates.get(item.licensePlateId) : undefined;
+    const container = item.containerId ? containers.get(item.containerId) : undefined;
+    const trailer = plate?.trailerId ? trailers.get(plate.trailerId) : undefined;
     const filled = applyInventoryDetails(
       item,
       attributesFromReceiving(item, system.receivingOrders),
@@ -142,6 +156,9 @@ export function enrichInventory(
       ...filled,
       locationCode: location?.code ?? "UNKNOWN",
       roomName: room?.name ?? "Unknown room",
+      licensePlateCode: plate?.code ?? null,
+      containerCode: container?.code ?? null,
+      trailerCode: trailer?.code ?? null,
     };
   });
 }
@@ -1277,9 +1294,35 @@ export async function createRoomRecord(rawData: unknown): Promise<Room> {
   });
 }
 
+function isStructuredLocationInput(rawData: unknown): boolean {
+  return Boolean(
+    rawData &&
+      typeof rawData === "object" &&
+      "bayId" in rawData &&
+      (rawData as { bayId?: unknown }).bayId,
+  );
+}
+
 export async function createLocationRecord(
   rawData: unknown,
 ): Promise<Location> {
+  if (isStructuredLocationInput(rawData)) {
+    const parsed = parseWithSchema(CreateStructuredLocationInputSchema, rawData);
+    if (!parsed.success) {
+      throw new ServiceError(parsed.error);
+    }
+    return updateSystem((system) => {
+      try {
+        return addStructuredLocation(system, parsed.data);
+      } catch (error) {
+        if (error instanceof NomenclatureError) {
+          throw new ServiceError(error.message);
+        }
+        throw error;
+      }
+    });
+  }
+
   const parsed = parseWithSchema(CreateLocationInputSchema, rawData);
   if (!parsed.success) {
     throw new ServiceError(parsed.error);

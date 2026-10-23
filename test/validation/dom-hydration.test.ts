@@ -199,6 +199,14 @@ describe("DOM hydration and schema privacy", () => {
       transactions: [],
       photos: [],
       itemCubes: [],
+      sites: [],
+      buildings: [],
+      zones: [],
+      aisles: [],
+      bays: [],
+      trailers: [],
+      licensePlates: [],
+      containers: [],
     });
     expect(user.passwordHash).to.equal("scrypt:warehouse");
     expect(hydrated.users[0]).to.not.have.property("passwordHash");

@@ -33,6 +33,12 @@ import {
   refinePasswordNotIdentity,
 } from "@/lib/validation/password-rules";
 import { DEFAULT_RACK_CUBE_CUBIC_INCHES } from "@/lib/cubing/measure";
+import {
+  CUBE_SIZES,
+  PHONETIC_CODENAMES,
+  TRAILER_STATUSES,
+  VELOCITIES,
+} from "@/lib/locations/nomenclature";
 
 /**
  * Canonical Zod models for the Saltbox inventory app.
@@ -572,6 +578,8 @@ export const InventoryItemSchema = z.object({
   upc: UpcSchema.optional(),
   batch: z.string().nullable().default(null),
   locationId: UuidSchema,
+  licensePlateId: UuidSchema.nullable().optional(),
+  containerId: UuidSchema.nullable().optional(),
   quantity: NonNegativeCountSchema,
   description: z.string().optional(),
   manufacturer: OptionalSafeTextSchema,
@@ -745,6 +753,115 @@ export const StorageClassSchema = z.enum(["pallet", "rack", "staging", "hold"]);
 export type StorageClass = z.infer<typeof StorageClassSchema>;
 export const STORAGE_CLASSES = StorageClassSchema.options;
 
+export const CodenameSchema = z.enum(PHONETIC_CODENAMES);
+export type Codename = z.infer<typeof CodenameSchema>;
+export const VelocitySchema = z.enum(VELOCITIES);
+export type ItemVelocity = z.infer<typeof VelocitySchema>;
+export const CubeSizeSchema = z.enum(CUBE_SIZES);
+export type ZoneCubeSize = z.infer<typeof CubeSizeSchema>;
+export const SlotKindSchema = z.enum(["pick", "overhead"]);
+export type SlotKind = z.infer<typeof SlotKindSchema>;
+export const TrailerStatusSchema = z.enum(TRAILER_STATUSES);
+export type TrailerStatus = z.infer<typeof TrailerStatusSchema>;
+
+const OptionalZoneLabelSchema = z.preprocess(
+  (value) => {
+    if (value == null) return null;
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+  },
+  z
+    .string()
+    .max(LIMITS.code)
+    .nullable()
+    .refine((value) => value == null || allowsDomText(value), unsafeDomText),
+);
+
+export const SiteSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  codename: CodenameSchema,
+  state: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{2}$/, { error: "State must be a 2-letter code." }),
+  city: NonEmptyStringSchema,
+  name: NonEmptyStringSchema,
+});
+export type Site = z.infer<typeof SiteSchema>;
+
+export const BuildingSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  siteId: UuidSchema,
+  number: z.number().int().min(1).max(100),
+  roomId: UuidSchema,
+});
+export type Building = z.infer<typeof BuildingSchema>;
+
+export const ZoneSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  buildingId: UuidSchema,
+  letter: z.string().regex(/^[A-Z]$/, { error: "Zone must be a single letter." }),
+  itemType: NonEmptyStringSchema,
+  cubeSize: CubeSizeSchema,
+  projectId: OptionalZoneLabelSchema,
+  poNumber: OptionalZoneLabelSchema,
+  inboundVelocity: VelocitySchema,
+  outboundVelocity: VelocitySchema,
+});
+export type Zone = z.infer<typeof ZoneSchema>;
+
+export const AisleSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  zoneId: UuidSchema,
+  number: z.number().int().min(1).max(99),
+});
+export type Aisle = z.infer<typeof AisleSchema>;
+
+export const BaySchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  aisleId: UuidSchema,
+  number: z.number().int().min(1).max(99),
+  cubeBudgetCubicInches: z.number().positive().max(10_000_000),
+});
+export type Bay = z.infer<typeof BaySchema>;
+
+export const TrailerSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  siteId: UuidSchema,
+  code: z.string().regex(/^TN\d{6}$/, { error: "Trailer numbers look like TN000142." }),
+  status: TrailerStatusSchema,
+});
+export type Trailer = z.infer<typeof TrailerSchema>;
+
+export const LicensePlateSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  code: z.string().regex(/^LP[A-Z0-9]{8}$/, {
+    error: "License plates look like LP followed by 8 letters or numbers.",
+  }),
+  locationId: UuidSchema.nullable(),
+  trailerId: UuidSchema.nullable(),
+});
+export type LicensePlate = z.infer<typeof LicensePlateSchema>;
+
+export const ContainerSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  licensePlateId: UuidSchema,
+  code: z.string().regex(/^CN[A-Z0-9]{8}$/, {
+    error: "Containers look like CN followed by 8 letters or numbers.",
+  }),
+});
+export type Container = z.infer<typeof ContainerSchema>;
+
 export const LocationSchema = z.object({
   id: UuidSchema,
   division: DivisionSchema.optional(),
@@ -758,6 +875,11 @@ export const LocationSchema = z.object({
     .positive()
     .max(10_000_000)
     .default(DEFAULT_RACK_CUBE_CUBIC_INCHES),
+  bayId: UuidSchema.nullable().optional(),
+  slotKind: SlotKindSchema.nullable().optional(),
+  height: z.string().trim().min(1).max(2).nullable().optional(),
+  position: z.number().int().min(1).max(9).nullable().optional(),
+  side: z.enum(["A", "B"]).nullable().optional(),
 });
 export type Location = z.infer<typeof LocationSchema>;
 
@@ -774,6 +896,105 @@ export const CreateLocationInputSchema = z.object({
   cubeCapacityCubicInches: z.number().positive().max(10_000_000).optional(),
 });
 export type CreateLocationInput = z.infer<typeof CreateLocationInputSchema>;
+
+export const CreateSiteInputSchema = z.object({
+  codename: z.string().trim().toUpperCase().pipe(CodenameSchema),
+  state: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{2}$/, { error: "State must be a 2-letter code." }),
+  city: NonEmptyStringSchema,
+  name: NonEmptyStringSchema,
+});
+export type CreateSiteInput = z.infer<typeof CreateSiteInputSchema>;
+
+export const CreateBuildingInputSchema = z.object({
+  siteId: UuidSchema,
+  number: z.coerce.number().int().min(1).max(100),
+});
+export type CreateBuildingInput = z.infer<typeof CreateBuildingInputSchema>;
+
+export const CreateZoneInputSchema = z.object({
+  buildingId: UuidSchema,
+  letter: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]$/, { error: "Zone must be a single letter." }),
+  itemType: NonEmptyStringSchema,
+  cubeSize: CubeSizeSchema,
+  projectId: OptionalZoneLabelSchema.optional(),
+  poNumber: OptionalZoneLabelSchema.optional(),
+  inboundVelocity: VelocitySchema,
+  outboundVelocity: VelocitySchema,
+});
+export type CreateZoneInput = z.infer<typeof CreateZoneInputSchema>;
+
+export const CreateAisleInputSchema = z.object({
+  zoneId: UuidSchema,
+  number: z.coerce.number().int().min(1).max(99),
+});
+export type CreateAisleInput = z.infer<typeof CreateAisleInputSchema>;
+
+export const CreateBayInputSchema = z.object({
+  aisleId: UuidSchema,
+  number: z.coerce.number().int().min(1).max(99),
+  cubeBudgetCubicInches: z.preprocess(
+    (value) => (value === "" || value == null ? undefined : value),
+    z.coerce.number().positive().max(10_000_000).optional(),
+  ),
+});
+export type CreateBayInput = z.infer<typeof CreateBayInputSchema>;
+
+export const CreateStructuredLocationInputSchema = z.object({
+  bayId: UuidSchema,
+  slotKind: SlotKindSchema,
+  height: z.string().trim().min(1).max(2),
+  position: z.coerce.number().int().min(1).max(9).optional(),
+  side: z.enum(["A", "B"]).optional(),
+  description: z
+    .string()
+    .trim()
+    .max(LIMITS.text)
+    .refine(allowsDomText, unsafeDomText)
+    .optional(),
+  storageClass: StorageClassSchema.optional(),
+  cubeCapacityCubicInches: z.number().positive().max(10_000_000).optional(),
+});
+export type CreateStructuredLocationInput = z.infer<
+  typeof CreateStructuredLocationInputSchema
+>;
+
+export const CreateTrailerInputSchema = z.object({
+  siteId: UuidSchema,
+  number: z.coerce.number().int().min(1).max(999_999),
+  status: TrailerStatusSchema.optional(),
+});
+export type CreateTrailerInput = z.infer<typeof CreateTrailerInputSchema>;
+
+export const CreateLicensePlateInputSchema = z
+  .object({
+    locationId: UuidSchema.optional().nullable(),
+    trailerId: UuidSchema.optional().nullable(),
+  })
+  .superRefine((value, ctx) => {
+    const hasLocation = Boolean(value.locationId);
+    const hasTrailer = Boolean(value.trailerId);
+    if (hasLocation === hasTrailer) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A license plate sits in one bin or on one trailer.",
+        path: ["locationId"],
+      });
+    }
+  });
+export type CreateLicensePlateInput = z.infer<typeof CreateLicensePlateInputSchema>;
+
+export const CreateContainerInputSchema = z.object({
+  licensePlateId: UuidSchema,
+});
+export type CreateContainerInput = z.infer<typeof CreateContainerInputSchema>;
 
 export const RoomSchema = z.object({
   id: UuidSchema,
@@ -1127,6 +1348,14 @@ export const InventorySystemSchema = z.object({
   inventoryItems: z.array(InventoryItemSchema).default([]),
   locations: z.array(LocationSchema).default([]),
   rooms: z.array(RoomSchema).default([]),
+  sites: z.array(SiteSchema).default([]),
+  buildings: z.array(BuildingSchema).default([]),
+  zones: z.array(ZoneSchema).default([]),
+  aisles: z.array(AisleSchema).default([]),
+  bays: z.array(BaySchema).default([]),
+  trailers: z.array(TrailerSchema).default([]),
+  licensePlates: z.array(LicensePlateSchema).default([]),
+  containers: z.array(ContainerSchema).default([]),
   transactions: z.array(InventoryTransactionSchema).default([]),
   photos: z.array(PhotoAttachmentSchema).default([]),
   users: z.array(UserSchema).default([]),
@@ -1143,6 +1372,9 @@ export type PartialReceivingOrder = z.infer<typeof PartialReceivingOrderSchema>;
 export type InventoryRow = InventoryItem & {
   locationCode: string;
   roomName: string;
+  licensePlateCode?: string | null;
+  containerCode?: string | null;
+  trailerCode?: string | null;
 };
 
 export type InventoryTransactionRow = InventoryTransaction & {

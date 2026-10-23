@@ -13,20 +13,11 @@ import {
   LargeInputConfirm,
   largeInputPayload,
 } from "@/frontend/client/large-input-confirm";
+import { findLocationForScan } from "@/lib/inventory/move";
 import type { InventoryRow, Location } from "@/lib/inventory-schema";
 import { matchesScan, type ScanPayload } from "@/lib/scan-code";
 
 export type MoveLine = InventoryRow & { available: number };
-
-function locationFromScan(
-  locations: Location[],
-  payload: ScanPayload,
-): Location | undefined {
-  const codes = [payload.locationCode, payload.raw, payload.sku]
-    .map((value) => value?.trim().toLowerCase())
-    .filter((value): value is string => Boolean(value));
-  return locations.find((location) => codes.includes(location.code.toLowerCase()));
-}
 
 export function RfMoveForm({
   lines,
@@ -83,7 +74,7 @@ export function RfMoveForm({
     setScannedCode(payload.raw);
     setError(null);
     setNotice(null);
-    const location = locationFromScan(locations, payload);
+    const location = findLocationForScan(locations, payload);
     if (location) {
       if (!source || source.locationId === location.id) {
         const atBin = movable.filter((line) => line.locationId === location.id);

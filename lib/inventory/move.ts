@@ -1,10 +1,12 @@
 import { moveQuantity, type StockChange } from "@/backend/server/inventory-ops";
 import { committedCubeForLocation } from "@/lib/cubing/capacity";
 import { inventoryQuantityCubeMessage } from "@/lib/cubing/workflow";
+import { divisionOf } from "@/lib/divisions";
 import type {
   CustomerOrder,
   InventoryItem,
   ItemCube,
+  LicensePlate,
   Location,
   MoveInventoryInput,
   ReceivingOrder,
@@ -21,7 +23,18 @@ export type MoveInventorySystem = {
   itemCubes?: ItemCube[];
   receivingOrders?: ReceivingOrder[];
   customerOrders?: CustomerOrder[];
+  licensePlates?: LicensePlate[];
 };
+
+export function findLocationForScan<T extends { code: string }>(
+  locations: readonly T[],
+  payload: { locationCode?: string; sku?: string; raw: string },
+): T | undefined {
+  const codes = [payload.locationCode, payload.raw, payload.sku]
+    .map((value) => value?.trim().toLowerCase())
+    .filter((value): value is string => Boolean(value));
+  return locations.find((location) => codes.includes(location.code.toLowerCase()));
+}
 
 export function applyInventoryMove(
   system: MoveInventorySystem,
@@ -42,6 +55,9 @@ export function applyInventoryMove(
   );
   if (sourceLocation.id === destination.id) {
     throw new ValidationError("Scan a different destination bin.");
+  }
+  if (divisionOf(sourceLocation) !== divisionOf(destination)) {
+    throw new ValidationError("Move stock inside one division.");
   }
 
   assertAvailableQuantity(
@@ -64,6 +80,16 @@ export function applyInventoryMove(
       item.sku === source.sku &&
       (item.batch ?? null) === (source.batch ?? null),
   );
+  if (
+    source.licensePlateId &&
+    input.quantity === source.quantity &&
+    destinationLine?.licensePlateId &&
+    destinationLine.licensePlateId !== source.licensePlateId
+  ) {
+    throw new ValidationError(
+      `Destination bin ${destination.code} already has another license plate.`,
+    );
+  }
   const quantityBefore = destinationLine?.quantity ?? 0;
   const cube = (system.itemCubes ?? []).find((entry) => entry.sku === source.sku) ?? null;
   const message = inventoryQuantityCubeMessage({
@@ -90,11 +116,31 @@ export function applyInventoryMove(
     throw new ValidationError(message);
   }
 
-  return moveQuantity({
+  const result = moveQuantity({
     items: system.inventoryItems,
     source,
     destinationLocationId: destination.id,
     quantity: input.quantity,
     now,
   });
+  if (source.licensePlateId && input.quantity === source.quantity) {
+    const destinationItem = result.items.find(
+      (item) => item.id === result.changes[1]?.inventoryItemId,
+    );
+    const sourceItem = result.items.find((item) => item.id === source.id);
+    if (destinationItem && sourceItem) {
+      destinationItem.licensePlateId = source.licensePlateId;
+      destinationItem.containerId = source.containerId ?? null;
+      sourceItem.licensePlateId = null;
+      sourceItem.containerId = null;
+      const plate = (system.licensePlates ?? []).find(
+        (entry) => entry.id === source.licensePlateId,
+      );
+      if (plate) {
+        plate.locationId = destination.id;
+        plate.trailerId = null;
+      }
+    }
+  }
+  return result;
 }

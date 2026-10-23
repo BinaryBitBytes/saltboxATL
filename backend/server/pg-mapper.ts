@@ -12,7 +12,12 @@ import {
   type InventoryItem,
   type InventorySystem,
   type InventoryTransaction,
+  type Aisle,
+  type Bay,
+  type Building,
+  type Container,
   type ItemCube,
+  type LicensePlate,
   type Location,
   type Pallet,
   type PhotoAttachment,
@@ -21,7 +26,10 @@ import {
   type ReceivingOrder,
   type Room,
   type ShippingOrder,
+  type Site,
+  type Trailer,
   type User,
+  type Zone,
 } from "@/lib/inventory-schema";
 import {
   defaultCubeCapacity,
@@ -114,9 +122,17 @@ export function mapLocation(row: {
   storage_class?: string | null;
   cube_capacity_cubic_inches?: number | string | null;
   division?: string | null;
+  bay_id?: string | null;
+  slot_kind?: string | null;
+  height?: string | null;
+  position?: number | string | null;
+  side?: string | null;
 }): Location {
   const storageClass = storageClassFrom(row.storage_class, row.code);
   const capacity = Number(row.cube_capacity_cubic_inches);
+  const position = row.position == null || row.position === "" ? null : Number(row.position);
+  const slotKind = row.slot_kind === "pick" || row.slot_kind === "overhead" ? row.slot_kind : null;
+  const side = row.side === "A" || row.side === "B" ? row.side : null;
   return {
     id: row.id,
     division: storedDivision(row.division),
@@ -129,6 +145,147 @@ export function mapLocation(row: {
       Number.isFinite(capacity) && capacity > 0
         ? capacity
         : defaultCubeCapacity(storageClass),
+    bayId: row.bay_id ?? null,
+    slotKind,
+    height: row.height ?? null,
+    position: position != null && Number.isFinite(position) ? position : null,
+    side,
+  };
+}
+
+export function mapSite(row: {
+  id: string;
+  division?: string | null;
+  codename: Site["codename"];
+  state: string;
+  city: string;
+  name: string;
+}): Site {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    codename: row.codename,
+    state: row.state.trim().toUpperCase(),
+    city: row.city,
+    name: row.name,
+  };
+}
+
+export function mapBuilding(row: {
+  id: string;
+  division?: string | null;
+  site_id: string;
+  number: number | string;
+  room_id: string;
+}): Building {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    siteId: row.site_id,
+    number: Number(row.number),
+    roomId: row.room_id,
+  };
+}
+
+export function mapZone(row: {
+  id: string;
+  division?: string | null;
+  building_id: string;
+  letter: string;
+  item_type: string;
+  cube_size: Zone["cubeSize"];
+  project_id: string | null;
+  po_number: string | null;
+  inbound_velocity: Zone["inboundVelocity"];
+  outbound_velocity: Zone["outboundVelocity"];
+}): Zone {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    buildingId: row.building_id,
+    letter: row.letter,
+    itemType: row.item_type,
+    cubeSize: row.cube_size,
+    projectId: row.project_id,
+    poNumber: row.po_number,
+    inboundVelocity: row.inbound_velocity,
+    outboundVelocity: row.outbound_velocity,
+  };
+}
+
+export function mapAisle(row: {
+  id: string;
+  division?: string | null;
+  zone_id: string;
+  number: number | string;
+}): Aisle {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    zoneId: row.zone_id,
+    number: Number(row.number),
+  };
+}
+
+export function mapBay(row: {
+  id: string;
+  division?: string | null;
+  aisle_id: string;
+  number: number | string;
+  cube_budget_cubic_inches: number | string;
+}): Bay {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    aisleId: row.aisle_id,
+    number: Number(row.number),
+    cubeBudgetCubicInches: Number(row.cube_budget_cubic_inches),
+  };
+}
+
+export function mapTrailer(row: {
+  id: string;
+  division?: string | null;
+  site_id: string;
+  code: string;
+  status: Trailer["status"];
+}): Trailer {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    siteId: row.site_id,
+    code: row.code,
+    status: row.status,
+  };
+}
+
+export function mapLicensePlate(row: {
+  id: string;
+  division?: string | null;
+  code: string;
+  location_id: string | null;
+  trailer_id: string | null;
+}): LicensePlate {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    code: row.code,
+    locationId: row.location_id,
+    trailerId: row.trailer_id,
+  };
+}
+
+export function mapContainer(row: {
+  id: string;
+  division?: string | null;
+  license_plate_id: string;
+  code: string;
+}): Container {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    licensePlateId: row.license_plate_id,
+    code: row.code,
   };
 }
 
@@ -203,6 +360,8 @@ export function mapItem(row: {
   last_moved_at: Date | string | null;
   updated_at: Date | string | null;
   division?: string | null;
+  license_plate_id?: string | null;
+  container_id?: string | null;
 }): InventoryItem {
   const strandCount =
     row.strand_count == null || row.strand_count === ""
@@ -224,6 +383,8 @@ export function mapItem(row: {
     upc: row.upc ?? undefined,
     batch: row.batch,
     locationId: row.location_id,
+    licensePlateId: row.license_plate_id ?? null,
+    containerId: row.container_id ?? null,
     quantity: row.quantity,
     description: row.description ?? undefined,
     manufacturer: row.manufacturer ?? "",
@@ -569,6 +730,14 @@ export function assembleSystem(parts: {
   shippingOrders: ShippingOrder[];
   customerOrders?: CustomerOrder[];
   itemCubes?: ItemCube[];
+  sites?: Site[];
+  buildings?: Building[];
+  zones?: Zone[];
+  aisles?: Aisle[];
+  bays?: Bay[];
+  trailers?: Trailer[];
+  licensePlates?: LicensePlate[];
+  containers?: Container[];
 }): InventorySystem {
   return {
     rooms: parts.rooms,
@@ -583,5 +752,13 @@ export function assembleSystem(parts: {
     shippingOrders: parts.shippingOrders,
     customerOrders: parts.customerOrders ?? [],
     itemCubes: parts.itemCubes ?? [],
+    sites: parts.sites ?? [],
+    buildings: parts.buildings ?? [],
+    zones: parts.zones ?? [],
+    aisles: parts.aisles ?? [],
+    bays: parts.bays ?? [],
+    trailers: parts.trailers ?? [],
+    licensePlates: parts.licensePlates ?? [],
+    containers: parts.containers ?? [],
   };
 }
