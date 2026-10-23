@@ -32,6 +32,7 @@ export default async function Home() {
   const system = await getSystem();
   const canReceive = hasPermission(user.role, "receive");
   const canPutaway = hasPermission(user.role, "putaway");
+  const canMove = hasPermission(user.role, "moveInventory");
   const canShip = hasPermission(user.role, "ship");
   const canPlaceOrder = hasPermission(user.role, "placeOrder");
   const canViewInventory = hasPermission(user.role, "viewInventory");
@@ -122,6 +123,15 @@ export default async function Home() {
               render={<Link href="/putaway" />}
             >
               Putaway
+            </Button>
+          ) : null}
+          {canMove ? (
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/moves" />}
+            >
+              RF Moves
             </Button>
           ) : null}
           {canPlaceOrder ? (

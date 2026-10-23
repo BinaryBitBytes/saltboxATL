@@ -38,6 +38,7 @@ export const PERMISSIONS = {
   fulfillOrder: withSecurityRoles(["associate", "threepl", "manager"]),
   receive: withSecurityRoles(["associate", "threepl", "manager"]),
   putaway: withSecurityRoles(["associate", "threepl", "manager"]),
+  moveInventory: withSecurityRoles(["associate", "manager"]),
   cube: withSecurityRoles(["associate", "threepl", "manager"]),
   ship: withSecurityRoles(["associate", "threepl", "manager"]),
   scanLookup: withSecurityRoles(["user", "associate", "threepl", "manager"]),
@@ -124,6 +125,9 @@ export function canAccessPath(
   if (path === "/putaway" || path.startsWith("/putaway/")) {
     return hasPermission(role, "putaway");
   }
+  if (path === "/moves" || path.startsWith("/moves/")) {
+    return hasPermission(role, "moveInventory");
+  }
   if (path === "/inbound" || path.startsWith("/inbound/")) {
     return hasPermission(role, "viewInboundForecast");
   }
@@ -163,6 +167,9 @@ export function canAccessPath(
   }
   if (path === "/api/putaway" || path.startsWith("/api/putaway/")) {
     return hasPermission(role, "putaway");
+  }
+  if (path === "/api/moves" || path.startsWith("/api/moves/")) {
+    return hasPermission(role, "moveInventory");
   }
   if (path === "/api/inventory/import" || path.startsWith("/api/inventory/import/")) {
     return hasPermission(role, "adjustInventory");
