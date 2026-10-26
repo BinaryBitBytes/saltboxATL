@@ -18,6 +18,8 @@ import {
   type Container,
   type ItemCube,
   type LicensePlate,
+  type LicensePlateLedger,
+  LicensePlateLedgerSchema,
   type Location,
   type Pallet,
   type PhotoAttachment,
@@ -275,6 +277,29 @@ export function mapLicensePlate(row: {
   };
 }
 
+function storedJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+export function mapLicensePlateLedger(row: {
+  next_ordinal: number | string;
+  active_users: unknown;
+  reservations: unknown;
+} | null | undefined): LicensePlateLedger | undefined {
+  if (!row) return undefined;
+  const parsed = LicensePlateLedgerSchema.safeParse({
+    nextOrdinal: Number(row.next_ordinal),
+    activeUsers: storedJson(row.active_users) ?? [],
+    reservations: storedJson(row.reservations) ?? [],
+  });
+  return parsed.success ? parsed.data : undefined;
+}
+
 export function mapContainer(row: {
   id: string;
   division?: string | null;
@@ -361,6 +386,7 @@ export function mapItem(row: {
   updated_at: Date | string | null;
   division?: string | null;
   license_plate_id?: string | null;
+  license_plate_number?: string | null;
   container_id?: string | null;
 }): InventoryItem {
   const strandCount =
@@ -384,6 +410,7 @@ export function mapItem(row: {
     batch: row.batch,
     locationId: row.location_id,
     licensePlateId: row.license_plate_id ?? null,
+    licensePlateNumber: row.license_plate_number ?? null,
     containerId: row.container_id ?? null,
     quantity: row.quantity,
     description: row.description ?? undefined,
@@ -737,6 +764,7 @@ export function assembleSystem(parts: {
   bays?: Bay[];
   trailers?: Trailer[];
   licensePlates?: LicensePlate[];
+  licensePlateLedger?: LicensePlateLedger;
   containers?: Container[];
 }): InventorySystem {
   return {
@@ -759,6 +787,7 @@ export function assembleSystem(parts: {
     bays: parts.bays ?? [],
     trailers: parts.trailers ?? [],
     licensePlates: parts.licensePlates ?? [],
+    licensePlateLedger: parts.licensePlateLedger,
     containers: parts.containers ?? [],
   };
 }

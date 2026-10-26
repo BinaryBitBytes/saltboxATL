@@ -152,6 +152,9 @@ export function mergeDivision(
   full.bays = replaceDivision(full.bays, scoped.bays, division);
   full.trailers = replaceDivision(full.trailers, scoped.trailers, division);
   full.licensePlates = replaceDivision(full.licensePlates, scoped.licensePlates, division);
+  if (scoped.licensePlateLedger) {
+    full.licensePlateLedger = scoped.licensePlateLedger;
+  }
   full.containers = replaceDivision(full.containers, scoped.containers, division);
   full.transactions = replaceDivision(full.transactions, scoped.transactions, division);
   full.photos = replaceDivision(full.photos, scoped.photos, division);

@@ -1,3 +1,4 @@
+import { parsePlateNumber } from "@/lib/license-plate/sequence";
 import {
   formatSlot,
   parseBinCode,
@@ -15,6 +16,7 @@ export type ScanPayload = {
   locationCode?: string;
   trailerCode?: string;
   licensePlateCode?: string;
+  licensePlateNumber?: string;
   containerCode?: string;
 };
 
@@ -22,13 +24,16 @@ export function encodeScanPayload(input: {
   sku: string;
   upc?: string;
   batch?: string | null;
+  licensePlateNumber?: string | null;
 }): string {
+  const licensePlate = parsePlateNumber(input.licensePlateNumber);
   return JSON.stringify({
     v: 1,
     type: "item",
     sku: input.sku,
     upc: input.upc || undefined,
     batch: input.batch || undefined,
+    licensePlate: licensePlate || undefined,
   });
 }
 
@@ -92,18 +97,27 @@ export function parseScanCode(rawInput: string): ScanPayload {
       }
       if (parsed.type === "license-plate") {
         const licensePlateCode = parseLicensePlate(String(parsed.code ?? ""));
-        return licensePlateCode ? { raw, licensePlateCode } : { raw };
+        const licensePlateNumber = parsePlateNumber(licensePlateCode) ?? undefined;
+        return licensePlateCode
+          ? { raw, licensePlateCode, licensePlateNumber }
+          : { raw };
       }
       if (parsed.type === "container") {
         const containerCode = parseContainerCode(String(parsed.code ?? ""));
         return containerCode ? { raw, containerCode } : { raw };
       }
+      const licensePlateNumber =
+        parsePlateNumber(emptyToUndefined(parsed.licensePlate)) ??
+        parsePlateNumber(emptyToUndefined(parsed.licensePlateNumber)) ??
+        undefined;
       return {
         raw,
         sku: emptyToUndefined(parsed.sku),
         upc: emptyToUndefined(parsed.upc),
         batch: emptyToUndefined(parsed.batch),
         locationCode: emptyToUndefined(parsed.locationCode),
+        licensePlateNumber,
+        licensePlateCode: licensePlateNumber ? `LP${licensePlateNumber}` : undefined,
       };
     } catch {
       return { raw };
@@ -124,7 +138,10 @@ export function parseScanCode(rawInput: string): ScanPayload {
         emptyToUndefined(url.searchParams.get("location"));
       if (url.pathname.includes("license-plate")) {
         const licensePlateCode = codeParam ? parseLicensePlate(codeParam) : null;
-        return licensePlateCode ? { raw, licensePlateCode } : { raw };
+        const licensePlateNumber = parsePlateNumber(licensePlateCode) ?? undefined;
+        return licensePlateCode
+          ? { raw, licensePlateCode, licensePlateNumber }
+          : { raw };
       }
       if (url.pathname.includes("container")) {
         const containerCode = codeParam ? parseContainerCode(codeParam) : null;
@@ -154,13 +171,20 @@ export function parseScanCode(rawInput: string): ScanPayload {
   const trailerCode = parseTrailerCode(raw);
   if (trailerCode) return { raw, trailerCode };
   const licensePlateCode = parseLicensePlate(raw);
-  if (licensePlateCode) return { raw, licensePlateCode };
+  if (licensePlateCode) {
+    const licensePlateNumber = parsePlateNumber(licensePlateCode) ?? undefined;
+    return { raw, licensePlateCode, licensePlateNumber };
+  }
   const containerCode = parseContainerCode(raw);
   if (containerCode) return { raw, containerCode };
   const bin = parseBinCode(raw);
   if (bin) return { raw, locationCode: raw.trim().toUpperCase() };
 
-  if (/^\d{8,14}$/.test(raw)) {
+  if (/^\d{8}$/.test(raw)) {
+    return { raw, licensePlateNumber: raw, licensePlateCode: `LP${raw}` };
+  }
+
+  if (/^\d{9,14}$/.test(raw)) {
     return { raw, upc: raw };
   }
 
@@ -174,11 +198,19 @@ export function matchesScan(
     batch?: string | null;
     locationCode?: string;
     licensePlateCode?: string | null;
+    licensePlateNumber?: string | null;
     containerCode?: string | null;
     trailerCode?: string | null;
   },
   parsed: ScanPayload,
 ): boolean {
+  if (
+    parsed.licensePlateNumber &&
+    item.licensePlateNumber &&
+    item.licensePlateNumber === parsed.licensePlateNumber
+  ) {
+    return true;
+  }
   if (
     parsed.licensePlateCode &&
     item.licensePlateCode &&

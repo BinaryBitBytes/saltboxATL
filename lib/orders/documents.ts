@@ -88,10 +88,13 @@ export function buildOrderItemLabels(
     heading: "Pick label",
     title: line.sku,
     barcodeValue: line.upc || line.sku,
+    licensePlateNumber: line.licensePlateNumber ?? null,
+    licensePlateBarcode: line.licensePlateNumber ?? null,
     qrValue: encodeScanPayload({
       sku: line.sku,
       upc: line.upc,
       batch: line.batch,
+      licensePlateNumber: line.licensePlateNumber,
     }),
     fields: [
       { label: "Order", value: order.orderNumber },
@@ -106,6 +109,9 @@ export function buildOrderItemLabels(
         label: "From",
         value: locationCodes.get(line.locationId) ?? line.locationId,
       },
+      ...(line.licensePlateNumber
+        ? [{ label: "License plate", value: line.licensePlateNumber }]
+        : []),
       { label: "Item", value: line.description },
     ],
   }));

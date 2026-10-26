@@ -81,10 +81,13 @@ export function applyInventoryMove(
       (item.batch ?? null) === (source.batch ?? null),
   );
   if (
-    source.licensePlateId &&
     input.quantity === source.quantity &&
-    destinationLine?.licensePlateId &&
-    destinationLine.licensePlateId !== source.licensePlateId
+    ((source.licensePlateId &&
+      destinationLine?.licensePlateId &&
+      destinationLine.licensePlateId !== source.licensePlateId) ||
+      (source.licensePlateNumber &&
+        destinationLine?.licensePlateNumber &&
+        destinationLine.licensePlateNumber !== source.licensePlateNumber))
   ) {
     throw new ValidationError(
       `Destination bin ${destination.code} already has another license plate.`,
@@ -123,22 +126,30 @@ export function applyInventoryMove(
     quantity: input.quantity,
     now,
   });
-  if (source.licensePlateId && input.quantity === source.quantity) {
+  if (input.quantity === source.quantity) {
     const destinationItem = result.items.find(
       (item) => item.id === result.changes[1]?.inventoryItemId,
     );
     const sourceItem = result.items.find((item) => item.id === source.id);
     if (destinationItem && sourceItem) {
-      destinationItem.licensePlateId = source.licensePlateId;
-      destinationItem.containerId = source.containerId ?? null;
-      sourceItem.licensePlateId = null;
-      sourceItem.containerId = null;
-      const plate = (system.licensePlates ?? []).find(
-        (entry) => entry.id === source.licensePlateId,
-      );
-      if (plate) {
-        plate.locationId = destination.id;
-        plate.trailerId = null;
+      if (source.licensePlateId) {
+        destinationItem.licensePlateId = source.licensePlateId;
+        destinationItem.containerId = source.containerId ?? null;
+        sourceItem.licensePlateId = null;
+        sourceItem.containerId = null;
+        const plate = (system.licensePlates ?? []).find(
+          (entry) => entry.id === source.licensePlateId,
+        );
+        if (plate) {
+          plate.locationId = destination.id;
+          plate.trailerId = null;
+        }
+      }
+      if (source.licensePlateNumber) {
+        if (!destinationItem.licensePlateNumber) {
+          destinationItem.licensePlateNumber = source.licensePlateNumber;
+        }
+        sourceItem.licensePlateNumber = null;
       }
     }
   }

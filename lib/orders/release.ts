@@ -80,6 +80,7 @@ export function placeRemoteOrder(input: {
       batch: item.batch,
       locationId: item.locationId,
       quantity: requested.quantity,
+      licensePlateNumber: item.licensePlateNumber ?? null,
     };
   });
 

@@ -23,6 +23,7 @@ import {
   isReceivingEditable,
   type CaseItem,
   type ItemCube,
+  type InventoryItem,
   type InventoryRow,
   type InventorySystem,
   type WarehouseSnapshot,
@@ -111,6 +112,15 @@ import {
 import { assertAvailableQuantity, reservedQuantity } from "@/lib/orders/availability";
 import { applyInventoryMove } from "@/lib/inventory/move";
 import { warehouseLabelPrinterName } from "@/lib/orders/documents";
+import {
+  assignHandlingPlate,
+  reserveLicensePlateBuffers,
+  stampInventoryLines,
+} from "@/lib/license-plate/assign";
+import {
+  queryLicensePlate,
+  type LicensePlateHit,
+} from "@/lib/license-plate/query";
 import { applyOrderFulfillment } from "@/lib/orders/fulfill";
 import {
   acknowledgeWarehousePrint,
@@ -157,6 +167,7 @@ export function enrichInventory(
       locationCode: location?.code ?? "UNKNOWN",
       roomName: room?.name ?? "Unknown room",
       licensePlateCode: plate?.code ?? null,
+      licensePlateNumber: filled.licensePlateNumber ?? null,
       containerCode: container?.code ?? null,
       trailerCode: trailer?.code ?? null,
     };
@@ -231,11 +242,66 @@ function appendTransactions(
   }
 }
 
+function writeStock(
+  system: InventorySystem,
+  userId: string | null | undefined,
+  items: InventoryItem[],
+  changes: StockChange[],
+  type: InventoryTransaction["type"],
+  extra: Omit<Partial<InventoryTransaction>, "type"> & { occurredAt: string },
+) {
+  system.inventoryItems = stampInventoryLines(
+    system,
+    userId,
+    items,
+    new Set(changes.map((change) => change.inventoryItemId)),
+  );
+  appendTransactions(system, type, changes, extra);
+}
+
+function rowsForLicensePlate(
+  system: InventorySystem,
+  hit: LicensePlateHit,
+): InventoryRow[] {
+  const rows = enrichInventory(system);
+  if (hit.kind === "inventory") {
+    return rows.filter((item) => item.id === hit.inventoryItemId);
+  }
+  if (hit.kind === "hierarchy") {
+    return rows.filter(
+      (item) =>
+        item.licensePlateId === hit.licensePlateId ||
+        item.licensePlateNumber === hit.number,
+    );
+  }
+  if (hit.kind === "check-in" && !hit.putawayPosted) return [];
+  if (!hit.locationId) return [];
+  return rows.filter(
+    (item) =>
+      item.sku === hit.sku &&
+      (item.batch ?? null) === (hit.batch ?? null) &&
+      item.locationId === hit.locationId,
+  );
+}
+
 export function lookupInventory(
   system: InventorySystem,
   code: string,
 ): InventoryRow[] {
+  const direct = queryLicensePlate(system, code);
+  if (direct) return rowsForLicensePlate(system, direct);
+
   const parsed = parseScanCode(code);
+  if (parsed.licensePlateNumber) {
+    const nested = queryLicensePlate(system, parsed.licensePlateNumber);
+    if (nested) return rowsForLicensePlate(system, nested);
+    if (/^\d{8}$/.test(code.trim())) {
+      const asUpc = enrichInventory(system).filter((item) =>
+        matchesScan(item, { raw: code.trim(), upc: code.trim() }),
+      );
+      if (asUpc.length > 0) return asUpc;
+    }
+  }
   return enrichInventory(system).filter((item) => matchesScan(item, parsed));
 }
 
@@ -524,6 +590,7 @@ export async function createReceivingOrderRecord(
       jobIdNumber: parsed.data.jobIdNumber,
     });
     system.receivingOrders.unshift(order);
+    reserveLicensePlateBuffers(system, order.createdBy ?? order.receiverName);
     return order;
   });
 }
@@ -810,7 +877,13 @@ export async function addCaseToPallet(
       "case quantity",
     );
 
-    pallet.cases.push(caseFromInput(system, parsed.data, {}));
+    pallet.cases.push(
+      assignHandlingPlate(
+        system,
+        order.createdBy ?? order.receiverName,
+        caseFromInput(system, parsed.data, {}),
+      ),
+    );
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -850,9 +923,15 @@ export async function updateCaseOnPallet(
       "case quantity",
     );
 
-    pallet.cases[index] = caseFromInput(system, parsed.data, {
-      existingId: caseId,
-    });
+    const previousPlate = pallet.cases[index]?.licensePlateNumber;
+    pallet.cases[index] = assignHandlingPlate(
+      system,
+      order.createdBy ?? order.receiverName,
+      caseFromInput(system, parsed.data, {
+        existingId: caseId,
+      }),
+      previousPlate,
+    );
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -1029,14 +1108,20 @@ export async function completePutawayOrder(
 
     const now = nowIso();
     const result = putAwayCases(system.inventoryItems, pending, now);
-    system.inventoryItems = result.items;
-    appendTransactions(system, "putaway", result.changes, {
-      occurredAt: now,
-      referenceType: "receiving-order",
-      referenceId: order.id,
-      createdBy: order.createdBy ?? order.receiverName,
-      reason: `Putaway ${order.orderNumber}`,
-    });
+    writeStock(
+      system,
+      order.createdBy ?? order.receiverName,
+      result.items,
+      result.changes,
+      "putaway",
+      {
+        occurredAt: now,
+        referenceType: "receiving-order",
+        referenceId: order.id,
+        createdBy: order.createdBy ?? order.receiverName,
+        reason: `Putaway ${order.orderNumber}`,
+      },
+    );
     for (const item of pending) {
       item.putawayPostedAt = now;
     }
@@ -1108,7 +1193,9 @@ export async function createShippingOrderRecord(
       parsed.data.picks,
       now,
     );
-    for (const shipped of shippedCases) {
+    const plateUser = parsed.data.createdBy ?? parsed.data.shipperName;
+    for (let index = 0; index < shippedCases.length; index += 1) {
+      const shipped = shippedCases[index]!;
       const attributes = caseItemAttributesFromInbound(
         system.receivingOrders,
         shipped.sku,
@@ -1116,6 +1203,7 @@ export async function createShippingOrderRecord(
       );
       if (!shipped.manufacturer) shipped.manufacturer = attributes.manufacturer;
       if (shipped.color == null) shipped.color = attributes.color;
+      shippedCases[index] = assignHandlingPlate(system, plateUser, shipped);
     }
 
     const pallet: Pallet = recountPallet({
@@ -1150,14 +1238,20 @@ export async function createShippingOrderRecord(
       createdBy: parsed.data.createdBy,
     };
 
-    system.inventoryItems = remaining;
-    appendTransactions(system, "shipping", changes, {
-      occurredAt: now,
-      referenceType: "shipping-order",
-      referenceId: order.id,
-      createdBy: parsed.data.createdBy ?? parsed.data.shipperName,
-      reason: `Shipment ${parsed.data.shipmentNumber}`,
-    });
+    writeStock(
+      system,
+      parsed.data.createdBy ?? parsed.data.shipperName,
+      remaining,
+      changes,
+      "shipping",
+      {
+        occurredAt: now,
+        referenceType: "shipping-order",
+        referenceId: order.id,
+        createdBy: parsed.data.createdBy ?? parsed.data.shipperName,
+        reason: `Shipment ${parsed.data.shipmentNumber}`,
+      },
+    );
     system.shippingOrders.unshift(order);
     return order;
   });
@@ -1183,6 +1277,12 @@ export async function createCustomerOrderRecord(
 
   return updateSystem((system) => {
     if (!system.customerOrders) system.customerOrders = [];
+    system.inventoryItems = stampInventoryLines(
+      system,
+      placedBy,
+      system.inventoryItems,
+      new Set(parsed.data.lines.map((line) => line.inventoryItemId)),
+    );
     const order = placeRemoteOrder({
       customer: parsed.data.customer,
       notes: parsed.data.notes,
@@ -1238,16 +1338,20 @@ export async function completeCustomerOrderPickRecord(
       now,
       completedBy,
     });
-    system.inventoryItems = result.items;
-    const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
-    system.customerOrders[index] = result.order;
-    appendTransactions(system, "pick", result.changes, {
+    writeStock(system, completedBy, result.items, result.changes, "pick", {
       occurredAt: now,
       referenceType: "customer-order",
       referenceId: order.id,
       createdBy: completedBy,
       reason: `Pick ${order.pickRequest.requestNumber} for ${order.orderNumber}`,
     });
+    for (const line of result.order.lines) {
+      if (line.licensePlateNumber) continue;
+      const item = system.inventoryItems.find((entry) => entry.id === line.inventoryItemId);
+      if (item?.licensePlateNumber) line.licensePlateNumber = item.licensePlateNumber;
+    }
+    const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
+    system.customerOrders[index] = result.order;
     return result.order;
   });
 }
@@ -1584,8 +1688,7 @@ export async function importInventorySpreadsheet(input: {
       throw new ServiceError("Spreadsheet matches on-hand inventory. Nothing to import.");
     }
 
-    current.inventoryItems = items;
-    appendTransactions(current, "import", stockChanges, {
+    writeStock(current, input.createdBy, items, stockChanges, "import", {
       occurredAt: now,
       reason:
         input.mode === "add"
@@ -1711,8 +1814,7 @@ export async function createAdjustmentRecord(
         description: input.description,
         now,
       });
-      system.inventoryItems = created.items;
-      appendTransactions(system, "overage", [created.change], {
+      writeStock(system, input.createdBy, created.items, [created.change], "overage", {
         occurredAt: now,
         reason: input.reason,
         notes: input.notes,
@@ -1771,8 +1873,7 @@ export async function createAdjustmentRecord(
       damagedLocationId:
         input.type === "damage" ? input.moveDamagedToLocationId : undefined,
     });
-    system.inventoryItems = result.items;
-    appendTransactions(system, input.type, result.changes, {
+    writeStock(system, input.createdBy, result.items, result.changes, input.type, {
       occurredAt: now,
       reason: input.reason,
       notes: input.notes,
@@ -1806,14 +1907,10 @@ export async function moveInventoryRecord(rawData: unknown): Promise<{
 
   return updateSystem((system) => {
     const result = applyInventoryMove(system, input, now);
-    system.inventoryItems = result.items;
-    const source = system.locations.find(
-      (location) => location.id === result.changes[0]?.locationId,
-    );
     const destination = system.locations.find(
       (location) => location.id === input.destinationLocationId,
     );
-    appendTransactions(system, "move", result.changes, {
+    writeStock(system, input.createdBy, result.items, result.changes, "move", {
       occurredAt: now,
       reason: `RF move to ${destination?.code ?? "bin"}`,
       notes: input.notes,
@@ -1822,6 +1919,9 @@ export async function moveInventoryRecord(rawData: unknown): Promise<{
       referenceType: "inventory-move",
       referenceId,
     });
+    const source = system.locations.find(
+      (location) => location.id === result.changes[0]?.locationId,
+    );
     return {
       sku: result.changes[0]?.sku ?? "",
       quantity: input.quantity,

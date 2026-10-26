@@ -1,4 +1,5 @@
 import { createId } from "@/backend/server/helperUtils";
+import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import { committedCubeForLocation } from "@/lib/cubing/capacity";
 import {
   defaultCubeCapacity,
@@ -360,6 +361,7 @@ export function addLicensePlate(
     trailerId?: string | null;
     id?: string;
     code?: string;
+    issuedBy?: string | null;
   },
 ): LicensePlate {
   const hasLocation = Boolean(input.locationId);
@@ -377,7 +379,9 @@ export function addLicensePlate(
     requireOwned(trailersOf(system), input.trailerId, input.division, "Trailer");
   }
   const id = input.id ?? createId();
-  const code = input.code ? formatLicensePlate(input.code) : formatLicensePlate(id);
+  const code = input.code
+    ? formatLicensePlate(input.code)
+    : allocateLicensePlate(system, input.issuedBy ?? "hierarchy").code;
   if (
     platesOf(system).some(
       (plate) => divisionOf(plate) === input.division && plate.code === code,

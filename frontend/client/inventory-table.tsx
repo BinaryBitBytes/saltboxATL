@@ -22,7 +22,7 @@ import {
 import { formatFiberSummary } from "@/lib/format";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { ProductCodes } from "@/frontend/client/product-codes";
-import { matchesScan } from "@/lib/scan-code";
+import { matchesScan, parseScanCode } from "@/lib/scan-code";
 
 const features = tableFeatures({});
 const columnHelper = createColumnHelper<typeof features, InventoryRow>();
@@ -30,6 +30,10 @@ const EMPTY_ROWS: InventoryRow[] = [];
 
 const columns = columnHelper.columns([
   columnHelper.accessor("sku", { header: "SKU" }),
+  columnHelper.accessor("licensePlateNumber", {
+    header: () => <T>License plate</T>,
+    cell: ({ getValue }) => getValue() || "—",
+  }),
   columnHelper.accessor("upc", { header: "UPC" }),
   columnHelper.accessor("description", { header: () => <T>Description</T> }),
   columnHelper.accessor("manufacturer", {
@@ -97,8 +101,15 @@ export function InventoryTable({
     const needle = query.trim();
     if (!needle) return rows;
     return rows.filter((row) =>
-      matchesScan(row, { raw: needle, sku: needle, upc: needle }) ||
-      [row.description, row.manufacturer, row.color, row.locationCode, row.roomName]
+      matchesScan(row, parseScanCode(needle)) ||
+      [
+        row.description,
+        row.manufacturer,
+        row.color,
+        row.locationCode,
+        row.roomName,
+        row.licensePlateNumber,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
