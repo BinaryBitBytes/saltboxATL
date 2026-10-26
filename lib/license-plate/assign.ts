@@ -33,7 +33,10 @@ function addIssued(values: Set<number>, raw: string | null | undefined): void {
 
 export function collectIssuedValues(system: InventorySystem): Set<number> {
   const values = new Set<number>();
-  for (const item of system.inventoryItems ?? []) addIssued(values, item.licensePlateNumber);
+  for (const item of system.inventoryItems ?? []) {
+    addIssued(values, item.licensePlateNumber);
+    for (const carton of item.cartons ?? []) addIssued(values, carton.licensePlateNumber);
+  }
   for (const order of system.receivingOrders ?? []) {
     for (const pallet of order.pallets ?? []) {
       for (const item of pallet.cases ?? []) addIssued(values, item.licensePlateNumber);

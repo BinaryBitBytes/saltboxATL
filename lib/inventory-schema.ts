@@ -601,6 +601,17 @@ export const InventoryItemSchema = z.object({
   locationId: UuidSchema,
   licensePlateId: UuidSchema.nullable().optional(),
   licensePlateNumber: LicensePlateNumberSchema.nullable().optional(),
+  poNumber: z.string().trim().max(LIMITS.code).nullable().optional(),
+  jobIdNumber: JobIdNumberSchema.optional(),
+  cartons: z
+    .array(
+      z.object({
+        licensePlateNumber: LicensePlateNumberSchema,
+        quantity: z.number().int().positive(),
+      }),
+    )
+    .max(500)
+    .optional(),
   containerId: UuidSchema.nullable().optional(),
   quantity: NonNegativeCountSchema,
   description: z.string().optional(),

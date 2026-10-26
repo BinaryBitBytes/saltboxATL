@@ -118,17 +118,24 @@ export function indexLicensePlates(system: InventorySystem): LicensePlateIndex {
   );
 
   for (const item of system.inventoryItems ?? []) {
-    const number = parsePlateNumber(item.licensePlateNumber);
-    if (!number) continue;
-    addHit(index, number, {
-      kind: "inventory",
-      number,
-      code: formatPlateCode(Number(number)),
-      inventoryItemId: item.id,
-      sku: item.sku,
-      batch: item.batch ?? null,
-      locationId: item.locationId,
-    });
+    const numbers = new Set<string>();
+    const primary = parsePlateNumber(item.licensePlateNumber);
+    if (primary) numbers.add(primary);
+    for (const carton of item.cartons ?? []) {
+      const number = parsePlateNumber(carton.licensePlateNumber);
+      if (number) numbers.add(number);
+    }
+    for (const number of numbers) {
+      addHit(index, number, {
+        kind: "inventory",
+        number,
+        code: formatPlateCode(Number(number)),
+        inventoryItemId: item.id,
+        sku: item.sku,
+        batch: item.batch ?? null,
+        locationId: item.locationId,
+      });
+    }
   }
 
   return index;

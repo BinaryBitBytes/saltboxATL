@@ -30,10 +30,17 @@ const EMPTY_ROWS: InventoryRow[] = [];
 
 const columns = columnHelper.columns([
   columnHelper.accessor("sku", { header: "SKU" }),
-  columnHelper.accessor("licensePlateNumber", {
-    header: () => <T>License plate</T>,
-    cell: ({ getValue }) => getValue() || "—",
-  }),
+  columnHelper.accessor(
+    (row) =>
+      row.cartons?.map((carton) => carton.licensePlateNumber).join(", ") ||
+      row.licensePlateNumber ||
+      "",
+    {
+      id: "licensePlateNumber",
+      header: () => <T>License plate</T>,
+      cell: ({ getValue }) => getValue() || "—",
+    },
+  ),
   columnHelper.accessor("upc", { header: "UPC" }),
   columnHelper.accessor("description", { header: () => <T>Description</T> }),
   columnHelper.accessor("manufacturer", {

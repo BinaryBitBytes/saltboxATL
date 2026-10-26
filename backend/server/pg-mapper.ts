@@ -277,6 +277,22 @@ export function mapLicensePlate(row: {
   };
 }
 
+function storedCartons(value: unknown): InventoryItem["cartons"] {
+  const parsed = storedJson(value);
+  if (!Array.isArray(parsed)) return undefined;
+  const cartons = parsed.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as { licensePlateNumber?: unknown; quantity?: unknown };
+    if (typeof row.licensePlateNumber !== "string" || !/^\d{8}$/.test(row.licensePlateNumber)) {
+      return [];
+    }
+    const quantity = Number(row.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) return [];
+    return [{ licensePlateNumber: row.licensePlateNumber, quantity }];
+  });
+  return cartons.length > 0 ? cartons : undefined;
+}
+
 function storedJson(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
@@ -387,6 +403,9 @@ export function mapItem(row: {
   division?: string | null;
   license_plate_id?: string | null;
   license_plate_number?: string | null;
+  po_number?: string | null;
+  job_id_number?: string | null;
+  cartons?: unknown;
   container_id?: string | null;
 }): InventoryItem {
   const strandCount =
@@ -411,6 +430,9 @@ export function mapItem(row: {
     locationId: row.location_id,
     licensePlateId: row.license_plate_id ?? null,
     licensePlateNumber: row.license_plate_number ?? null,
+    poNumber: row.po_number ?? null,
+    jobIdNumber: row.job_id_number ?? null,
+    cartons: storedCartons(row.cartons),
     containerId: row.container_id ?? null,
     quantity: row.quantity,
     description: row.description ?? undefined,

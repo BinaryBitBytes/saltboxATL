@@ -287,8 +287,8 @@ export async function saveSystem(
          id, sku, upc, batch, location_id, quantity, description,
          manufacturer, color, is_fiber, connection_type, strand_count, length_meters,
          last_moved_at, updated_at, division, license_plate_id, container_id,
-         license_plate_number
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+         license_plate_number, po_number, job_id_number, cartons
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
       [
         item.id,
         item.sku,
@@ -309,6 +309,9 @@ export async function saveSystem(
         item.licensePlateId ?? null,
         item.containerId ?? null,
         item.licensePlateNumber ?? null,
+        item.poNumber ?? null,
+        item.jobIdNumber ?? null,
+        JSON.stringify(item.cartons ?? []),
       ],
     );
   }

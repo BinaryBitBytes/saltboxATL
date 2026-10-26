@@ -16,6 +16,7 @@ import {
 import { findLocationForScan } from "@/lib/inventory/move";
 import type { InventoryRow, Location } from "@/lib/inventory-schema";
 import { matchesScan, type ScanPayload } from "@/lib/scan-code";
+import { ProcessAlert } from "@/frontend/client/process-alert";
 
 export type MoveLine = InventoryRow & { available: number };
 
@@ -228,11 +229,7 @@ export function RfMoveForm({
               confirmationQuantity={confirmationQuantity}
               onConfirmationQuantityChange={setConfirmationQuantity}
             />
-            {error ? (
-              <p className="text-sm text-destructive">
-                <T>{error}</T>
-              </p>
-            ) : null}
+            <ProcessAlert message={error} />
             {notice ? <p className="text-sm">{notice}</p> : null}
             <Button
               type="submit"

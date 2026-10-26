@@ -41,9 +41,20 @@ import {
 import { applyDeliveryNotes, applyDeliveryScan, DeliveryCheckInError } from "@/lib/delivery/check-in";
 import {
   assignPurchaseOrderJobId,
+  jobIdForPurchaseOrder,
   saveBuyerPurchaseOrder,
   upsertPurchaseOrder,
 } from "@/lib/purchase-orders";
+import {
+  binMixError,
+  cartonsForQuantity,
+  checkBinPlacement,
+  nearestOpenLocation,
+  occupantsByLocation,
+  type BinOccupant,
+  type PlacementLocation,
+} from "@/lib/inventory/bin-container";
+import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
 import { PersonNameSchema } from "@/lib/validation/fields";
@@ -85,7 +96,7 @@ import {
   hasPostedPutaway,
   isCasePutawayPosted,
 } from "@/lib/receiving/reopen";
-import { defaultCubeCapacity, cubeExceeds, formatCubicInches, measureCaseCube } from "@/lib/cubing/measure";
+import { caseCubicInches, defaultCubeCapacity, measureCaseCube } from "@/lib/cubing/measure";
 import {
   buildCubingLocations,
   committedCubeForLocation,
@@ -456,11 +467,33 @@ function receivingCubeBlocker(
   return null;
 }
 
+function placementLocationsFor(
+  system: InventorySystem,
+  excludeCaseIds?: ReadonlySet<string>,
+): PlacementLocation[] {
+  return system.locations.map((location) => ({
+    id: location.id,
+    code: location.code,
+    isActive: location.isActive,
+    storageClass: location.storageClass,
+    division: location.division,
+    cubeCapacityCubicInches: location.cubeCapacityCubicInches,
+    committedCubicInches: committedCubeForLocation(
+      location.id,
+      system.inventoryItems,
+      system.receivingOrders,
+      system.itemCubes,
+      excludeCaseIds,
+    ),
+  }));
+}
+
 function assertDirectedCasesFit(
   system: InventorySystem,
   pallet: { cases: CaseItem[] } | undefined,
   locationId: string,
   cases: CaseItem[],
+  freight: { poNumber?: string | null; jobIdNumber?: string | null },
 ): void {
   const location = system.locations.find((entry) => entry.id === locationId);
   if (!location) {
@@ -473,21 +506,130 @@ function assertDirectedCasesFit(
     );
   }
   const exclude = new Set(cases.map((item) => item.id));
-  const committed = committedCubeForLocation(
-    locationId,
-    system.inventoryItems,
-    system.receivingOrders,
-    system.itemCubes,
-    exclude,
-  );
-  if (!cubeExceeds(committed + incoming.cubicInches, location.cubeCapacityCubicInches)) {
-    return;
+  const occupants = occupantsByLocation(system.inventoryItems);
+  const views = placementLocationsFor(system, exclude);
+  const origin = views.find((entry) => entry.id === locationId);
+  const sharing = [...(occupants.get(locationId) ?? [])];
+  for (const item of cases) {
+    const mix = binMixError(
+      {
+        sku: item.sku,
+        batch: item.batch,
+        quantity: item.quantityInCase,
+        poNumber: freight.poNumber,
+        jobIdNumber: freight.jobIdNumber,
+      },
+      sharing,
+      location.code,
+    );
+    if (mix) {
+      const suggestion = origin
+        ? nearestOpenLocation({
+            origin,
+            incoming: {
+              sku: item.sku,
+              batch: item.batch,
+              quantity: item.quantityInCase,
+              poNumber: freight.poNumber,
+              jobIdNumber: freight.jobIdNumber,
+            },
+            incomingCubicInches: incoming.cubicInches,
+            locations: views,
+            occupantsByLocation: occupants,
+          })
+        : null;
+      throw new ServiceError(
+        suggestion ? `${mix} Nearest open location is ${suggestion.code}.` : mix,
+      );
+    }
+    sharing.push({
+      sku: item.sku,
+      batch: item.batch,
+      quantity: item.quantityInCase,
+      poNumber: freight.poNumber,
+      jobIdNumber: freight.jobIdNumber,
+    });
   }
+  if (!origin) return;
+  const placement = checkBinPlacement({
+    location: origin,
+    occupants: occupants.get(locationId) ?? [],
+    incoming: {
+      sku: cases[0]?.sku ?? "",
+      batch: cases[0]?.batch,
+      quantity: cases.reduce((sum, item) => sum + item.quantityInCase, 0),
+      poNumber: freight.poNumber,
+      jobIdNumber: freight.jobIdNumber,
+    },
+    incomingCubicInches: incoming.cubicInches,
+    locations: views,
+    occupantsByLocation: occupants,
+  });
+  if (placement.ok) return;
   const pending = (pallet?.cases ?? cases).filter((item) => !isCasePutawayPosted(item));
   const plan = palletCubePlan(system, pending);
-  throw new ServiceError(
-    `Location ${location.code} can hold ${formatCubicInches(location.cubeCapacityCubicInches)} and already has ${formatCubicInches(committed)} committed. These cases need ${formatCubicInches(incoming.cubicInches)}, which is too large for the location. ${plan.directive}`,
-  );
+  throw new ServiceError(`${placement.message} ${plan.directive}`);
+}
+
+function receivingFreight(system: InventorySystem, order: ReceivingOrder) {
+  return {
+    poNumber: order.poNumber,
+    jobIdNumber: jobIdForPurchaseOrder(system.purchaseOrders ?? [], order.poNumber),
+  };
+}
+
+function attachPutawayCartons(
+  system: InventorySystem,
+  items: InventoryItem[],
+  cases: CaseItem[],
+  freight: { poNumber?: string | null; jobIdNumber?: string | null },
+  userId: string,
+): InventoryItem[] {
+  let next = items;
+  for (const caseItem of cases) {
+    if (!caseItem.putawayLocationId) continue;
+    const cube = system.itemCubes.find((entry) => entry.sku === caseItem.sku);
+    const plates = cartonsForQuantity(
+      caseItem.quantityInCase,
+      cube?.unitsPerCase,
+      caseItem.licensePlateNumber,
+      () => allocateLicensePlate(system, userId).number,
+    );
+    if (!caseItem.licensePlateNumber && plates[0]) {
+      caseItem.licensePlateNumber = plates[0].licensePlateNumber;
+    }
+    next = next.map((item) => {
+      if (item.locationId !== caseItem.putawayLocationId || item.sku !== caseItem.sku) return item;
+      if ((item.batch ?? null) !== (caseItem.batch ?? null)) return item;
+      const cartons = [...(item.cartons ?? [])];
+      for (const plate of plates) {
+        if (cartons.some((entry) => entry.licensePlateNumber === plate.licensePlateNumber)) continue;
+        cartons.push(plate);
+      }
+      return {
+        ...item,
+        cartons,
+        licensePlateNumber: item.licensePlateNumber ?? cartons[0]?.licensePlateNumber ?? null,
+        poNumber: item.poNumber ?? freight.poNumber ?? null,
+        jobIdNumber: item.jobIdNumber ?? freight.jobIdNumber ?? null,
+      };
+    });
+  }
+  return next;
+}
+
+function withNearestLocation(system: InventorySystem, locationId: string, message: string, incoming: BinOccupant, incomingCubicInches: number): string {
+  const views = placementLocationsFor(system);
+  const origin = views.find((entry) => entry.id === locationId);
+  if (!origin) return message;
+  const suggestion = nearestOpenLocation({
+    origin,
+    incoming,
+    incomingCubicInches,
+    locations: views,
+    occupantsByLocation: occupantsByLocation(system.inventoryItems),
+  });
+  return suggestion ? `${message} Nearest open location is ${suggestion.code}.` : message;
 }
 
 function assertInventoryIncreaseFits(
@@ -499,7 +641,28 @@ function assertInventoryIncreaseFits(
 ): void {
   const location = system.locations.find((entry) => entry.id === locationId);
   if (!location) return;
+  const existing = system.inventoryItems.find(
+    (item) => item.locationId === locationId && item.sku === sku,
+  );
   const cube = system.itemCubes.find((entry) => entry.sku === sku) ?? null;
+  const addedCube = cube
+    ? Math.max(0, caseCubicInches(quantityAfter, cube) - caseCubicInches(quantityBefore, cube))
+    : 0;
+  const incoming = {
+    sku,
+    batch: existing?.batch,
+    quantity: Math.max(0, quantityAfter - quantityBefore),
+    poNumber: existing?.poNumber,
+    jobIdNumber: existing?.jobIdNumber,
+  };
+  const mix = binMixError(
+    incoming,
+    occupantsByLocation(system.inventoryItems).get(locationId) ?? [],
+    location.code,
+  );
+  if (mix) {
+    throw new ServiceError(withNearestLocation(system, locationId, mix, incoming, addedCube));
+  }
   const message = inventoryQuantityCubeMessage({
     sku,
     locationCode: location.code,
@@ -520,7 +683,17 @@ function assertInventoryIncreaseFits(
     quantityBefore,
     quantityAfter,
   });
-  if (message) throw new ServiceError(message);
+  if (message) {
+    throw new ServiceError(
+      withNearestLocation(
+        system,
+        locationId,
+        message,
+        incoming,
+        addedCube,
+      ),
+    );
+  }
 }
 
 function nextSplitPalletNumber(
@@ -1060,7 +1233,13 @@ export async function assignPutawayLocation(
     }
 
     if (putaway.putawayLocationId) {
-      assertDirectedCasesFit(system, pallet, putaway.putawayLocationId, targets);
+      assertDirectedCasesFit(
+        system,
+        pallet,
+        putaway.putawayLocationId,
+        targets,
+        receivingFreight(system, order),
+      );
     }
 
     for (const caseItem of targets) {
@@ -1096,7 +1275,7 @@ export async function completePutawayOrder(
       const pallet = order.pallets.find((entry) =>
         entry.cases.some((item) => group.some((candidate) => candidate.id === item.id)),
       );
-      assertDirectedCasesFit(system, pallet, locationId, group);
+      assertDirectedCasesFit(system, pallet, locationId, group, receivingFreight(system, order));
     }
     const totalUnits = pending.reduce((sum, item) => sum + item.quantityInCase, 0);
     assertLargeInputConfirmed(
@@ -1108,10 +1287,18 @@ export async function completePutawayOrder(
 
     const now = nowIso();
     const result = putAwayCases(system.inventoryItems, pending, now);
+    const freight = receivingFreight(system, order);
+    const stocked = attachPutawayCartons(
+      system,
+      result.items,
+      pending,
+      freight,
+      order.createdBy ?? order.receiverName,
+    );
     writeStock(
       system,
       order.createdBy ?? order.receiverName,
-      result.items,
+      stocked,
       result.changes,
       "putaway",
       {
