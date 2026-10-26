@@ -593,6 +593,7 @@ export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 export const INVENTORY_TRANSACTION_TYPES = [
   "receiving",
   "putaway",
+  "move",
   "shipping",
   "pick",
   "overage",
@@ -730,6 +731,23 @@ export const CreateAdjustmentInputSchema = z.object({
   confirmationQuantity: z.coerce.number().int().optional(),
 });
 export type CreateAdjustmentInput = z.infer<typeof CreateAdjustmentInputSchema>;
+
+export const MoveInventoryInputSchema = z.object({
+  inventoryItemId: UuidSchema,
+  destinationLocationId: UuidSchema,
+  quantity: QuantitySchema,
+  notes: OptionalNotesSchema,
+  scannedCode: z
+    .string()
+    .trim()
+    .max(LIMITS.notes)
+    .refine(allowsDomText, unsafeDomText)
+    .optional(),
+  createdBy: z.string().optional(),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
+});
+export type MoveInventoryInput = z.infer<typeof MoveInventoryInputSchema>;
 
 export const StorageClassSchema = z.enum(["pallet", "rack", "staging", "hold"]);
 export type StorageClass = z.infer<typeof StorageClassSchema>;

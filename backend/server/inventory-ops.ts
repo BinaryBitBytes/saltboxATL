@@ -12,6 +12,7 @@ import {
   type InventoryLineDetails,
 } from "@/lib/inventory/details";
 import { inventoryKey } from "@/lib/inventory/keys";
+import { ValidationError } from "@/lib/validation/errors";
 import {
   assertEnoughOnHand,
   assertFiniteQuantity,
@@ -416,4 +417,63 @@ export function applyAdjustment(input: {
   }
 
   return { items, changes: [outbound] };
+}
+
+export function moveQuantity(input: {
+  items: InventoryItem[];
+  source: InventoryItem;
+  destinationLocationId: string;
+  quantity: number;
+  now: string;
+}): { items: InventoryItem[]; changes: StockChange[] } {
+  const { source, destinationLocationId, quantity, now } = input;
+  assertPositiveQuantity(quantity, "Move quantity");
+  if (source.locationId === destinationLocationId) {
+    throw new ValidationError("Scan a different destination bin.");
+  }
+  assertEnoughOnHand(source.quantity, quantity, source.sku);
+
+  const items = input.items.map((item) =>
+    item.id === source.id ? { ...item } : item,
+  );
+  const current = items.find((item) => item.id === source.id);
+  if (!current) {
+    throw new ValidationError("Inventory line was not found.");
+  }
+
+  const quantityBefore = current.quantity;
+  current.quantity -= quantity;
+  assertStockDoesNotGoNegative(quantityBefore, current.quantity);
+  current.lastMovedAt = now;
+  current.updatedAt = now;
+
+  const outbound: StockChange = {
+    inventoryItemId: current.id,
+    sku: current.sku,
+    upc: current.upc,
+    batch: current.batch,
+    locationId: current.locationId,
+    destinationLocationId,
+    quantityDelta: -quantity,
+    quantityBefore,
+    quantityAfter: current.quantity,
+    description: current.description,
+  };
+
+  const moved = addQuantity(items, {
+    sku: current.sku,
+    upc: current.upc,
+    batch: current.batch,
+    locationId: destinationLocationId,
+    quantity,
+    description: current.description,
+    details: {
+      manufacturer: current.manufacturer ?? "",
+      color: current.color ?? null,
+      fiber: current.fiber ?? null,
+    },
+    now,
+  });
+  moved.change.destinationLocationId = destinationLocationId;
+  return { items: moved.items, changes: [outbound, moved.change] };
 }

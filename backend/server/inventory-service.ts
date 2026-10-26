@@ -1,6 +1,7 @@
 import {
   CaseItemInputSchema,
   CreateAdjustmentInputSchema,
+  MoveInventoryInputSchema,
   CreateLocationInputSchema,
   CreateStructuredLocationInputSchema,
   CreateReceivingOrderInputSchema,
@@ -108,6 +109,7 @@ import {
   backfillOnHandAttributes,
 } from "@/lib/inventory/details";
 import { assertAvailableQuantity, reservedQuantity } from "@/lib/orders/availability";
+import { applyInventoryMove } from "@/lib/inventory/move";
 import { warehouseLabelPrinterName } from "@/lib/orders/documents";
 import { applyOrderFulfillment } from "@/lib/orders/fulfill";
 import {
@@ -1784,5 +1786,48 @@ export async function createAdjustmentRecord(
       throw new ServiceError("Adjustment did not produce a stock change.");
     }
     return { ...change, referenceId: adjustmentId };
+  });
+}
+
+export async function moveInventoryRecord(rawData: unknown): Promise<{
+  sku: string;
+  quantity: number;
+  sourceLocationCode: string;
+  destinationLocationCode: string;
+  referenceId: string;
+}> {
+  const parsed = parseWithSchema(MoveInventoryInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  const input = parsed.data;
+  const referenceId = createId();
+  const now = nowIso();
+
+  return updateSystem((system) => {
+    const result = applyInventoryMove(system, input, now);
+    system.inventoryItems = result.items;
+    const source = system.locations.find(
+      (location) => location.id === result.changes[0]?.locationId,
+    );
+    const destination = system.locations.find(
+      (location) => location.id === input.destinationLocationId,
+    );
+    appendTransactions(system, "move", result.changes, {
+      occurredAt: now,
+      reason: `RF move to ${destination?.code ?? "bin"}`,
+      notes: input.notes,
+      createdBy: input.createdBy,
+      scannedCode: input.scannedCode,
+      referenceType: "inventory-move",
+      referenceId,
+    });
+    return {
+      sku: result.changes[0]?.sku ?? "",
+      quantity: input.quantity,
+      sourceLocationCode: source?.code ?? "",
+      destinationLocationCode: destination?.code ?? "",
+      referenceId,
+    };
   });
 }
