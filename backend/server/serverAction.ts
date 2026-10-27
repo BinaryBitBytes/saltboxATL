@@ -686,7 +686,15 @@ export async function createTrailer(rawData: unknown): Promise<ActionResult<{ id
 export async function createLicensePlate(
   rawData: unknown,
 ): Promise<ActionResult<{ id: string }>> {
-  return saveNomenclature(() => createLicensePlateRecord(rawData));
+  try {
+    const user = await requireApiPermission("manageLocations");
+    const data = await createLicensePlateRecord(rawData, user.name);
+    revalidatePath("/locations");
+    revalidatePath("/inventory");
+    return { ok: true, data: clientPayload({ id: data.id }) };
+  } catch (error) {
+    return fail(error);
+  }
 }
 
 export async function createContainer(rawData: unknown): Promise<ActionResult<{ id: string }>> {

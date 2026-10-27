@@ -8,6 +8,7 @@ import {
 import { withInventoryLock } from "@/backend/server/db";
 import { readJsonFile } from "@/backend/server/json-store";
 import { asDivision, divisionForRole } from "@/lib/divisions";
+import { licensePlateRegistryRows } from "@/lib/license-plate/query";
 import {
   assembleSystem,
   mapAisle,
@@ -17,6 +18,7 @@ import {
   mapItem,
   mapItemCube,
   mapLicensePlate,
+  mapLicensePlateLedger,
   mapLocation,
   mapPhoto,
   mapPurchaseDocument,
@@ -65,6 +67,9 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
   const trailers = await client.query("SELECT * FROM trailers ORDER BY code");
   const licensePlates = await client.query("SELECT * FROM license_plates ORDER BY code");
   const containers = await client.query("SELECT * FROM containers ORDER BY code");
+  const ledger = await client.query(
+    "SELECT next_ordinal, active_users, reservations FROM license_plate_ledger WHERE id = 1",
+  );
 
   return InventorySystemSchema.parse(
     assembleSystem({
@@ -87,6 +92,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       bays: bays.rows.map(mapBay),
       trailers: trailers.rows.map(mapTrailer),
       licensePlates: licensePlates.rows.map(mapLicensePlate),
+      licensePlateLedger: mapLicensePlateLedger(ledger.rows[0]),
       containers: containers.rows.map(mapContainer),
     }),
   );
@@ -105,6 +111,8 @@ export async function saveSystem(
   await client.query("DELETE FROM purchase_documents");
   await client.query("DELETE FROM purchase_orders");
   await client.query("DELETE FROM item_cubes");
+  await client.query("DELETE FROM license_plate_registry");
+  await client.query("DELETE FROM license_plate_ledger");
   await client.query("DELETE FROM containers");
   await client.query("DELETE FROM license_plates");
   await client.query("DELETE FROM locations");
@@ -278,8 +286,9 @@ export async function saveSystem(
       `INSERT INTO inventory_items (
          id, sku, upc, batch, location_id, quantity, description,
          manufacturer, color, is_fiber, connection_type, strand_count, length_meters,
-         last_moved_at, updated_at, division, license_plate_id, container_id
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+         last_moved_at, updated_at, division, license_plate_id, container_id,
+         license_plate_number, po_number, job_id_number, cartons
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
       [
         item.id,
         item.sku,
@@ -299,6 +308,10 @@ export async function saveSystem(
         asDivision(item.division),
         item.licensePlateId ?? null,
         item.containerId ?? null,
+        item.licensePlateNumber ?? null,
+        item.poNumber ?? null,
+        item.jobIdNumber ?? null,
+        JSON.stringify(item.cartons ?? []),
       ],
     );
   }
@@ -525,6 +538,27 @@ export async function saveSystem(
         cube.cubedBy ?? null,
         asDivision(cube.division),
       ],
+    );
+  }
+  const ledgerRow = system.licensePlateLedger ?? {
+    nextOrdinal: 0,
+    activeUsers: [],
+    reservations: [],
+  };
+  await client.query(
+    `INSERT INTO license_plate_ledger (id, next_ordinal, active_users, reservations)
+     VALUES (1, $1, $2::jsonb, $3::jsonb)`,
+    [
+      ledgerRow.nextOrdinal,
+      JSON.stringify(ledgerRow.activeUsers ?? []),
+      JSON.stringify(ledgerRow.reservations ?? []),
+    ],
+  );
+  for (const row of licensePlateRegistryRows(system)) {
+    await client.query(
+      `INSERT INTO license_plate_registry (number, owner_kind, owner_id)
+       VALUES ($1, $2, $3)`,
+      [row.number, row.ownerKind, row.ownerId],
     );
   }
 }

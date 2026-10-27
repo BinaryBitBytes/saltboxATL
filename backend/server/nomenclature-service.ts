@@ -122,13 +122,16 @@ export async function createTrailerRecord(rawData: unknown): Promise<Trailer> {
   });
 }
 
-export async function createLicensePlateRecord(rawData: unknown): Promise<LicensePlate> {
+export async function createLicensePlateRecord(
+  rawData: unknown,
+  issuedBy?: string | null,
+): Promise<LicensePlate> {
   const division = await resolveActiveDivision();
   const parsed = parseWithSchema(CreateLicensePlateInputSchema, rawData);
   if (!parsed.success) throw new ServiceError(parsed.error);
   return updateSystem((system) => {
     try {
-      return addLicensePlate(system, { ...parsed.data, division });
+      return addLicensePlate(system, { ...parsed.data, division, issuedBy });
     } catch (error) {
       failNomenclature(error);
     }

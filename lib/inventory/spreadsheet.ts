@@ -49,6 +49,7 @@ export const INVENTORY_SPREADSHEET_HEADERS = [
   "Strand count",
   "Length (m)",
   "Last moved",
+  "License plate",
 ] as const;
 
 export type SpreadsheetImportMode = "set" | "add";
@@ -90,6 +91,7 @@ export type ParsedInventorySpreadsheetRow = {
   connection?: string;
   strandCount?: string;
   lengthMeters?: string;
+  licensePlateNumber?: string;
 };
 
 export type SpreadsheetImportPlan = {
@@ -118,6 +120,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   connection: ["connection", "connection type", "connector"],
   strandCount: ["strand count", "strands", "strand"],
   lengthMeters: ["length (m)", "length m", "length meters", "length", "meters"],
+  licensePlate: ["license plate", "license plate number", "lp"],
 };
 
 function normalizeHeader(value: string): string {
@@ -151,6 +154,7 @@ export function inventoryRowsToSpreadsheet(rows: InventoryRow[]): string {
       row.fiber?.strandCount ?? "",
       row.fiber?.lengthMeters ?? "",
       row.lastMovedAt ?? "",
+      row.licensePlateNumber ?? "",
     ]),
     { bom: true },
   );
@@ -179,6 +183,7 @@ export function parseInventorySpreadsheet(
   const connectionIndex = columnIndex(headers, "connection");
   const strandIndex = columnIndex(headers, "strandCount");
   const lengthIndex = columnIndex(headers, "lengthMeters");
+  const licensePlateIndex = columnIndex(headers, "licensePlate");
 
   if (rows.length > LIMITS.spreadsheetMaxRows) {
     throw new ValidationError(
@@ -201,7 +206,16 @@ export function parseInventorySpreadsheet(
     connection: columnText(cells, connectionIndex),
     strandCount: columnText(cells, strandIndex),
     lengthMeters: columnText(cells, lengthIndex),
+    licensePlateNumber: plateCell(cells, licensePlateIndex),
   }));
+}
+
+function plateCell(cells: string[], index: number): string | undefined {
+  if (index < 0) return undefined;
+  const value = cells[index]?.trim() ?? "";
+  if (!value) return undefined;
+  const digits = /^LP(\d{8})$/i.exec(value)?.[1] ?? value;
+  return /^\d{8}$/.test(digits) ? digits : undefined;
 }
 
 function cubeByLocation(
