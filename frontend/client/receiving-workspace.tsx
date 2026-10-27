@@ -1,6 +1,6 @@
 "use client";
 
-import { T } from "@/frontend/client/language";
+import { T, useT } from "@/frontend/client/language";
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { useForm, useWatch } from "react-hook-form";
@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   CONNECTION_TYPES,
+  INBOUND_CANCEL_CONFIRMATION,
   STRAND_COUNTS,
   isReceivingEditable,
   type CaseItem,
@@ -26,6 +27,7 @@ import {
   addReceivingPallet,
   cancelReceiving,
   completeReceiving,
+  partialReceivingPallet,
   removeReceivingCase,
   reopenReceivingForm,
   type ReopenReceivingState,
@@ -52,6 +54,14 @@ import { buildInboundLabels } from "@/lib/labels/build-labels";
 import type { ItemCube } from "@/lib/inventory-schema";
 import type { CubingLocation } from "@/lib/cubing/workflow";
 import { PalletCubeDirective } from "@/frontend/client/pallet-cube-directive";
+import {
+  backorderLinesForShipment,
+  inboundShipmentOpenedByReceiving,
+  palletHasUnarrivedInventory,
+  type ExpectedArrivalLine,
+} from "@/lib/inbound/receiving-transactions";
+
+export type ReceivingCancelMode = "allow" | "confirm" | "hidden";
 
 const PalletFormSchema = z.object({
   palletNumber: z.string().trim().min(1),
@@ -149,6 +159,8 @@ export function ReceivingWorkspace({
   canReopen = false,
   cubes = [],
   cubingLocations = [],
+  expectedLines = [],
+  cancelMode = "allow",
 }: {
   order: ReceivingOrder;
   knownProducts: KnownProduct[];
@@ -156,6 +168,8 @@ export function ReceivingWorkspace({
   canReopen?: boolean;
   cubes?: ItemCube[];
   cubingLocations?: CubingLocation[];
+  expectedLines?: ExpectedArrivalLine[];
+  cancelMode?: ReceivingCancelMode;
 }) {
   const router = useRouter();
   const editable = isReceivingEditable(order.status);
@@ -178,6 +192,9 @@ export function ReceivingWorkspace({
       : (order.pallets
           .find((pallet) => pallet.id === editing.palletId)
           ?.cases.find((item) => item.id === editing.caseId) ?? null);
+  const openedInbound = inboundShipmentOpenedByReceiving(order);
+  const shortfall = backorderLinesForShipment(order, expectedLines);
+  const canCancel = !hasPostedPutaway(order) && cancelMode !== "hidden";
 
   useEffect(() => {
     setWorking(order.id, workingPallet?.id ?? null);
@@ -234,6 +251,9 @@ export function ReceivingWorkspace({
                   router.refresh();
                 }}
                 orderId={order.id}
+                order={order}
+                expectedLines={expectedLines}
+                openedInbound={openedInbound}
                 cubes={cubes}
                 cubingLocations={cubingLocations}
                 canBreakDown={editable || order.status === "received"}
@@ -262,7 +282,8 @@ export function ReceivingWorkspace({
       {order.status === "received" ? (
         <ReceivedOrderActions
           order={order}
-          canCancel={!hasPostedPutaway(order)}
+          canCancel={canCancel}
+          cancelMode={cancelMode}
           canReopen={canReopen}
         />
       ) : null}
@@ -274,7 +295,9 @@ export function ReceivingWorkspace({
       {editable ? (
         <ReceivingActions
           orderId={order.id}
-          canCancel={!hasPostedPutaway(order)}
+          canCancel={canCancel}
+          cancelMode={cancelMode}
+          shortfall={shortfall}
           totalUnits={order.pallets.reduce(
             (sum, pallet) =>
               sum +
@@ -295,6 +318,7 @@ export function ReceivingWorkspace({
 
 function PalletCard({
   orderId,
+  order,
   pallet,
   editable,
   isWorking,
@@ -302,11 +326,14 @@ function PalletCard({
   onSelect,
   onEdit,
   onRemoved,
+  expectedLines,
+  openedInbound,
   cubes,
   cubingLocations,
   canBreakDown,
 }: {
   orderId: string;
+  order: ReceivingOrder;
   pallet: ReceivingOrder["pallets"][number];
   editable: boolean;
   isWorking: boolean;
@@ -314,12 +341,17 @@ function PalletCard({
   onSelect: () => void;
   onEdit: (caseId: string) => void;
   onRemoved: (caseId: string) => void;
+  expectedLines: ExpectedArrivalLine[];
+  openedInbound: boolean;
   cubes: ItemCube[];
   cubingLocations: CubingLocation[];
   canBreakDown: boolean;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const shortPallet =
+    openedInbound && palletHasUnarrivedInventory(pallet, order, expectedLines);
 
   return (
     <div
@@ -407,6 +439,37 @@ function PalletCard({
             </li>
           ))}
         </ul>
+      ) : null}
+      {openedInbound && !pallet.isPartial ? (
+        <div className="grid gap-2 border-t border-border px-3 py-2">
+          {shortPallet ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                setError(null);
+                startTransition(async () => {
+                  const result = await partialReceivingPallet(orderId, pallet.id);
+                  if (!result.ok) {
+                    setError(result.error);
+                    return;
+                  }
+                  router.refresh();
+                });
+              }}
+            >
+              {pending ? "Partialing…" : "Partial pallet"}
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              <T>
+                If some inventory on this pallet has not arrived, remove those cases or lower the quantity, then partial the pallet.
+              </T>
+            </p>
+          )}
+        </div>
       ) : null}
       <PalletCubeDirective
         orderId={orderId}
@@ -987,10 +1050,12 @@ function CompletedOrderActions({
 function ReceivedOrderActions({
   order,
   canCancel = true,
+  cancelMode = "allow",
   canReopen = false,
 }: {
   order: ReceivingOrder;
   canCancel?: boolean;
+  cancelMode?: ReceivingCancelMode;
   canReopen?: boolean;
 }) {
   const router = useRouter();
@@ -1005,32 +1070,29 @@ function ReceivedOrderActions({
       </CardHeader>
       <CardContent className="grid gap-3">
         <p className="text-sm text-muted-foreground"><T>Cases are checked in. Assign bin locations in putaway to add this stock to on-hand inventory.</T></p>
+        <BackorderNotice lines={order.backorderLines} />
         <div className="flex flex-wrap items-center gap-2">
           <Button nativeButton={false} render={<Link href={`/putaway/${order.id}`} />}>
             Open putaway
           </Button>
-          {canCancel ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => {
-                setError(null);
-                startTransition(async () => {
-                  const result = await cancelReceiving(order.id);
-                  if (!result.ok) {
-                    setError(result.error);
-                    return;
-                  }
-                  clear();
-                  router.push("/receiving");
-                  router.refresh();
-                });
-              }}
-            >
-              Cancel order
-            </Button>
-          ) : null}
+          <CancelOrderControl
+            canCancel={canCancel}
+            cancelMode={cancelMode}
+            pending={pending}
+            onCancel={(confirmText) => {
+              setError(null);
+              startTransition(async () => {
+                const result = await cancelReceiving(order.id, confirmText);
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                clear();
+                router.push("/receiving");
+                router.refresh();
+              });
+            }}
+          />
           <ErrorText error={error} />
         </div>
         {canReopen ? <ReopenAsPartialControls order={order} /> : null}
@@ -1043,17 +1105,23 @@ function ReceivingActions({
   orderId,
   totalUnits,
   canCancel = true,
+  cancelMode = "allow",
+  shortfall,
 }: {
   orderId: string;
   totalUnits: number;
   canCancel?: boolean;
+  cancelMode?: ReceivingCancelMode;
+  shortfall: ReturnType<typeof backorderLinesForShipment>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
+  const [acknowledgeBackorder, setAcknowledgeBackorder] = useState(false);
   const clear = useReceivingSession((state) => state.clear);
+  const needsBackorder = shortfall.length > 0;
 
   return (
     <div className="grid gap-3">
@@ -1066,20 +1134,38 @@ function ReceivingActions({
         confirmationQuantity={confirmationQuantity}
         onConfirmationQuantityChange={setConfirmationQuantity}
       />
+      {needsBackorder ? (
+        <div className="grid gap-2 rounded-md border border-border p-3">
+          <p className="text-sm text-muted-foreground">
+            <T>
+              Not every case on this purchase order has arrived. Completing this shipment leaves the rest on backorder.
+            </T>
+          </p>
+          <BackorderNotice lines={shortfall} />
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={acknowledgeBackorder}
+              onChange={(event) => setAcknowledgeBackorder(event.target.checked)}
+            />
+            <T>I am completing this shipment with the remaining cases on backorder.</T>
+          </label>
+        </div>
+      ) : null}
     <div className="flex flex-wrap items-center gap-2">
       <Button
-        disabled={pending}
+        disabled={pending || (needsBackorder && !acknowledgeBackorder)}
         onClick={() => {
           setError(null);
           startTransition(async () => {
-            const result = await completeReceiving(
-              orderId,
-              largeInputPayload(
+            const result = await completeReceiving(orderId, {
+              ...largeInputPayload(
                 totalUnits,
                 confirmLargeInput,
                 confirmationQuantity,
               ),
-            );
+              acknowledgeBackorder,
+            });
             if (!result.ok) {
               setError(result.error);
               return;
@@ -1092,29 +1178,143 @@ function ReceivingActions({
       >
         Complete receiving
       </Button>
-      {canCancel ? (
-        <Button
-          variant="outline"
-          disabled={pending}
-          onClick={() => {
-            setError(null);
-            startTransition(async () => {
-              const result = await cancelReceiving(orderId);
-              if (!result.ok) {
-                setError(result.error);
-                return;
-              }
-              clear();
-              router.push("/receiving");
-              router.refresh();
-            });
-          }}
-        >
-          Cancel order
-        </Button>
-      ) : null}
+      <CancelOrderControl
+        canCancel={canCancel}
+        cancelMode={cancelMode}
+        pending={pending}
+        onCancel={(confirmText) => {
+          setError(null);
+          startTransition(async () => {
+            const result = await cancelReceiving(orderId, confirmText);
+            if (!result.ok) {
+              setError(result.error);
+              return;
+            }
+            clear();
+            router.push("/receiving");
+            router.refresh();
+          });
+        }}
+      />
       <ErrorText error={error} />
     </div>
     </div>
+  );
+}
+
+function BackorderNotice({
+  lines,
+}: {
+  lines: ReturnType<typeof backorderLinesForShipment>;
+}) {
+  const t = useT();
+  if (lines.length === 0) return null;
+  return (
+    <ul className="grid gap-1 text-xs text-muted-foreground">
+      {lines.map((line) => {
+        const label = line.sku || line.description || "Case";
+        return (
+          <li key={`${label}-${line.expectedQuantity}`}>
+            {t(
+              "{{label}} is on backorder: expected {{expected}}, received {{received}}.",
+              {
+                label,
+                expected: line.expectedQuantity,
+                received: line.receivedQuantity,
+              },
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function CancelOrderControl({
+  canCancel,
+  cancelMode,
+  pending,
+  onCancel,
+}: {
+  canCancel: boolean;
+  cancelMode: ReceivingCancelMode;
+  pending: boolean;
+  onCancel: (confirmText?: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  if (!canCancel) return null;
+  if (cancelMode !== "confirm") {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        disabled={pending}
+        onClick={() => onCancel()}
+      >
+        Cancel order
+      </Button>
+    );
+  }
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        disabled={pending}
+        onClick={() => {
+          setConfirmText("");
+          setOpen(true);
+        }}
+      >
+        Cancel order
+      </Button>
+    );
+  }
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (confirmText !== INBOUND_CANCEL_CONFIRMATION) return;
+        onCancel(confirmText);
+      }}
+      className="grid basis-full gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3"
+    >
+      <p className="text-sm text-muted-foreground">
+        <T>
+          Cancelling this order wipes the parsed expected entries. The PDF will have to be uploaded again by a coordinator if you proceed.
+        </T>
+      </p>
+      <Field label="Type CancelRightMeow to continue." htmlFor="cancel-po-confirm">
+        <Input
+          id="cancel-po-confirm"
+          value={confirmText}
+          onChange={(event) => setConfirmText(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          aria-label="Type CancelRightMeow to continue."
+        />
+      </Field>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          variant="destructive"
+          disabled={pending || confirmText !== INBOUND_CANCEL_CONFIRMATION}
+        >
+          {pending ? "Cancelling…" : "Cancel this PO"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={pending}
+          onClick={() => {
+            setOpen(false);
+            setConfirmText("");
+          }}
+        >
+          Keep order
+        </Button>
+      </div>
+    </form>
   );
 }

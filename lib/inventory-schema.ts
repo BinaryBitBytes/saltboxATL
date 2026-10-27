@@ -355,6 +355,18 @@ export type SaveBuyerPurchaseOrderInput = z.infer<
 export const INBOUND_DELETE_CONFIRMATION = "DELETE";
 export const INBOUND_DOCK_DELETE_CONFIRMATION = "DeleteThisMeow";
 export const INBOUND_DOCK_DELETE_DAILY_LIMIT = 5;
+/** Typed by a manager or coordinator after an inbound shipment has entered receiving. */
+export const INBOUND_CANCEL_CONFIRMATION = "CancelRightMeow";
+export const INBOUND_CANCEL_REQUIRES_BUTTON =
+  "This shipment has entered receiving. Cancel the purchase order and type CancelRightMeow.";
+
+export const BackorderLineSchema = z.object({
+  sku: z.string().trim().max(LIMITS.sku).default(""),
+  description: z.string().trim().max(LIMITS.description).default(""),
+  expectedQuantity: z.number().int().min(0),
+  receivedQuantity: z.number().int().min(0),
+});
+export type BackorderLine = z.infer<typeof BackorderLineSchema>;
 
 export const UpdateInboundPurchaseOrderInputSchema =
   SaveBuyerPurchaseOrderInputSchema.safeExtend({
@@ -362,6 +374,14 @@ export const UpdateInboundPurchaseOrderInputSchema =
   });
 export type UpdateInboundPurchaseOrderInput = z.infer<
   typeof UpdateInboundPurchaseOrderInputSchema
+>;
+
+export const CancelInboundPurchaseOrderInputSchema = z.object({
+  id: UuidSchema,
+  confirmText: z.string().max(64),
+});
+export type CancelInboundPurchaseOrderInput = z.infer<
+  typeof CancelInboundPurchaseOrderInputSchema
 >;
 
 export const DeleteInboundPurchaseOrderInputSchema = z
@@ -414,6 +434,8 @@ export const ReceivingOrderSchema = z.object({
   status: ReceivingOrderStatusSchema.default("draft"),
   /** draft + expected is an inbound load imported from an invoice, not yet checked in. */
   intake: z.enum(["dock", "expected"]).optional(),
+  /** Cases the vendor did not ship. Empty when receiving closed the full order. */
+  backorderLines: z.array(BackorderLineSchema).default([]),
   isPartialed: z.boolean().default(false),
   partialedAt: DateTimeSchema.optional(),
   partialedBy: z.string().optional(),

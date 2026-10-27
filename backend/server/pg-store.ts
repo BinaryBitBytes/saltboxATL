@@ -392,10 +392,11 @@ export async function saveSystem(
          id, po_number, received_at, vendor, order_number, carrier_inbound,
          receiver_name, load_pallet_count, status, is_partialed, partialed_at,
          partialed_by, reopened_at, reopened_by, working_pallet_id, pallets,
-         notes, created_at, updated_at, created_by, division, intake
+         notes, created_at, updated_at, created_by, division, intake,
+         backorder_lines
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-         $17, $18, $19, $20, $21, $22
+         $17, $18, $19, $20, $21, $22, $23
        )`,
       [
         order.id,
@@ -420,6 +421,7 @@ export async function saveSystem(
         order.createdBy ?? null,
         asDivision(order.division),
         order.intake ?? null,
+        JSON.stringify(order.backorderLines ?? []),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import {
+  INBOUND_CANCEL_REQUIRES_BUTTON,
   INBOUND_DOCK_DELETE_CONFIRMATION,
   INBOUND_DOCK_DELETE_DAILY_LIMIT,
   type BuyerPoLine,
@@ -61,6 +62,13 @@ export function updateInboundEntry(
   );
   if (duplicate) {
     return { ok: false, error: "Another inbound entry already uses that PO number." };
+  }
+  if (
+    input.expectationStatus === "cancelled" &&
+    existing.expectationStatus !== "cancelled" &&
+    inboundReceivingHasStarted(system.receivingOrders, existing.purchaseOrderNumber)
+  ) {
+    return { ok: false, error: INBOUND_CANCEL_REQUIRES_BUTTON };
   }
 
   const previousNumber = existing.purchaseOrderNumber;
@@ -353,9 +361,14 @@ export function refreshExpectedLoad(
       order.poNumber === input.purchaseOrderNumber && isUncheckedExpectedLoad(order),
   );
   if (!expected) {
+    // A cancelled receipt stays on file so a dock delete is still guarded, and
+    // it must not block a coordinator from staging the purchase order again.
+    const openReceiving = system.receivingOrders.filter(
+      (order) => order.status !== "cancelled",
+    );
     if (
       receivable.length === 0 ||
-      inboundReceivingHasStarted(system.receivingOrders, input.purchaseOrderNumber)
+      inboundReceivingHasStarted(openReceiving, input.purchaseOrderNumber)
     ) {
       return;
     }
