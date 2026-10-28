@@ -4,7 +4,7 @@ import { createId, nowIso } from "@/backend/server/helperUtils";
 import { toPublicUser } from "@/lib/validation/user-security";
 import { ServiceError } from "@/backend/server/inventory-service";
 import { parseWithSchema } from "@/backend/server/safeParsing";
-import { readAccountCatalog } from "@/backend/server/site-files";
+import { readAccounts } from "@/backend/server/account-store";
 import { updateSystem } from "@/backend/server/store";
 import {
   canAssignRole,
@@ -76,7 +76,7 @@ export async function authenticateUser(
   const loginId = parsed.data.identifier;
   let system;
   try {
-    system = await readAccountCatalog();
+    system = await readAccounts();
   } catch {
     throw new ServiceError(
       "Unable to load accounts right now. Try signing in again.",
@@ -153,7 +153,7 @@ export async function recoverUsername(
   const lockKey = usernameRecoveryLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "username recovery");
 
-  const system = await readAccountCatalog();
+  const system = await readAccounts();
   const user = findUserForUsernameRecovery(
     system.users,
     parsed.data.name,
@@ -181,7 +181,7 @@ export async function resetPasswordWithIdentity(
   const lockKey = passwordResetLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "password reset");
 
-  const current = await readAccountCatalog();
+  const current = await readAccounts();
   const matched = findUserForPasswordReset(current.users, parsed.data);
   if (!matched) {
     await consumePasswordCheck(parsed.data.password);
@@ -205,7 +205,7 @@ export async function resetPasswordWithIdentity(
 }
 
 export async function listPublicUsers(actorRole: UserRole): Promise<PublicUser[]> {
-  const system = await readAccountCatalog();
+  const system = await readAccounts();
   return system.users
     .filter((user) => canManageUser(actorRole, user.role))
     .map(toPublicUser);

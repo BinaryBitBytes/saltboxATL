@@ -1,8 +1,6 @@
 import { cookies } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
-import { usesPostgres } from "@/backend/server/db";
-import { readFromPostgres } from "@/backend/server/pg-store";
-import { readAccountCatalog } from "@/backend/server/site-files";
+import { readAccounts } from "@/backend/server/account-store";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
 import { selectDivision, DIVISION_COOKIE } from "@/lib/divisions";
 import type { Division, UserRole } from "@/lib/inventory-schema";
@@ -48,7 +46,7 @@ export async function resolveViewerSite(): Promise<ViewerSite> {
   try {
     const cookieStore = await cookies();
     const session = verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
-    const catalog = usesPostgres() ? await readFromPostgres() : await readAccountCatalog();
+    const catalog = await readAccounts();
     const division = session
       ? selectDivision(session.role, cookieStore.get(DIVISION_COOKIE)?.value)
       : "hyperscale";

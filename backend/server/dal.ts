@@ -4,7 +4,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ServiceError } from "@/backend/server/inventory-service";
-import { readAccountCatalog } from "@/backend/server/site-files";
+import { readAccounts } from "@/backend/server/account-store";
 import {
   hasAnyPermission,
   hasPermission,
@@ -21,7 +21,7 @@ export const getSessionUser = cache(async (): Promise<PublicUser | null> => {
   const payload = verifySessionToken(token);
   if (!payload) return null;
 
-  const system = await readAccountCatalog();
+  const system = await readAccounts();
   const user = system.users.find((entry) => entry.id === payload.sub);
   if (!user || !user.isActive) return null;
   return toPublicUser(user);
