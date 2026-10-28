@@ -518,6 +518,14 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
     system.licensePlates = [];
     changed = true;
   }
+  if (!system.licensePlateLedger) {
+    system.licensePlateLedger = {
+      nextOrdinal: 0,
+      activeUsers: [],
+      reservations: [],
+    };
+    changed = true;
+  }
   if (!system.containers) {
     system.containers = [];
     changed = true;

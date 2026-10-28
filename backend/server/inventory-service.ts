@@ -24,6 +24,7 @@ import {
   isReceivingEditable,
   type CaseItem,
   type ItemCube,
+  type InventoryItem,
   type InventoryRow,
   type InventorySystem,
   type WarehouseSnapshot,
@@ -41,10 +42,20 @@ import {
 import { applyDeliveryNotes, applyDeliveryScan, DeliveryCheckInError } from "@/lib/delivery/check-in";
 import {
   assignPurchaseOrderJobId,
-  findPurchaseOrder,
+  jobIdForPurchaseOrder,
   saveBuyerPurchaseOrder,
   upsertPurchaseOrder,
 } from "@/lib/purchase-orders";
+import {
+  binMixError,
+  cartonsForQuantity,
+  checkBinPlacement,
+  nearestOpenLocation,
+  occupantsByLocation,
+  type BinOccupant,
+  type PlacementLocation,
+} from "@/lib/inventory/bin-container";
+import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
 import {
@@ -93,7 +104,7 @@ import {
   hasPostedPutaway,
   isCasePutawayPosted,
 } from "@/lib/receiving/reopen";
-import { defaultCubeCapacity, cubeExceeds, formatCubicInches, measureCaseCube } from "@/lib/cubing/measure";
+import { caseCubicInches, defaultCubeCapacity, measureCaseCube } from "@/lib/cubing/measure";
 import {
   buildCubingLocations,
   committedCubeForLocation,
@@ -120,6 +131,15 @@ import {
 import { assertAvailableQuantity, reservedQuantity } from "@/lib/orders/availability";
 import { applyInventoryMove } from "@/lib/inventory/move";
 import { warehouseLabelPrinterName } from "@/lib/orders/documents";
+import {
+  assignHandlingPlate,
+  reserveLicensePlateBuffers,
+  stampInventoryLines,
+} from "@/lib/license-plate/assign";
+import {
+  queryLicensePlate,
+  type LicensePlateHit,
+} from "@/lib/license-plate/query";
 import { applyOrderFulfillment } from "@/lib/orders/fulfill";
 import {
   acknowledgeWarehousePrint,
@@ -166,6 +186,7 @@ export function enrichInventory(
       locationCode: location?.code ?? "UNKNOWN",
       roomName: room?.name ?? "Unknown room",
       licensePlateCode: plate?.code ?? null,
+      licensePlateNumber: filled.licensePlateNumber ?? null,
       containerCode: container?.code ?? null,
       trailerCode: trailer?.code ?? null,
     };
@@ -240,11 +261,66 @@ function appendTransactions(
   }
 }
 
+function writeStock(
+  system: InventorySystem,
+  userId: string | null | undefined,
+  items: InventoryItem[],
+  changes: StockChange[],
+  type: InventoryTransaction["type"],
+  extra: Omit<Partial<InventoryTransaction>, "type"> & { occurredAt: string },
+) {
+  system.inventoryItems = stampInventoryLines(
+    system,
+    userId,
+    items,
+    new Set(changes.map((change) => change.inventoryItemId)),
+  );
+  appendTransactions(system, type, changes, extra);
+}
+
+function rowsForLicensePlate(
+  system: InventorySystem,
+  hit: LicensePlateHit,
+): InventoryRow[] {
+  const rows = enrichInventory(system);
+  if (hit.kind === "inventory") {
+    return rows.filter((item) => item.id === hit.inventoryItemId);
+  }
+  if (hit.kind === "hierarchy") {
+    return rows.filter(
+      (item) =>
+        item.licensePlateId === hit.licensePlateId ||
+        item.licensePlateNumber === hit.number,
+    );
+  }
+  if (hit.kind === "check-in" && !hit.putawayPosted) return [];
+  if (!hit.locationId) return [];
+  return rows.filter(
+    (item) =>
+      item.sku === hit.sku &&
+      (item.batch ?? null) === (hit.batch ?? null) &&
+      item.locationId === hit.locationId,
+  );
+}
+
 export function lookupInventory(
   system: InventorySystem,
   code: string,
 ): InventoryRow[] {
+  const direct = queryLicensePlate(system, code);
+  if (direct) return rowsForLicensePlate(system, direct);
+
   const parsed = parseScanCode(code);
+  if (parsed.licensePlateNumber) {
+    const nested = queryLicensePlate(system, parsed.licensePlateNumber);
+    if (nested) return rowsForLicensePlate(system, nested);
+    if (/^\d{8}$/.test(code.trim())) {
+      const asUpc = enrichInventory(system).filter((item) =>
+        matchesScan(item, { raw: code.trim(), upc: code.trim() }),
+      );
+      if (asUpc.length > 0) return asUpc;
+    }
+  }
   return enrichInventory(system).filter((item) => matchesScan(item, parsed));
 }
 
@@ -399,11 +475,33 @@ function receivingCubeBlocker(
   return null;
 }
 
+function placementLocationsFor(
+  system: InventorySystem,
+  excludeCaseIds?: ReadonlySet<string>,
+): PlacementLocation[] {
+  return system.locations.map((location) => ({
+    id: location.id,
+    code: location.code,
+    isActive: location.isActive,
+    storageClass: location.storageClass,
+    division: location.division,
+    cubeCapacityCubicInches: location.cubeCapacityCubicInches,
+    committedCubicInches: committedCubeForLocation(
+      location.id,
+      system.inventoryItems,
+      system.receivingOrders,
+      system.itemCubes,
+      excludeCaseIds,
+    ),
+  }));
+}
+
 function assertDirectedCasesFit(
   system: InventorySystem,
   pallet: { cases: CaseItem[] } | undefined,
   locationId: string,
   cases: CaseItem[],
+  freight: { poNumber?: string | null; jobIdNumber?: string | null },
 ): void {
   const location = system.locations.find((entry) => entry.id === locationId);
   if (!location) {
@@ -416,21 +514,130 @@ function assertDirectedCasesFit(
     );
   }
   const exclude = new Set(cases.map((item) => item.id));
-  const committed = committedCubeForLocation(
-    locationId,
-    system.inventoryItems,
-    system.receivingOrders,
-    system.itemCubes,
-    exclude,
-  );
-  if (!cubeExceeds(committed + incoming.cubicInches, location.cubeCapacityCubicInches)) {
-    return;
+  const occupants = occupantsByLocation(system.inventoryItems);
+  const views = placementLocationsFor(system, exclude);
+  const origin = views.find((entry) => entry.id === locationId);
+  const sharing = [...(occupants.get(locationId) ?? [])];
+  for (const item of cases) {
+    const mix = binMixError(
+      {
+        sku: item.sku,
+        batch: item.batch,
+        quantity: item.quantityInCase,
+        poNumber: freight.poNumber,
+        jobIdNumber: freight.jobIdNumber,
+      },
+      sharing,
+      location.code,
+    );
+    if (mix) {
+      const suggestion = origin
+        ? nearestOpenLocation({
+            origin,
+            incoming: {
+              sku: item.sku,
+              batch: item.batch,
+              quantity: item.quantityInCase,
+              poNumber: freight.poNumber,
+              jobIdNumber: freight.jobIdNumber,
+            },
+            incomingCubicInches: incoming.cubicInches,
+            locations: views,
+            occupantsByLocation: occupants,
+          })
+        : null;
+      throw new ServiceError(
+        suggestion ? `${mix} Nearest open location is ${suggestion.code}.` : mix,
+      );
+    }
+    sharing.push({
+      sku: item.sku,
+      batch: item.batch,
+      quantity: item.quantityInCase,
+      poNumber: freight.poNumber,
+      jobIdNumber: freight.jobIdNumber,
+    });
   }
+  if (!origin) return;
+  const placement = checkBinPlacement({
+    location: origin,
+    occupants: occupants.get(locationId) ?? [],
+    incoming: {
+      sku: cases[0]?.sku ?? "",
+      batch: cases[0]?.batch,
+      quantity: cases.reduce((sum, item) => sum + item.quantityInCase, 0),
+      poNumber: freight.poNumber,
+      jobIdNumber: freight.jobIdNumber,
+    },
+    incomingCubicInches: incoming.cubicInches,
+    locations: views,
+    occupantsByLocation: occupants,
+  });
+  if (placement.ok) return;
   const pending = (pallet?.cases ?? cases).filter((item) => !isCasePutawayPosted(item));
   const plan = palletCubePlan(system, pending);
-  throw new ServiceError(
-    `Location ${location.code} can hold ${formatCubicInches(location.cubeCapacityCubicInches)} and already has ${formatCubicInches(committed)} committed. These cases need ${formatCubicInches(incoming.cubicInches)}, which is too large for the location. ${plan.directive}`,
-  );
+  throw new ServiceError(`${placement.message} ${plan.directive}`);
+}
+
+function receivingFreight(system: InventorySystem, order: ReceivingOrder) {
+  return {
+    poNumber: order.poNumber,
+    jobIdNumber: jobIdForPurchaseOrder(system.purchaseOrders ?? [], order.poNumber),
+  };
+}
+
+function attachPutawayCartons(
+  system: InventorySystem,
+  items: InventoryItem[],
+  cases: CaseItem[],
+  freight: { poNumber?: string | null; jobIdNumber?: string | null },
+  userId: string,
+): InventoryItem[] {
+  let next = items;
+  for (const caseItem of cases) {
+    if (!caseItem.putawayLocationId) continue;
+    const cube = system.itemCubes.find((entry) => entry.sku === caseItem.sku);
+    const plates = cartonsForQuantity(
+      caseItem.quantityInCase,
+      cube?.unitsPerCase,
+      caseItem.licensePlateNumber,
+      () => allocateLicensePlate(system, userId).number,
+    );
+    if (!caseItem.licensePlateNumber && plates[0]) {
+      caseItem.licensePlateNumber = plates[0].licensePlateNumber;
+    }
+    next = next.map((item) => {
+      if (item.locationId !== caseItem.putawayLocationId || item.sku !== caseItem.sku) return item;
+      if ((item.batch ?? null) !== (caseItem.batch ?? null)) return item;
+      const cartons = [...(item.cartons ?? [])];
+      for (const plate of plates) {
+        if (cartons.some((entry) => entry.licensePlateNumber === plate.licensePlateNumber)) continue;
+        cartons.push(plate);
+      }
+      return {
+        ...item,
+        cartons,
+        licensePlateNumber: item.licensePlateNumber ?? cartons[0]?.licensePlateNumber ?? null,
+        poNumber: item.poNumber ?? freight.poNumber ?? null,
+        jobIdNumber: item.jobIdNumber ?? freight.jobIdNumber ?? null,
+      };
+    });
+  }
+  return next;
+}
+
+function withNearestLocation(system: InventorySystem, locationId: string, message: string, incoming: BinOccupant, incomingCubicInches: number): string {
+  const views = placementLocationsFor(system);
+  const origin = views.find((entry) => entry.id === locationId);
+  if (!origin) return message;
+  const suggestion = nearestOpenLocation({
+    origin,
+    incoming,
+    incomingCubicInches,
+    locations: views,
+    occupantsByLocation: occupantsByLocation(system.inventoryItems),
+  });
+  return suggestion ? `${message} Nearest open location is ${suggestion.code}.` : message;
 }
 
 function assertInventoryIncreaseFits(
@@ -442,7 +649,28 @@ function assertInventoryIncreaseFits(
 ): void {
   const location = system.locations.find((entry) => entry.id === locationId);
   if (!location) return;
+  const existing = system.inventoryItems.find(
+    (item) => item.locationId === locationId && item.sku === sku,
+  );
   const cube = system.itemCubes.find((entry) => entry.sku === sku) ?? null;
+  const addedCube = cube
+    ? Math.max(0, caseCubicInches(quantityAfter, cube) - caseCubicInches(quantityBefore, cube))
+    : 0;
+  const incoming = {
+    sku,
+    batch: existing?.batch,
+    quantity: Math.max(0, quantityAfter - quantityBefore),
+    poNumber: existing?.poNumber,
+    jobIdNumber: existing?.jobIdNumber,
+  };
+  const mix = binMixError(
+    incoming,
+    occupantsByLocation(system.inventoryItems).get(locationId) ?? [],
+    location.code,
+  );
+  if (mix) {
+    throw new ServiceError(withNearestLocation(system, locationId, mix, incoming, addedCube));
+  }
   const message = inventoryQuantityCubeMessage({
     sku,
     locationCode: location.code,
@@ -463,7 +691,17 @@ function assertInventoryIncreaseFits(
     quantityBefore,
     quantityAfter,
   });
-  if (message) throw new ServiceError(message);
+  if (message) {
+    throw new ServiceError(
+      withNearestLocation(
+        system,
+        locationId,
+        message,
+        incoming,
+        addedCube,
+      ),
+    );
+  }
 }
 
 function nextSplitPalletNumber(
@@ -534,6 +772,7 @@ export async function createReceivingOrderRecord(
       jobIdNumber: parsed.data.jobIdNumber,
     });
     system.receivingOrders.unshift(order);
+    reserveLicensePlateBuffers(system, order.createdBy ?? order.receiverName);
     return order;
   });
 }
@@ -820,7 +1059,13 @@ export async function addCaseToPallet(
       "case quantity",
     );
 
-    pallet.cases.push(caseFromInput(system, parsed.data, {}));
+    pallet.cases.push(
+      assignHandlingPlate(
+        system,
+        order.createdBy ?? order.receiverName,
+        caseFromInput(system, parsed.data, {}),
+      ),
+    );
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -860,9 +1105,15 @@ export async function updateCaseOnPallet(
       "case quantity",
     );
 
-    pallet.cases[index] = caseFromInput(system, parsed.data, {
-      existingId: caseId,
-    });
+    const previousPlate = pallet.cases[index]?.licensePlateNumber;
+    pallet.cases[index] = assignHandlingPlate(
+      system,
+      order.createdBy ?? order.receiverName,
+      caseFromInput(system, parsed.data, {
+        existingId: caseId,
+      }),
+      previousPlate,
+    );
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -990,7 +1241,13 @@ export async function assignPutawayLocation(
     }
 
     if (putaway.putawayLocationId) {
-      assertDirectedCasesFit(system, pallet, putaway.putawayLocationId, targets);
+      assertDirectedCasesFit(
+        system,
+        pallet,
+        putaway.putawayLocationId,
+        targets,
+        receivingFreight(system, order),
+      );
     }
 
     for (const caseItem of targets) {
@@ -1026,7 +1283,7 @@ export async function completePutawayOrder(
       const pallet = order.pallets.find((entry) =>
         entry.cases.some((item) => group.some((candidate) => candidate.id === item.id)),
       );
-      assertDirectedCasesFit(system, pallet, locationId, group);
+      assertDirectedCasesFit(system, pallet, locationId, group, receivingFreight(system, order));
     }
     const totalUnits = pending.reduce((sum, item) => sum + item.quantityInCase, 0);
     assertLargeInputConfirmed(
@@ -1038,14 +1295,28 @@ export async function completePutawayOrder(
 
     const now = nowIso();
     const result = putAwayCases(system.inventoryItems, pending, now);
-    system.inventoryItems = result.items;
-    appendTransactions(system, "putaway", result.changes, {
-      occurredAt: now,
-      referenceType: "receiving-order",
-      referenceId: order.id,
-      createdBy: order.createdBy ?? order.receiverName,
-      reason: `Putaway ${order.orderNumber}`,
-    });
+    const freight = receivingFreight(system, order);
+    const stocked = attachPutawayCartons(
+      system,
+      result.items,
+      pending,
+      freight,
+      order.createdBy ?? order.receiverName,
+    );
+    writeStock(
+      system,
+      order.createdBy ?? order.receiverName,
+      stocked,
+      result.changes,
+      "putaway",
+      {
+        occurredAt: now,
+        referenceType: "receiving-order",
+        referenceId: order.id,
+        createdBy: order.createdBy ?? order.receiverName,
+        reason: `Putaway ${order.orderNumber}`,
+      },
+    );
     for (const item of pending) {
       item.putawayPostedAt = now;
     }
@@ -1171,7 +1442,9 @@ export async function createShippingOrderRecord(
       parsed.data.picks,
       now,
     );
-    for (const shipped of shippedCases) {
+    const plateUser = parsed.data.createdBy ?? parsed.data.shipperName;
+    for (let index = 0; index < shippedCases.length; index += 1) {
+      const shipped = shippedCases[index]!;
       const attributes = caseItemAttributesFromInbound(
         system.receivingOrders,
         shipped.sku,
@@ -1179,6 +1452,7 @@ export async function createShippingOrderRecord(
       );
       if (!shipped.manufacturer) shipped.manufacturer = attributes.manufacturer;
       if (shipped.color == null) shipped.color = attributes.color;
+      shippedCases[index] = assignHandlingPlate(system, plateUser, shipped);
     }
 
     const pallet: Pallet = recountPallet({
@@ -1213,14 +1487,20 @@ export async function createShippingOrderRecord(
       createdBy: parsed.data.createdBy,
     };
 
-    system.inventoryItems = remaining;
-    appendTransactions(system, "shipping", changes, {
-      occurredAt: now,
-      referenceType: "shipping-order",
-      referenceId: order.id,
-      createdBy: parsed.data.createdBy ?? parsed.data.shipperName,
-      reason: `Shipment ${parsed.data.shipmentNumber}`,
-    });
+    writeStock(
+      system,
+      parsed.data.createdBy ?? parsed.data.shipperName,
+      remaining,
+      changes,
+      "shipping",
+      {
+        occurredAt: now,
+        referenceType: "shipping-order",
+        referenceId: order.id,
+        createdBy: parsed.data.createdBy ?? parsed.data.shipperName,
+        reason: `Shipment ${parsed.data.shipmentNumber}`,
+      },
+    );
     system.shippingOrders.unshift(order);
     return order;
   });
@@ -1246,6 +1526,12 @@ export async function createCustomerOrderRecord(
 
   return updateSystem((system) => {
     if (!system.customerOrders) system.customerOrders = [];
+    system.inventoryItems = stampInventoryLines(
+      system,
+      placedBy,
+      system.inventoryItems,
+      new Set(parsed.data.lines.map((line) => line.inventoryItemId)),
+    );
     const order = placeRemoteOrder({
       customer: parsed.data.customer,
       notes: parsed.data.notes,
@@ -1301,16 +1587,20 @@ export async function completeCustomerOrderPickRecord(
       now,
       completedBy,
     });
-    system.inventoryItems = result.items;
-    const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
-    system.customerOrders[index] = result.order;
-    appendTransactions(system, "pick", result.changes, {
+    writeStock(system, completedBy, result.items, result.changes, "pick", {
       occurredAt: now,
       referenceType: "customer-order",
       referenceId: order.id,
       createdBy: completedBy,
       reason: `Pick ${order.pickRequest.requestNumber} for ${order.orderNumber}`,
     });
+    for (const line of result.order.lines) {
+      if (line.licensePlateNumber) continue;
+      const item = system.inventoryItems.find((entry) => entry.id === line.inventoryItemId);
+      if (item?.licensePlateNumber) line.licensePlateNumber = item.licensePlateNumber;
+    }
+    const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
+    system.customerOrders[index] = result.order;
     return result.order;
   });
 }
@@ -1647,8 +1937,7 @@ export async function importInventorySpreadsheet(input: {
       throw new ServiceError("Spreadsheet matches on-hand inventory. Nothing to import.");
     }
 
-    current.inventoryItems = items;
-    appendTransactions(current, "import", stockChanges, {
+    writeStock(current, input.createdBy, items, stockChanges, "import", {
       occurredAt: now,
       reason:
         input.mode === "add"
@@ -1774,8 +2063,7 @@ export async function createAdjustmentRecord(
         description: input.description,
         now,
       });
-      system.inventoryItems = created.items;
-      appendTransactions(system, "overage", [created.change], {
+      writeStock(system, input.createdBy, created.items, [created.change], "overage", {
         occurredAt: now,
         reason: input.reason,
         notes: input.notes,
@@ -1834,8 +2122,7 @@ export async function createAdjustmentRecord(
       damagedLocationId:
         input.type === "damage" ? input.moveDamagedToLocationId : undefined,
     });
-    system.inventoryItems = result.items;
-    appendTransactions(system, input.type, result.changes, {
+    writeStock(system, input.createdBy, result.items, result.changes, input.type, {
       occurredAt: now,
       reason: input.reason,
       notes: input.notes,
@@ -1869,14 +2156,10 @@ export async function moveInventoryRecord(rawData: unknown): Promise<{
 
   return updateSystem((system) => {
     const result = applyInventoryMove(system, input, now);
-    system.inventoryItems = result.items;
-    const source = system.locations.find(
-      (location) => location.id === result.changes[0]?.locationId,
-    );
     const destination = system.locations.find(
       (location) => location.id === input.destinationLocationId,
     );
-    appendTransactions(system, "move", result.changes, {
+    writeStock(system, input.createdBy, result.items, result.changes, "move", {
       occurredAt: now,
       reason: `RF move to ${destination?.code ?? "bin"}`,
       notes: input.notes,
@@ -1885,6 +2168,9 @@ export async function moveInventoryRecord(rawData: unknown): Promise<{
       referenceType: "inventory-move",
       referenceId,
     });
+    const source = system.locations.find(
+      (location) => location.id === result.changes[0]?.locationId,
+    );
     return {
       sku: result.changes[0]?.sku ?? "",
       quantity: input.quantity,

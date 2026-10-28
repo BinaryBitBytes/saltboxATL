@@ -20,10 +20,10 @@ import { Field, NativeSelect } from "@/frontend/client/field";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
 import { formatCaseItemLine, formatPalletHeading } from "@/lib/format";
 import { LIMITS } from "@/lib/validation/limits";
+import { ProcessAlert } from "@/frontend/client/process-alert";
 
 function ErrorText({ error }: { error: string | null }) {
-  if (!error) return null;
-  return <p className="text-xs text-destructive"><T>{error}</T></p>;
+  return <ProcessAlert message={error} />;
 }
 
 export function PutawayWorkspace({

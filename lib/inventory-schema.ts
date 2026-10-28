@@ -100,6 +100,26 @@ export const FiberItemSchema = z.object({
 });
 export type FiberItem = z.infer<typeof FiberItemSchema>;
 
+/** Eight digits, 00000000 through 99999999. */
+export const LicensePlateNumberSchema = z
+  .string()
+  .regex(/^\d{8}$/, { error: "License plate numbers are 8 digits." });
+
+export const LicensePlateLedgerSchema = z.object({
+  nextOrdinal: z.number().int().min(0).max(100_000_000).default(0),
+  activeUsers: z.array(z.string().trim().min(1).max(200)).max(500).default([]),
+  reservations: z
+    .array(
+      z.object({
+        userId: z.string().trim().min(1).max(200),
+        plates: z.array(z.number().int().min(0).max(99_999_999)).max(1000),
+      }),
+    )
+    .max(500)
+    .default([]),
+});
+export type LicensePlateLedger = z.infer<typeof LicensePlateLedgerSchema>;
+
 export const CaseItemSchema = z.object({
   id: UuidSchema,
   upc: UpcSchema,
@@ -107,6 +127,7 @@ export const CaseItemSchema = z.object({
   batch: z.string().trim().nullable().default(null),
   quantityInCase: QuantitySchema,
   description: DescriptionSchema,
+  licensePlateNumber: LicensePlateNumberSchema.nullable().optional(),
   manufacturer: OptionalSafeTextSchema,
   color: z.preprocess(
     (value) => (value === "" || value === undefined ? null : value),
@@ -601,6 +622,18 @@ export const InventoryItemSchema = z.object({
   batch: z.string().nullable().default(null),
   locationId: UuidSchema,
   licensePlateId: UuidSchema.nullable().optional(),
+  licensePlateNumber: LicensePlateNumberSchema.nullable().optional(),
+  poNumber: z.string().trim().max(LIMITS.code).nullable().optional(),
+  jobIdNumber: JobIdNumberSchema.optional(),
+  cartons: z
+    .array(
+      z.object({
+        licensePlateNumber: LicensePlateNumberSchema,
+        quantity: z.number().int().positive(),
+      }),
+    )
+    .max(500)
+    .optional(),
   containerId: UuidSchema.nullable().optional(),
   quantity: NonNegativeCountSchema,
   description: z.string().optional(),
@@ -1218,6 +1251,7 @@ export const CustomerOrderLineSchema = z.object({
   batch: z.string().trim().max(LIMITS.code).nullable().default(null),
   locationId: UuidSchema,
   quantity: QuantitySchema,
+  licensePlateNumber: LicensePlateNumberSchema.nullable().optional(),
 });
 export type CustomerOrderLine = z.infer<typeof CustomerOrderLineSchema>;
 
@@ -1377,6 +1411,7 @@ export const InventorySystemSchema = z.object({
   bays: z.array(BaySchema).default([]),
   trailers: z.array(TrailerSchema).default([]),
   licensePlates: z.array(LicensePlateSchema).default([]),
+  licensePlateLedger: LicensePlateLedgerSchema.optional(),
   containers: z.array(ContainerSchema).default([]),
   transactions: z.array(InventoryTransactionSchema).default([]),
   photos: z.array(PhotoAttachmentSchema).default([]),

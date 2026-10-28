@@ -1,10 +1,20 @@
 import { moveQuantity, type StockChange } from "@/backend/server/inventory-ops";
 import { committedCubeForLocation } from "@/lib/cubing/capacity";
-import { inventoryQuantityCubeMessage } from "@/lib/cubing/workflow";
 import { divisionOf } from "@/lib/divisions";
+import {
+  appendCartons,
+  checkBinPlacement,
+  incomingCubicInches,
+  materializeCartons,
+  occupantsByLocation,
+  takeCartons,
+  type PlacementLocation,
+} from "@/lib/inventory/bin-container";
+import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import type {
   CustomerOrder,
   InventoryItem,
+  InventorySystem,
   ItemCube,
   LicensePlate,
   Location,
@@ -81,8 +91,8 @@ export function applyInventoryMove(
       (item.batch ?? null) === (source.batch ?? null),
   );
   if (
-    source.licensePlateId &&
     input.quantity === source.quantity &&
+    source.licensePlateId &&
     destinationLine?.licensePlateId &&
     destinationLine.licensePlateId !== source.licensePlateId
   ) {
@@ -90,30 +100,27 @@ export function applyInventoryMove(
       `Destination bin ${destination.code} already has another license plate.`,
     );
   }
-  const quantityBefore = destinationLine?.quantity ?? 0;
   const cube = (system.itemCubes ?? []).find((entry) => entry.sku === source.sku) ?? null;
-  const message = inventoryQuantityCubeMessage({
-    sku: source.sku,
-    locationCode: destination.code,
-    capacity: destination.cubeCapacityCubicInches,
-    committedCubicInches: committedCubeForLocation(
-      destination.id,
-      system.inventoryItems,
-      system.receivingOrders ?? [],
-      system.itemCubes ?? [],
-    ),
-    cube: cube
-      ? {
-          sku: cube.sku,
-          cubicInches: cube.cubicInches,
-          unitsPerCase: cube.unitsPerCase,
-        }
-      : null,
-    quantityBefore,
-    quantityAfter: quantityBefore + input.quantity,
-  });
-  if (message) {
-    throw new ValidationError(message);
+  const occupants = occupantsByLocation(system.inventoryItems);
+  const placementLocations = placementViews(system);
+  const destinationView = placementLocations.find((location) => location.id === destination.id);
+  if (destinationView) {
+    const placement = checkBinPlacement({
+      location: destinationView,
+      occupants: occupants.get(destination.id) ?? [],
+      incoming: {
+        sku: source.sku,
+        batch: source.batch,
+        quantity: input.quantity,
+        poNumber: source.poNumber,
+        jobIdNumber: source.jobIdNumber,
+      },
+      incomingCubicInches: incomingCubicInches(input.quantity, cube),
+      locations: placementLocations,
+      occupantsByLocation: occupants,
+      excludeIds: [source.locationId],
+    });
+    if (!placement.ok) throw new ValidationError(placement.message);
   }
 
   const result = moveQuantity({
@@ -123,12 +130,12 @@ export function applyInventoryMove(
     quantity: input.quantity,
     now,
   });
-  if (source.licensePlateId && input.quantity === source.quantity) {
-    const destinationItem = result.items.find(
-      (item) => item.id === result.changes[1]?.inventoryItemId,
-    );
-    const sourceItem = result.items.find((item) => item.id === source.id);
-    if (destinationItem && sourceItem) {
+  const destinationItem = result.items.find(
+    (item) => item.id === result.changes[1]?.inventoryItemId,
+  );
+  const sourceItem = result.items.find((item) => item.id === source.id);
+  if (destinationItem && sourceItem) {
+    if (input.quantity === source.quantity && source.licensePlateId) {
       destinationItem.licensePlateId = source.licensePlateId;
       destinationItem.containerId = source.containerId ?? null;
       sourceItem.licensePlateId = null;
@@ -141,6 +148,50 @@ export function applyInventoryMove(
         plate.trailerId = null;
       }
     }
+    const unitsPerCase = cube?.unitsPerCase ?? null;
+    const takePlate = () => allocateLicensePlate(system as InventorySystem, "move").number;
+    const { kept, moved } = takeCartons(
+      materializeCartons(source, unitsPerCase, takePlate),
+      input.quantity,
+      unitsPerCase,
+      takePlate,
+    );
+    const priorDestinationQuantity = Math.max(0, destinationItem.quantity - input.quantity);
+    const destinationCartons =
+      destinationItem.cartons && destinationItem.cartons.length > 0
+        ? destinationItem.cartons
+        : destinationItem.licensePlateNumber && priorDestinationQuantity > 0
+          ? [
+              {
+                licensePlateNumber: destinationItem.licensePlateNumber,
+                quantity: priorDestinationQuantity,
+              },
+            ]
+          : [];
+    sourceItem.cartons = kept;
+    sourceItem.licensePlateNumber = kept[0]?.licensePlateNumber ?? null;
+    destinationItem.cartons = appendCartons(destinationCartons, moved);
+    destinationItem.licensePlateNumber =
+      destinationItem.licensePlateNumber ?? moved[0]?.licensePlateNumber ?? null;
+    destinationItem.poNumber = destinationItem.poNumber ?? source.poNumber ?? null;
+    destinationItem.jobIdNumber = destinationItem.jobIdNumber ?? source.jobIdNumber ?? null;
   }
   return result;
+}
+
+function placementViews(system: MoveInventorySystem): PlacementLocation[] {
+  return system.locations.map((location) => ({
+    id: location.id,
+    code: location.code,
+    isActive: location.isActive,
+    storageClass: location.storageClass,
+    division: location.division,
+    cubeCapacityCubicInches: location.cubeCapacityCubicInches,
+    committedCubicInches: committedCubeForLocation(
+      location.id,
+      system.inventoryItems,
+      system.receivingOrders ?? [],
+      system.itemCubes ?? [],
+    ),
+  }));
 }

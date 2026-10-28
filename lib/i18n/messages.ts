@@ -270,6 +270,7 @@ export const ES: Record<string, string> = {
   "Color": "Color",
   "Batch": "Lote",
   "Manufacturer": "Fabricante",
+  "License plate": "Matrícula",
   "Tracking": "Rastreo",
   "Buyer": "Comprador",
   "Job ID": "ID de trabajo",

@@ -9,14 +9,59 @@ import type { WarehouseLabel } from "@/lib/labels/build-labels";
 import { printNamedDocument } from "@/frontend/client/print";
 import { cn } from "@/lib/utils";
 
+function LicensePlateMark({ barcode, number }: { barcode: string; number: string }) {
+  const barcodeRef = useRef<SVGSVGElement>(null);
+  const barcodeId = useId().replace(/:/g, "");
+
+  useEffect(() => {
+    const svg = barcodeRef.current;
+    if (!svg || !barcode) return;
+    void import("jsbarcode").then((mod) => {
+      const JsBarcode = mod.default;
+      JsBarcode(svg, barcode, {
+        format: "CODE128",
+        displayValue: false,
+        height: 36,
+        margin: 0,
+        width: 1.2,
+      });
+    });
+  }, [barcode]);
+
+  return (
+    <div data-license-plate="">
+      <p className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-neutral-600">
+        <T>License plate</T>
+      </p>
+      <svg
+        ref={barcodeRef}
+        id={`license-plate-${barcodeId}`}
+        role="img"
+        aria-label={`License plate barcode for ${barcode}`}
+        className="max-w-full text-black"
+      />
+      <p
+        className="font-mono text-sm font-semibold tracking-[0.22em]"
+        data-license-plate-number=""
+      >
+        {number}
+      </p>
+    </div>
+  );
+}
+
 function LabelMark({
   barcodeValue,
   qrValue,
   compact = false,
+  displayValue = true,
+  caption,
 }: {
   barcodeValue: string;
   qrValue: string;
   compact?: boolean;
+  displayValue?: boolean;
+  caption?: string;
 }) {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const [qrSrc, setQrSrc] = useState<string | null>(null);
@@ -47,14 +92,14 @@ function LabelMark({
       const JsBarcode = mod.default;
       JsBarcode(svg, barcodeValue, {
         format: "CODE128",
-        displayValue: true,
+        displayValue,
         fontSize: compact ? 10 : 12,
         height: compact ? 28 : 40,
         margin: 0,
         width: compact ? 1.1 : 1.3,
       });
     });
-  }, [barcodeValue, compact]);
+  }, [barcodeValue, compact, displayValue]);
 
   return (
     <div className="flex flex-wrap items-end gap-3">
@@ -62,7 +107,7 @@ function LabelMark({
         ref={barcodeRef}
         id={`barcode-${barcodeId}`}
         role="img"
-        aria-label={`Barcode for ${barcodeValue}`}
+        aria-label={caption ?? `Barcode for ${barcodeValue}`}
         className="max-w-full text-black"
       />
       {qrSrc ? (
@@ -111,12 +156,33 @@ export function LabelCard({
           </div>
         ))}
       </dl>
-      <div className="mt-3">
+      <div className="mt-3 grid gap-2">
         <LabelMark
           barcodeValue={label.barcodeValue}
           qrValue={label.qrValue}
           compact={compact || label.kind === "location"}
+          displayValue={label.licensePlateBarcode !== label.barcodeValue}
+          caption={
+            label.licensePlateNumber && label.licensePlateBarcode === label.barcodeValue
+              ? `License plate barcode for ${label.licensePlateBarcode}`
+              : undefined
+          }
         />
+        {label.licensePlateNumber &&
+        label.licensePlateBarcode &&
+        label.licensePlateBarcode !== label.barcodeValue ? (
+          <LicensePlateMark
+            barcode={label.licensePlateBarcode}
+            number={label.licensePlateNumber}
+          />
+        ) : label.licensePlateNumber ? (
+          <p
+            className="font-mono text-sm font-semibold tracking-[0.22em]"
+            data-license-plate-number=""
+          >
+            {label.licensePlateNumber}
+          </p>
+        ) : null}
       </div>
     </article>
   );

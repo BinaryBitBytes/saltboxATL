@@ -1,4 +1,5 @@
 import type { Location, ReceivingOrder, Room, ShippingOrder } from "@/lib/inventory-schema";
+import { parsePlateNumber } from "@/lib/license-plate/sequence";
 import { parseBinCode } from "@/lib/locations/nomenclature";
 import {
   encodeHandlingPayload,
@@ -15,8 +16,28 @@ export type WarehouseLabel = {
   title: string;
   barcodeValue: string;
   qrValue: string;
+  /** Eight-digit plate printed under its own barcode. */
+  licensePlateNumber?: string | null;
+  /** Value encoded by the license plate barcode. */
+  licensePlateBarcode?: string | null;
   fields: Array<{ label: string; value: string }>;
 };
+
+/** Barcode field plus the human-readable number that sits under it. */
+export function licensePlateTag(
+  label: Pick<WarehouseLabel, "licensePlateNumber" | "licensePlateBarcode">,
+): { barcode: string; number: string } | null {
+  const number = parsePlateNumber(label.licensePlateNumber);
+  if (!number) return null;
+  const barcode = label.licensePlateBarcode?.trim() || number;
+  return { barcode, number };
+}
+
+function plateFields(number: string | null | undefined): Array<{ label: string; value: string }> {
+  const plate = parsePlateNumber(number);
+  if (!plate) return [];
+  return [{ label: "License plate", value: plate }];
+}
 
 export function buildInboundLabels(
   order: ReceivingOrder,
@@ -30,10 +51,13 @@ export function buildInboundLabels(
       heading: "Inbound freight",
       title: item.sku,
       barcodeValue: item.upc || item.sku,
+      licensePlateNumber: parsePlateNumber(item.licensePlateNumber),
+      licensePlateBarcode: parsePlateNumber(item.licensePlateNumber),
       qrValue: encodeScanPayload({
         sku: item.sku,
         upc: item.upc,
         batch: item.batch,
+        licensePlateNumber: item.licensePlateNumber,
       }),
       fields: [
         { label: "Order", value: order.orderNumber },
@@ -47,6 +71,7 @@ export function buildInboundLabels(
         { label: "Batch", value: item.batch || "—" },
         { label: "Manufacturer", value: item.manufacturer || "—" },
         { label: "Color", value: item.color || "—" },
+        ...plateFields(item.licensePlateNumber),
         { label: "Item", value: item.description },
       ],
     })),
@@ -64,10 +89,13 @@ export function buildOutboundLabels(
       heading: "Outbound freight",
       title: item.sku,
       barcodeValue: item.upc || item.sku,
+      licensePlateNumber: parsePlateNumber(item.licensePlateNumber),
+      licensePlateBarcode: parsePlateNumber(item.licensePlateNumber),
       qrValue: encodeScanPayload({
         sku: item.sku,
         upc: item.upc,
         batch: item.batch,
+        licensePlateNumber: item.licensePlateNumber,
       }),
       fields: [
         { label: "Shipment", value: order.shipmentNumber },
@@ -85,6 +113,7 @@ export function buildOutboundLabels(
             ? (locationCodes.get(item.putawayLocationId) ?? item.putawayLocationId)
             : "—",
         },
+        ...plateFields(item.licensePlateNumber),
         { label: "Item", value: item.description },
       ],
     })),
@@ -138,15 +167,19 @@ export function buildHandlingLabel(input: {
       : input.kind === "license-plate"
         ? "License plate"
         : "Container";
+  const plateNumber =
+    input.kind === "license-plate" ? parsePlateNumber(input.code) : null;
   return {
     id: input.id,
     kind: "location",
     heading,
-    title: input.code,
-    barcodeValue: input.code,
+    title: plateNumber ?? input.code,
+    barcodeValue: plateNumber ?? input.code,
+    licensePlateNumber: plateNumber,
+    licensePlateBarcode: plateNumber,
     qrValue: encodeHandlingPayload({ kind: input.kind, code: input.code }),
     fields: [
-      { label: heading, value: input.code },
+      { label: heading, value: plateNumber ?? input.code },
       { label: "Detail", value: input.detail || "—" },
     ],
   };
