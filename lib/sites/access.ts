@@ -87,6 +87,20 @@ export function authorizeSiteChange(input: {
 }
 
 /**
+ * Inventory edits open one site at a time. Site grants still need every site
+ * in the division, so the registry is merged with that open slice.
+ */
+export function sitesForAssignment(
+  openSites: readonly Site[] | undefined,
+  registrySites: readonly Site[] | undefined,
+): Site[] {
+  const byId = new Map<string, Site>();
+  for (const site of registrySites ?? []) byId.set(site.id, site);
+  for (const site of openSites ?? []) byId.set(site.id, site);
+  return [...byId.values()];
+}
+
+/**
  * Managers and IT admins grant an explicit site list.
  * The home site is the one selected in the dropdown and must be checked.
  */

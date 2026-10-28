@@ -5,6 +5,7 @@ import {
   authorizeSiteChange,
   resolveAssignedSites,
   selectSiteId,
+  sitesForAssignment,
   viewableSites,
 } from "@/lib/sites/access";
 
@@ -55,6 +56,43 @@ describe("assigned site access", () => {
       division: "hyperscale",
       allowedSiteIds: [sierra!.id],
       siteId: sierra!.id,
+    });
+    expect(otherDivision).to.deep.equal({
+      ok: false,
+      error: "That work site is not in this user's division.",
+    });
+  });
+
+  it("applies a second-site grant while the open inventory contains one site", () => {
+    const open = seed.sites.filter((site) => site.id === alpha!.id);
+    const granted = resolveAssignedSites({
+      sites: sitesForAssignment(open, seed.sites),
+      division: "hyperscale",
+      allowedSiteIds: [alpha!.id, beta!.id],
+      siteId: beta!.id,
+    });
+    expect(granted).to.deep.equal({
+      ok: true,
+      allowedSiteIds: [alpha!.id, beta!.id],
+      siteId: beta!.id,
+    });
+
+    const openOnly = resolveAssignedSites({
+      sites: open,
+      division: "hyperscale",
+      allowedSiteIds: [alpha!.id, beta!.id],
+      siteId: beta!.id,
+    });
+    expect(openOnly).to.deep.equal({
+      ok: false,
+      error: "That work site is not in this user's division.",
+    });
+
+    const otherDivision = resolveAssignedSites({
+      sites: sitesForAssignment(open, seed.sites),
+      division: "hyperscale",
+      allowedSiteIds: [alpha!.id, sierra!.id],
+      siteId: alpha!.id,
     });
     expect(otherDivision).to.deep.equal({
       ok: false,

@@ -173,7 +173,8 @@ describe("account reads follow the store that saves users", () => {
     );
     expect(auth).to.not.include("readAccountCatalog");
     expect(session).to.not.include("readAccountCatalog");
-    expect(auth.match(/readAccounts\(/g)?.length).to.equal(4);
+    expect(auth).to.include("sitesForAssignment");
+    expect(auth.match(/readAccounts\(/g)?.length).to.equal(5);
     expect(session).to.include("restoreSessionAccount(payload.sub, readAccounts)");
   });
 });

@@ -10,8 +10,13 @@ import {
   canAssignRole,
   canManageUser,
   divisionForRole,
+  divisionOf,
 } from "@/lib/divisions";
-import { homeSiteForDivision, resolveAssignedSites } from "@/lib/sites/access";
+import {
+  homeSiteForDivision,
+  resolveAssignedSites,
+  sitesForAssignment,
+} from "@/lib/sites/access";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   accountLoginLockKeys,
@@ -36,6 +41,7 @@ import {
   ResetPasswordInputSchema,
   UpdateUserInputSchema,
   type PublicUser,
+  type Site,
   type UserRole,
 } from "@/lib/inventory-schema";
 
@@ -212,6 +218,11 @@ export async function listPublicUsers(actorRole: UserRole): Promise<PublicUser[]
     .map(toPublicUser);
 }
 
+async function registrySites(): Promise<Site[]> {
+  const accounts = await readAccounts();
+  return accounts.sites ?? [];
+}
+
 export async function createUserRecord(
   rawData: unknown,
   actor: { name: string; role: UserRole },
@@ -226,17 +237,19 @@ export async function createUserRecord(
     throw new ServiceError("You cannot assign that role.", 403);
   }
 
+  const knownSites = await registrySites();
   return updateSystem(async (system) => {
     claimUsernameAndEmail(system.users, parsed.data);
 
     const now = nowIso();
     const division = divisionForRole(parsed.data.role);
-    const home = homeSiteForDivision(system.sites ?? [], division);
+    const sites = sitesForAssignment(system.sites, knownSites);
+    const home = homeSiteForDivision(sites, division);
     let siteId = home?.id;
     let allowedSiteIds: string[] | undefined;
     if (home) {
       const granted = resolveAssignedSites({
-        sites: system.sites ?? [],
+        sites,
         division,
         allowedSiteIds: parsed.data.allowedSiteIds ?? [home.id],
         siteId: parsed.data.siteId ?? home.id,
@@ -275,6 +288,10 @@ export async function updateUserRecord(
     throw new ServiceError(parsed.error);
   }
 
+  const touchesSites = Boolean(
+    parsed.data.allowedSiteIds || parsed.data.siteId || parsed.data.role,
+  );
+  const knownSites = touchesSites ? await registrySites() : [];
   return updateSystem(async (system) => {
     const user = system.users.find((entry) => entry.id === parsed.data.id);
     if (!user) {
@@ -312,8 +329,9 @@ export async function updateUserRecord(
     }
 
     if (parsed.data.allowedSiteIds) {
+      const sites = sitesForAssignment(system.sites, knownSites);
       const granted = resolveAssignedSites({
-        sites: system.sites ?? [],
+        sites,
         division: divisionForRole(user.role),
         allowedSiteIds: parsed.data.allowedSiteIds,
         siteId: parsed.data.siteId ?? user.siteId,
@@ -323,10 +341,11 @@ export async function updateUserRecord(
       user.siteId = granted.siteId;
     } else if (parsed.data.role) {
       const division = divisionForRole(user.role);
-      const home = homeSiteForDivision(system.sites ?? [], division);
+      const sites = sitesForAssignment(system.sites, knownSites);
+      const home = homeSiteForDivision(sites, division);
       if (user.allowedSiteIds != null) {
         const granted = resolveAssignedSites({
-          sites: system.sites ?? [],
+          sites,
           division,
           allowedSiteIds: user.allowedSiteIds,
           siteId: user.siteId,
@@ -339,8 +358,8 @@ export async function updateUserRecord(
           user.siteId = home.id;
         }
       } else if (home && user.siteId !== home.id) {
-        const stillValid = (system.sites ?? []).some(
-          (site) => site.id === user.siteId && divisionForRole(user.role) === (site.division ?? "hyperscale"),
+        const stillValid = sites.some(
+          (site) => site.id === user.siteId && divisionOf(site) === division,
         );
         if (!stillValid) user.siteId = home.id;
       }
