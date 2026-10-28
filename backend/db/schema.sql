@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS receiving_orders (
   updated_at TIMESTAMPTZ,
   created_by TEXT,
   division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  backorder_lines JSONB NOT NULL DEFAULT '[]'::jsonb,
   CONSTRAINT receiving_orders_division_check CHECK (division IN ('hyperscale', 'security'))
 );
 

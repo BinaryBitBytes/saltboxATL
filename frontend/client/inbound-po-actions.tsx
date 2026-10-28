@@ -4,6 +4,7 @@ import { T, useT } from "@/frontend/client/language";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  cancelInboundPurchaseOrder,
   deleteInboundPurchaseOrder,
   updateInboundPurchaseOrder,
 } from "@/backend/server/serverAction";
@@ -17,6 +18,7 @@ import {
 } from "@/frontend/client/large-input-confirm";
 import { localDateTimeValue, toIsoDateTime } from "@/lib/format";
 import {
+  INBOUND_CANCEL_CONFIRMATION,
   INBOUND_DELETE_CONFIRMATION,
   INBOUND_DOCK_DELETE_CONFIRMATION,
 } from "@/lib/inventory-schema";
@@ -93,8 +95,10 @@ export function InboundPoActions({
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState("");
+  const [cancelConfirmText, setCancelConfirmText] = useState("");
   const [dockConfirmText, setDockConfirmText] = useState("");
   const [purchaseOrderNumber, setPurchaseOrderNumber] = useState(order.purchaseOrderNumber);
   const [projectId, setProjectId] = useState(order.projectId);
@@ -134,6 +138,7 @@ export function InboundPoActions({
     setConfirmationQuantity("");
     setError(null);
     setDeleting(false);
+    setCancelling(false);
     setEditing(true);
   }
 
@@ -212,6 +217,25 @@ export function InboundPoActions({
     });
   }
 
+  function cancelPurchaseOrder(event: React.FormEvent) {
+    event.preventDefault();
+    if (cancelConfirmText !== INBOUND_CANCEL_CONFIRMATION) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await cancelInboundPurchaseOrder({
+        id: order.id,
+        confirmText: cancelConfirmText,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setCancelling(false);
+      setCancelConfirmText("");
+      router.refresh();
+    });
+  }
+
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap gap-2">
@@ -223,6 +247,7 @@ export function InboundPoActions({
           variant="destructive"
           onClick={() => {
             setEditing(false);
+            setCancelling(false);
             setError(null);
             setConfirmText("");
             setDockConfirmText("");
@@ -232,6 +257,22 @@ export function InboundPoActions({
         >
           Delete entry
         </Button>
+        {freightOnDock && order.expectationStatus !== "cancelled" ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setEditing(false);
+              setDeleting(false);
+              setError(null);
+              setCancelConfirmText("");
+              setCancelling(true);
+            }}
+            disabled={pending}
+          >
+            Cancel PO
+          </Button>
+        ) : null}
       </div>
 
       {editing ? (
@@ -317,7 +358,9 @@ export function InboundPoActions({
               >
                 <option value="expected"><T>Expected</T></option>
                 <option value="in-transit"><T>In transit</T></option>
-                <option value="cancelled"><T>Cancelled</T></option>
+                {freightOnDock && order.expectationStatus !== "cancelled" ? null : (
+                  <option value="cancelled"><T>Cancelled</T></option>
+                )}
               </NativeSelect>
             </Field>
           </div>
@@ -437,6 +480,54 @@ export function InboundPoActions({
               }}
             >
               Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {cancelling ? (
+        <form
+          onSubmit={cancelPurchaseOrder}
+          className="grid gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3"
+        >
+          <p className="text-sm font-medium">
+            {t("You are cancelling PO {{po}}.", { po: order.purchaseOrderNumber })}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <T>
+              Cancelling this order wipes the parsed expected entries. The PDF will have to be uploaded again by a coordinator if you proceed.
+            </T>
+          </p>
+          <Field label="Type CancelRightMeow to continue." htmlFor={fieldId("cancel-confirm")}>
+            <Input
+              id={fieldId("cancel-confirm")}
+              value={cancelConfirmText}
+              onChange={(event) => setCancelConfirmText(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              aria-label={t("Type CancelRightMeow to continue.")}
+            />
+          </Field>
+          {error ? <p className="text-xs text-destructive"><T>{error}</T></p> : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={pending || cancelConfirmText !== INBOUND_CANCEL_CONFIRMATION}
+            >
+              {pending ? "Cancelling…" : "Cancel this PO"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                setCancelling(false);
+                setCancelConfirmText("");
+                setError(null);
+              }}
+            >
+              Keep order
             </Button>
           </div>
         </form>

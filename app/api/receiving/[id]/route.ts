@@ -3,6 +3,7 @@ import {
   addPalletToOrder,
   completeReceivingOrder,
   getReceivingOrder,
+  partialReceivingPalletRecord,
   removeCaseFromPallet,
   reopenReceivingOrder,
   updateCaseOnPallet,
@@ -40,6 +41,7 @@ export async function POST(
       caseId?: string;
       confirmLargeInput?: boolean;
       confirmationQuantity?: number;
+      acknowledgeBackorder?: boolean;
       expectedPalletCount?: number;
     };
 
@@ -61,12 +63,17 @@ export async function POST(
       await requireApiPermission("receive");
       return jsonOk(await removeCaseFromPallet(id, body.palletId, body.caseId));
     }
+    if (body.action === "partial-pallet" && body.palletId) {
+      const user = await requireApiPermission("receive");
+      return jsonOk(await partialReceivingPalletRecord(id, body.palletId, user.name));
+    }
     if (body.action === "complete") {
       await requireApiPermission("receive");
       return jsonOk(
         await completeReceivingOrder(id, {
           confirmLargeInput: body.confirmLargeInput,
           confirmationQuantity: body.confirmationQuantity,
+          acknowledgeBackorder: body.acknowledgeBackorder,
         }),
       );
     }

@@ -31,10 +31,11 @@ export function applyRecognizedPurchase(
         ? existing.lines
         : [];
   const status =
-    existing?.expectationStatus === "cancelled" ||
     existing?.expectationStatus === "in-transit"
-      ? existing.expectationStatus
-      : "expected";
+      ? "in-transit"
+      : existing?.expectationStatus === "cancelled" && incoming.length === 0
+        ? "cancelled"
+        : "expected";
   const saved = saveBuyerPurchaseOrder(purchaseOrders, {
     id: input.id,
     purchaseOrderNumber,

@@ -9,9 +9,18 @@ import { collectKnownProducts } from "@/lib/codes/product-codes";
 import { photosForOwnerKind } from "@/lib/photos/query";
 import { hasPermission } from "@/lib/auth/permissions";
 
-import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
+import {
+  formatJobId,
+  isCoordinatorPurchaseOrder,
+  jobIdForPurchaseOrder,
+} from "@/lib/purchase-orders";
 import { JobIdEditor } from "@/frontend/client/job-id-editor";
-import { remainingExpectedPallets } from "@/lib/receiving/reopen";
+import { hasPostedPutaway, remainingExpectedPallets } from "@/lib/receiving/reopen";
+import { inboundReceivingHasStarted } from "@/lib/inbound/entry";
+import {
+  canConfirmInboundCancel,
+  expectedLinesFromPurchaseOrder,
+} from "@/lib/inbound/receiving-transactions";
 import { buildCubingLocations } from "@/lib/cubing/capacity";
 import {
   Card,
@@ -37,6 +46,26 @@ export default async function ReceivingOrderPage({
   const canReopen = hasPermission(user.role, "reopenReceiving");
   const canAssignJobId = hasPermission(user.role, "assignJobId");
   const jobIdNumber = jobIdForPurchaseOrder(system.purchaseOrders, order.poNumber);
+  const purchaseOrder =
+    system.purchaseOrders.find((entry) => entry.purchaseOrderNumber === order.poNumber) ??
+    null;
+  const enteredReceiving = purchaseOrder
+    ? inboundReceivingHasStarted(system.receivingOrders, purchaseOrder.purchaseOrderNumber)
+    : false;
+  const inboundShipment =
+    order.intake === "expected" ||
+    (purchaseOrder ? isCoordinatorPurchaseOrder(purchaseOrder) : false);
+  const cancelMode =
+    inboundShipment &&
+    enteredReceiving &&
+    order.status !== "completed" &&
+    order.status !== "cancelled" &&
+    !hasPostedPutaway(order)
+      ? canConfirmInboundCancel(user.role)
+        ? "confirm"
+        : "hidden"
+      : "allow";
+  const expectedLines = expectedLinesFromPurchaseOrder(purchaseOrder);
 
   return (
     <div className="grid gap-6">
@@ -118,6 +147,21 @@ export default async function ReceivingOrderPage({
               }
             />
           ) : null}
+          {order.backorderLines.length > 0 ? (
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground">
+                <T>Backorder</T>
+              </p>
+              <ul className="grid gap-1">
+                {order.backorderLines.map((line) => (
+                  <li key={`${line.sku}-${line.description}-${line.expectedQuantity}`}>
+                    {line.sku || line.description}: {line.receivedQuantity}/
+                    {line.expectedQuantity}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -169,6 +213,8 @@ export default async function ReceivingOrderPage({
         jobIdNumber={jobIdNumber}
         knownProducts={collectKnownProducts(system)}
         canReopen={canReopen}
+        expectedLines={expectedLines}
+        cancelMode={cancelMode}
         cubes={system.itemCubes}
         cubingLocations={buildCubingLocations({
           locations: system.locations,

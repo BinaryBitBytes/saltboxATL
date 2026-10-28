@@ -10,6 +10,7 @@ import {
   CreateShippingOrderInputSchema,
   CubeItemInputSchema,
   RecordDeliveryScanInputSchema,
+  CancelInboundPurchaseOrderInputSchema,
   DeleteInboundPurchaseOrderInputSchema,
   SaveBuyerPurchaseOrderInputSchema,
   SaveDeliveryNotesInputSchema,
@@ -57,6 +58,13 @@ import {
 import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import { createId, nowIso } from "@/backend/server/helperUtils";
 import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
+import {
+  applyPartialInboundPallet,
+  cancelEnteredInboundPurchaseOrder,
+  expectedLinesFromPurchaseOrder,
+  finishReceivingShipment,
+  inboundCancelApplies,
+} from "@/lib/inbound/receiving-transactions";
 import { PersonNameSchema } from "@/lib/validation/fields";
 import { parseWithSchema } from "@/backend/server/safeParsing";
 import {
@@ -746,6 +754,7 @@ export async function createReceivingOrderRecord(
     receiverName: parsed.data.receiverName,
     loadPalletCount: parsed.data.loadPalletCount,
     status: "in-progress",
+    backorderLines: [],
     isPartialed: false,
     workingPalletId: null,
     pallets: [],
@@ -1140,20 +1149,17 @@ export async function removeCaseFromPallet(
 
 export async function completeReceivingOrder(
   orderId: string,
-  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+  confirmation?: {
+    confirmLargeInput?: boolean;
+    confirmationQuantity?: number;
+    acknowledgeBackorder?: boolean;
+  },
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
     requireReceivingEditable(order);
 
     const cases = casesPendingPutaway(order);
-    if (cases.length === 0) {
-      throw new ServiceError(
-        hasPostedPutaway(order)
-          ? "Receive at least one additional case before completing this partialed order."
-          : "Receive at least one case before completing this order.",
-      );
-    }
     const totalUnits = cases.reduce((sum, item) => sum + item.quantityInCase, 0);
     assertLargeInputConfirmed(
       totalUnits,
@@ -1165,10 +1171,12 @@ export async function completeReceivingOrder(
     if (cubeBlocker) {
       throw new ServiceError(cubeBlocker);
     }
-
-    order.status = "received";
-    order.workingPalletId = null;
-    order.updatedAt = nowIso();
+    const purchaseOrder = findPurchaseOrder(system.purchaseOrders, order.poNumber) ?? null;
+    const finished = finishReceivingShipment(order, purchaseOrder, {
+      acknowledgeBackorder: confirmation?.acknowledgeBackorder === true,
+      now: nowIso(),
+    });
+    if (!finished.ok) throw new ServiceError(finished.error);
     return order;
   });
 }
@@ -1319,9 +1327,51 @@ export async function completePutawayOrder(
   });
 }
 
+export async function partialReceivingPalletRecord(
+  orderId: string,
+  palletId: string,
+  partialedBy: string,
+): Promise<ReceivingOrder> {
+  return updateSystem((system) => {
+    const order = requireOrder(system, orderId);
+    const purchaseOrder = findPurchaseOrder(system.purchaseOrders, order.poNumber) ?? null;
+    const result = applyPartialInboundPallet({
+      order,
+      palletId,
+      partialedBy,
+      expectedLines: expectedLinesFromPurchaseOrder(purchaseOrder),
+      now: nowIso(),
+    });
+    if (!result.ok) throw new ServiceError(result.error);
+    return order;
+  });
+}
+
+export async function cancelInboundPurchaseOrderRecord(
+  rawData: unknown,
+  actor: { role: string; id: string },
+): Promise<string[]> {
+  const parsed = parseWithSchema(CancelInboundPurchaseOrderInputSchema, rawData);
+  if (!parsed.success) {
+    throw new ServiceError(parsed.error);
+  }
+  return updateSystem((system) => {
+    const result = cancelEnteredInboundPurchaseOrder(system, parsed.data.id, {
+      actorRole: actor.role,
+      actorId: actor.id,
+      confirmText: parsed.data.confirmText,
+      now: nowIso(),
+      nextId: createId,
+    });
+    if (!result.ok) throw new ServiceError(result.error);
+    return result.documentIds;
+  });
+}
+
 export async function cancelReceivingOrder(
   orderId: string,
-): Promise<ReceivingOrder> {
+  actor?: { role: string; id?: string; confirmText?: string },
+): Promise<{ order: ReceivingOrder; documentIds: string[] }> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
     requireCancellable(order);
@@ -1330,10 +1380,22 @@ export async function cancelReceivingOrder(
         "This order already has on-hand inventory and cannot be cancelled. Keep it open as a partialed PO until remaining freight arrives.",
       );
     }
+    const purchaseOrder = findPurchaseOrder(system.purchaseOrders, order.poNumber) ?? null;
+    if (inboundCancelApplies(order, purchaseOrder, system.receivingOrders) && purchaseOrder) {
+      const result = cancelEnteredInboundPurchaseOrder(system, purchaseOrder.id, {
+        actorRole: actor?.role ?? "",
+        actorId: actor?.id,
+        confirmText: actor?.confirmText,
+        now: nowIso(),
+        nextId: createId,
+      });
+      if (!result.ok) throw new ServiceError(result.error);
+      return { order, documentIds: result.documentIds };
+    }
     order.status = "cancelled";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
-    return order;
+    return { order, documentIds: [] };
   });
 }
 

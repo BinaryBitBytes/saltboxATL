@@ -1,4 +1,5 @@
 import {
+  BackorderLineSchema,
   BuyerPoLineSchema,
   DeliveryRecordSchema,
   ExpectationStatusSchema,
@@ -43,6 +44,11 @@ import type { Division } from "@/lib/inventory-schema";
 
 function storedDivision(value: string | null | undefined): Division {
   return asDivision(value);
+}
+
+function parseBackorderLines(raw: unknown): ReceivingOrder["backorderLines"] {
+  const parsed = BackorderLineSchema.array().safeParse(raw ?? []);
+  return parsed.success ? parsed.data : [];
 }
 
 export function parseStoredPallets(raw: unknown): Pallet[] {
@@ -611,6 +617,7 @@ export function mapReceivingOrder(row: {
   created_by: string | null;
   intake?: string | null;
   division?: string | null;
+  backorder_lines?: unknown;
 }): ReceivingOrder {
   const intake = row.intake === "expected" || row.intake === "dock" ? row.intake : undefined;
   return {
@@ -625,6 +632,7 @@ export function mapReceivingOrder(row: {
     loadPalletCount: row.load_pallet_count,
     status: row.status,
     intake,
+    backorderLines: parseBackorderLines(row.backorder_lines),
     isPartialed: row.is_partialed,
     partialedAt: iso(row.partialed_at),
     partialedBy: row.partialed_by ?? undefined,

@@ -59,6 +59,7 @@ function makeOrder(overrides: Partial<ReceivingOrder> = {}): ReceivingOrder {
     receiverName: "Jordan Associate",
     loadPalletCount: 4,
     status: "completed",
+    backorderLines: [],
     isPartialed: false,
     workingPalletId: null,
     pallets: [makePallet()],

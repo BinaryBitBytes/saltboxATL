@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  cancelInboundPurchaseOrderRecord,
   cancelReceivingOrder,
   completeReceivingOrder,
+  partialReceivingPalletRecord,
   reopenReceivingOrder,
   createLocationRecord,
   createReceivingOrderRecord,
@@ -364,7 +366,11 @@ export async function removeReceivingCase(
 
 export async function completeReceiving(
   orderId: string,
-  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+  confirmation?: {
+    confirmLargeInput?: boolean;
+    confirmationQuantity?: number;
+    acknowledgeBackorder?: boolean;
+  },
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
     await requireApiPermission("receive");
@@ -428,16 +434,68 @@ export async function reopenReceivingForm(
   redirect(`/receiving/${orderId}`);
 }
 
-export async function cancelReceiving(
+export async function partialReceivingPallet(
   orderId: string,
+  palletId: string,
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
-    await requireApiPermission("receive");
-    const data = await cancelReceivingOrder(orderId);
+    const user = await requireApiPermission("receive");
+    const data = await partialReceivingPalletRecord(orderId, palletId, user.name);
+    revalidateInventory();
+    revalidatePath(`/receiving/${orderId}`);
+    return { ok: true, data: clientPayload(data) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function cancelInboundPurchaseOrder(
+  rawData: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireApiPermission("uploadBuyerOrders");
+    const id =
+      rawData && typeof rawData === "object" && !Array.isArray(rawData)
+        ? String((rawData as { id?: unknown }).id ?? "")
+        : "";
+    const documentIds = await cancelInboundPurchaseOrderRecord(rawData, {
+      role: user.role,
+      id: user.id,
+    });
+    await Promise.all(
+      documentIds.flatMap((documentId) => [
+        deletePurchaseDocumentFile(documentId, false),
+        deletePurchaseDocumentFile(documentId, true),
+      ]),
+    );
+    revalidateInventory();
+    return { ok: true, data: clientPayload({ id }) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function cancelReceiving(
+  orderId: string,
+  confirmText?: string,
+): Promise<ActionResult<ReceivingOrder>> {
+  try {
+    const user = await requireApiPermission("receive");
+    const data = await cancelReceivingOrder(orderId, {
+      role: user.role,
+      id: user.id,
+      confirmText,
+    });
+    await Promise.all(
+      data.documentIds.flatMap((documentId) => [
+        deletePurchaseDocumentFile(documentId, false),
+        deletePurchaseDocumentFile(documentId, true),
+      ]),
+    );
     revalidateInventory();
     revalidatePath(`/receiving/${orderId}`);
     revalidatePath(`/putaway/${orderId}`);
-    return { ok: true, data: clientPayload(data) };
+    return { ok: true, data: clientPayload(data.order) };
   } catch (error) {
     return fail(error);
   }
