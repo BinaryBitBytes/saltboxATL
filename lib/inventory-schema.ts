@@ -1108,6 +1108,8 @@ export const UserSchema = z.object({
   role: UserRoleSchema,
   division: DivisionSchema.optional(),
   siteId: UuidSchema.optional(),
+  /** Sites this login may open. Omitted means the role's default site access. */
+  allowedSiteIds: z.array(UuidSchema).max(26).optional(),
   isActive: z.boolean().default(true),
   createdAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
@@ -1157,6 +1159,8 @@ export const CreateUserInputSchema = z
     email: EmailSchema,
     password: PasswordSchema,
     role: UserRoleSchema,
+    siteId: UuidSchema.optional(),
+    allowedSiteIds: z.array(UuidSchema).max(26).optional(),
   })
   .strict();
 export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
@@ -1205,6 +1209,8 @@ export const UpdateUserInputSchema = z
     password: PasswordSchema.optional(),
     role: UserRoleSchema.optional(),
     isActive: z.boolean().optional(),
+    siteId: UuidSchema.optional(),
+    allowedSiteIds: z.array(UuidSchema).max(26).optional(),
   })
   .strict();
 export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;

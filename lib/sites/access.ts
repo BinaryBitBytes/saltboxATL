@@ -37,8 +37,13 @@ export function viewableSites(input: {
   sites: readonly Site[];
   division: Division;
   homeSiteId?: string | null;
+  allowedSiteIds?: readonly string[] | null;
 }): Site[] {
   const list = sitesInDivision(input.sites, input.division);
+  if (input.allowedSiteIds != null) {
+    const allowed = new Set(input.allowedSiteIds);
+    return list.filter((site) => allowed.has(site.id));
+  }
   if (canAccessMultiSite(input.role)) return list;
   const home = list.find((site) => site.id === input.homeSiteId);
   if (home) return [home];
@@ -52,9 +57,10 @@ export function selectSiteId(input: {
   homeSiteId?: string | null;
   sites: readonly Site[];
   division: Division;
+  allowedSiteIds?: readonly string[] | null;
 }): string {
   const visible = viewableSites(input);
-  if (canAccessMultiSite(input.role) && typeof input.requested === "string") {
+  if (visible.length > 1 && typeof input.requested === "string") {
     const picked = visible.find((site) => site.id === input.requested);
     if (picked) return picked.id;
   }
@@ -68,18 +74,50 @@ export function authorizeSiteChange(input: {
   requested: unknown;
   sites: readonly Site[];
   division: Division;
+  homeSiteId?: string | null;
+  allowedSiteIds?: readonly string[] | null;
 }): { ok: true; siteId: string } | { ok: false; error: string } {
-  if (!canAccessMultiSite(input.role)) {
-    return { ok: false, error: "Only multi-site roles can change work sites." };
+  const visible = viewableSites(input);
+  if (visible.length < 2) {
+    return { ok: false, error: "That work site is not available." };
   }
-  const visible = viewableSites({
-    role: input.role,
-    sites: input.sites,
-    division: input.division,
-  });
   const picked = visible.find((site) => site.id === input.requested);
   if (!picked) return { ok: false, error: "That work site is not available." };
   return { ok: true, siteId: picked.id };
+}
+
+/**
+ * Managers and IT admins grant an explicit site list.
+ * The home site is the one selected in the dropdown and must be checked.
+ */
+export function resolveAssignedSites(input: {
+  sites: readonly Site[];
+  division: Division;
+  allowedSiteIds: readonly string[];
+  siteId?: string | null;
+}): { ok: true; allowedSiteIds: string[]; siteId: string } | { ok: false; error: string } {
+  const list = sitesInDivision(input.sites, input.division);
+  if (list.length === 0) {
+    return { ok: false, error: "That work site is not in this user's division." };
+  }
+  const known = new Set(list.map((site) => site.id));
+  if (input.allowedSiteIds.some((id) => !known.has(id))) {
+    return { ok: false, error: "That work site is not in this user's division." };
+  }
+  const allowedSiteIds = input.allowedSiteIds.filter((id) => known.has(id));
+  if (allowedSiteIds.length === 0) {
+    return { ok: false, error: "Allow at least one work site." };
+  }
+  if (input.siteId && !allowedSiteIds.includes(input.siteId)) {
+    return { ok: false, error: "The home site must be an allowed work site." };
+  }
+  return {
+    ok: true,
+    allowedSiteIds,
+    siteId: input.siteId && allowedSiteIds.includes(input.siteId)
+      ? input.siteId
+      : allowedSiteIds[0]!,
+  };
 }
 
 export function assignUserHomeSites(system: InventorySystem): boolean {
@@ -98,11 +136,25 @@ export function assignUserHomeSites(system: InventorySystem): boolean {
       changed = true;
     }
     const home = homeSiteForDivision(system.sites ?? [], division);
-    const valid = (system.sites ?? []).some(
-      (site) => site.id === user.siteId && divisionOf(site) === division,
-    );
-    if (!valid && home && user.siteId !== home.id) {
-      user.siteId = home.id;
+    const divisionSites = sitesInDivision(system.sites ?? [], division);
+    const known = new Set(divisionSites.map((site) => site.id));
+    if (user.allowedSiteIds != null) {
+      const allowed = user.allowedSiteIds.filter((id) => known.has(id));
+      const nextAllowed = allowed.length > 0 ? allowed : home ? [home.id] : [];
+      if (nextAllowed.join() !== user.allowedSiteIds.join()) {
+        user.allowedSiteIds = nextAllowed;
+        changed = true;
+      }
+    }
+    const allowedHome =
+      user.allowedSiteIds == null || user.allowedSiteIds.includes(user.siteId ?? "");
+    const valid =
+      Boolean(user.siteId) && known.has(user.siteId ?? "") && allowedHome;
+    const nextHome = valid
+      ? user.siteId
+      : (user.allowedSiteIds?.[0] ?? home?.id);
+    if (nextHome && user.siteId !== nextHome) {
+      user.siteId = nextHome;
       changed = true;
     }
   }

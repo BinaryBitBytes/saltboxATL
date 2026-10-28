@@ -10,7 +10,7 @@ import { ServiceError } from "@/backend/server/inventory-service";
 import { hasPermission } from "@/lib/auth/permissions";
 import { connectionIsSecure, SESSION_MAX_AGE } from "@/lib/auth/token";
 import { OrderSiteTransferInputSchema } from "@/lib/inventory-schema";
-import { canAccessMultiSite, SITE_COOKIE } from "@/lib/sites/access";
+import { SITE_COOKIE } from "@/lib/sites/access";
 import { orderSiteTransfer } from "@/lib/sites/transfer";
 import { ValidationError } from "@/lib/validation/errors";
 
@@ -25,10 +25,7 @@ function requestFromHeaders(headerStore: Headers): Request {
 }
 
 export async function setActiveSite(siteId: string): Promise<SiteActionResult> {
-  const user = await requireUser();
-  if (!canAccessMultiSite(user.role)) {
-    return { ok: false, error: "Only multi-site roles can change work sites." };
-  }
+  await requireUser();
   const viewer = await resolveViewerSite();
   if (!viewer.choices.some((choice) => choice.id === siteId)) {
     return { ok: false, error: "That work site is not available." };

@@ -38,7 +38,9 @@ describe("persisted schema matches app types", () => {
 
   it("keeps sites, users, locations, and site databases aligned with their type fields", () => {
     expect(requireColumns(tables, "sites", Object.values(SITE_COLUMNS))).to.deep.equal([]);
-    expect(requireColumns(tables, "users", Object.values(USER_SITE_COLUMN))).to.deep.equal([]);
+    expect(requireColumns(tables, "users", Object.values(USER_SITE_COLUMN))).to.deep.equal(
+      [],
+    );
     expect(
       requireColumns(tables, "locations", Object.values(LOCATION_SITE_COLUMN)),
     ).to.deep.equal([]);

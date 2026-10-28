@@ -11,6 +11,7 @@ import {
   canManageUser,
   divisionForRole,
 } from "@/lib/divisions";
+import { homeSiteForDivision, resolveAssignedSites } from "@/lib/sites/access";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   accountLoginLockKeys,
@@ -229,6 +230,21 @@ export async function createUserRecord(
     claimUsernameAndEmail(system.users, parsed.data);
 
     const now = nowIso();
+    const division = divisionForRole(parsed.data.role);
+    const home = homeSiteForDivision(system.sites ?? [], division);
+    let siteId = home?.id;
+    let allowedSiteIds: string[] | undefined;
+    if (home) {
+      const granted = resolveAssignedSites({
+        sites: system.sites ?? [],
+        division,
+        allowedSiteIds: parsed.data.allowedSiteIds ?? [home.id],
+        siteId: parsed.data.siteId ?? home.id,
+      });
+      if (!granted.ok) throw new ServiceError(granted.error);
+      siteId = granted.siteId;
+      allowedSiteIds = granted.allowedSiteIds;
+    }
     const user = {
       id: createId(),
       name: parsed.data.name,
@@ -236,7 +252,9 @@ export async function createUserRecord(
       email: parsed.data.email,
       passwordHash: await hashPassword(parsed.data.password),
       role: parsed.data.role,
-      division: divisionForRole(parsed.data.role),
+      division,
+      siteId,
+      allowedSiteIds,
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -291,6 +309,41 @@ export async function updateUserRecord(
       }
       user.role = parsed.data.role;
       user.division = divisionForRole(parsed.data.role);
+    }
+
+    if (parsed.data.allowedSiteIds) {
+      const granted = resolveAssignedSites({
+        sites: system.sites ?? [],
+        division: divisionForRole(user.role),
+        allowedSiteIds: parsed.data.allowedSiteIds,
+        siteId: parsed.data.siteId ?? user.siteId,
+      });
+      if (!granted.ok) throw new ServiceError(granted.error);
+      user.allowedSiteIds = granted.allowedSiteIds;
+      user.siteId = granted.siteId;
+    } else if (parsed.data.role) {
+      const division = divisionForRole(user.role);
+      const home = homeSiteForDivision(system.sites ?? [], division);
+      if (user.allowedSiteIds != null) {
+        const granted = resolveAssignedSites({
+          sites: system.sites ?? [],
+          division,
+          allowedSiteIds: user.allowedSiteIds,
+          siteId: user.siteId,
+        });
+        if (granted.ok) {
+          user.allowedSiteIds = granted.allowedSiteIds;
+          user.siteId = granted.siteId;
+        } else if (home) {
+          user.allowedSiteIds = [home.id];
+          user.siteId = home.id;
+        }
+      } else if (home && user.siteId !== home.id) {
+        const stillValid = (system.sites ?? []).some(
+          (site) => site.id === user.siteId && divisionForRole(user.role) === (site.division ?? "hyperscale"),
+        );
+        if (!stillValid) user.siteId = home.id;
+      }
     }
 
     if (parsed.data.password) {

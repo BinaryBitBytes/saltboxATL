@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS users (
   )),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   division TEXT NOT NULL DEFAULT 'hyperscale' REFERENCES divisions (id),
+  site_id UUID,
+  allowed_site_ids JSONB,
   CONSTRAINT users_division_check CHECK (division IN ('hyperscale', 'security')),
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,

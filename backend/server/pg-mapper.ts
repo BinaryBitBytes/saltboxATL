@@ -304,6 +304,19 @@ function storedCartons(value: unknown): InventoryItem["cartons"] {
   return cartons.length > 0 ? cartons : undefined;
 }
 
+function storedUuidList(value: unknown): string[] | undefined {
+  const parsed = storedJson(value);
+  if (!Array.isArray(parsed)) return undefined;
+  const ids = parsed.filter(
+    (entry): entry is string =>
+      typeof entry === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        entry,
+      ),
+  );
+  return ids;
+}
+
 function storedJson(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
@@ -380,6 +393,7 @@ export function mapUser(row: {
   created_by: string | null;
   division?: string | null;
   site_id?: string | null;
+  allowed_site_ids?: unknown;
 }): User {
   return {
     id: row.id,
@@ -390,6 +404,7 @@ export function mapUser(row: {
     role: row.role,
     division: storedDivision(row.division),
     siteId: row.site_id || undefined,
+    allowedSiteIds: storedUuidList(row.allowed_site_ids),
     isActive: row.is_active,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),

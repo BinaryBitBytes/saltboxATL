@@ -5,7 +5,6 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
 import { selectDivision, DIVISION_COOKIE } from "@/lib/divisions";
 import type { Division, UserRole } from "@/lib/inventory-schema";
 import {
-  canAccessMultiSite,
   homeSiteForDivision,
   selectSiteId,
   siteChoice,
@@ -40,7 +39,7 @@ function fallbackSite(): ViewerSite {
 
 /**
  * Active work site for this request.
- * A forged site cookie is ignored unless the signed-in role can open multiple sites.
+ * A forged site cookie is ignored unless that login was granted more than one work site.
  */
 export async function resolveViewerSite(): Promise<ViewerSite> {
   try {
@@ -55,6 +54,15 @@ export async function resolveViewerSite(): Promise<ViewerSite> {
       : undefined;
     const role = user?.role ?? session?.role ?? null;
     const home = homeSiteForDivision(catalog.sites ?? [], division);
+    const visible = role
+      ? viewableSites({
+          role,
+          sites: catalog.sites ?? [],
+          division,
+          homeSiteId: user?.siteId ?? home?.id ?? null,
+          allowedSiteIds: user?.allowedSiteIds,
+        })
+      : [];
     const siteId = role
       ? selectSiteId({
           role,
@@ -62,19 +70,14 @@ export async function resolveViewerSite(): Promise<ViewerSite> {
           homeSiteId: user?.siteId ?? home?.id ?? null,
           sites: catalog.sites ?? [],
           division,
+          allowedSiteIds: user?.allowedSiteIds,
         })
       : (home?.id ?? "");
     const site = (catalog.sites ?? []).find((entry) => entry.id === siteId) ?? home;
-    const canSwitch = role ? canAccessMultiSite(role) : false;
-    const choices =
-      role && canSwitch
-        ? viewableSites({
-            role,
-            sites: catalog.sites ?? [],
-            division,
-            homeSiteId: user?.siteId,
-          }).map((entry) => ({ id: entry.id, label: siteLabel(entry) }))
-        : [];
+    const canSwitch = visible.length > 1;
+    const choices = canSwitch
+      ? visible.map((entry) => ({ id: entry.id, label: siteLabel(entry) }))
+      : [];
     const chosen = site ? siteChoice(site) : null;
     return {
       role,

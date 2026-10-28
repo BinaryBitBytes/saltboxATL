@@ -18,6 +18,7 @@ export const MIGRATIONS = [
   { id: "013_receiving_backorder", file: "013_receiving_backorder.sql" },
   { id: "014_site_databases", file: "014_site_databases.sql" },
   { id: "015_site_transfer_columns", file: "015_site_transfer_columns.sql" },
+  { id: "016_user_site_access", file: "016_user_site_access.sql" },
 ] as const;
 
 let pool: Pool | undefined;
