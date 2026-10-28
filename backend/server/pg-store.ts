@@ -656,6 +656,30 @@ async function loadSeededSystem(client: PoolClient): Promise<InventorySystem> {
   return system;
 }
 
+export const ACCOUNT_USER_QUERY = "SELECT * FROM users ORDER BY email";
+export const ACCOUNT_SITE_QUERY = "SELECT * FROM sites ORDER BY codename";
+
+/**
+ * Account rows for sign-in and session restore.
+ * Does not read inventory, site_transfers, or site_databases. A missing
+ * transfer column or a bad site payload must not block the login page.
+ * An empty user table still runs the full seed so the first boot creates
+ * the demo accounts.
+ */
+export async function readAccountRecords(): Promise<InventorySystem> {
+  return withInventoryLock(async (client) => {
+    const users = await client.query(ACCOUNT_USER_QUERY);
+    if ((users.rowCount ?? 0) === 0) {
+      return loadSeededSystem(client);
+    }
+    const sites = await client.query(ACCOUNT_SITE_QUERY);
+    return InventorySystemSchema.parse({
+      users: users.rows.map(mapUser),
+      sites: sites.rows.map(mapSite),
+    });
+  });
+}
+
 export async function readFromPostgres(): Promise<InventorySystem> {
   return withInventoryLock((client) => loadSeededSystem(client));
 }

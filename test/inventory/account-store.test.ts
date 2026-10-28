@@ -3,6 +3,11 @@ import path from "node:path";
 import { describe, it } from "mocha";
 import { expect } from "chai";
 import { readAccountsFrom } from "@/backend/server/account-store";
+import {
+  ACCOUNT_SITE_QUERY,
+  ACCOUNT_USER_QUERY,
+} from "@/backend/server/pg-store";
+import { restoreSessionAccount } from "@/lib/auth/session-account";
 import type { InventorySystem, User } from "@/lib/inventory-schema";
 
 function accountSystem(user: Pick<User, "id" | "email" | "role" | "isActive">): InventorySystem {
@@ -77,6 +82,86 @@ describe("account reads follow the store that saves users", () => {
     expect(loaded.users.map((user) => user.email)).to.deep.equal(["json-only@saltbox.local"]);
   });
 
+  it("restores a signed-in account without throwing when the store fails", async () => {
+    const original = console.error;
+    const logged: unknown[] = [];
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      const missingColumn = await restoreSessionAccount("pg-user", async () => {
+        throw new Error('column "ordered_at" does not exist');
+      });
+      const badPayload = await restoreSessionAccount("pg-user", async () => {
+        throw new Error("Invalid site database payload");
+      });
+      const outage = await restoreSessionAccount("pg-user", async () => {
+        throw new Error("connect ECONNREFUSED");
+      });
+      expect(missingColumn).to.equal(null);
+      expect(badPayload).to.equal(null);
+      expect(outage).to.equal(null);
+      expect(logged).to.have.length(3);
+    } finally {
+      console.error = original;
+    }
+  });
+
+  it("returns the public account when the store can be read, and drops inactive users", async () => {
+    const id = "bbbb1111-1111-4111-8111-111111111111";
+    const active = await restoreSessionAccount(id, async () =>
+      accountSystem({
+        id,
+        email: "active@saltbox.local",
+        role: "project-manager",
+        isActive: true,
+      }),
+    );
+    expect(active?.email).to.equal("active@saltbox.local");
+    expect(active?.role).to.equal("project-manager");
+    expect(active && "passwordHash" in active).to.equal(false);
+
+    const inactive = await restoreSessionAccount(id, async () =>
+      accountSystem({
+        id,
+        email: "inactive@saltbox.local",
+        role: "user",
+        isActive: false,
+      }),
+    );
+    expect(inactive).to.equal(null);
+  });
+
+  it("loads Postgres accounts without site transfers or site database payloads", () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), "backend/server/pg-store.ts"),
+      "utf8",
+    );
+    const accountReader = source.slice(
+      source.indexOf("export async function readAccountRecords"),
+      source.indexOf("export async function readFromPostgres"),
+    );
+    expect(accountReader).to.include("ACCOUNT_USER_QUERY");
+    expect(accountReader).to.include("ACCOUNT_SITE_QUERY");
+    expect(accountReader).to.not.include("site_transfers");
+    expect(accountReader).to.not.include("site_databases");
+    expect(ACCOUNT_USER_QUERY).to.not.include("ordered_at");
+    expect(ACCOUNT_SITE_QUERY).to.not.include("payload");
+
+    const accounts = fs.readFileSync(
+      path.join(process.cwd(), "backend/server/account-store.ts"),
+      "utf8",
+    );
+    expect(accounts).to.include("readAccountRecords");
+    expect(accounts).to.not.include("readFromPostgres");
+
+    const session = fs.readFileSync(
+      path.join(process.cwd(), "backend/server/dal.ts"),
+      "utf8",
+    );
+    expect(session).to.include("restoreSessionAccount(payload.sub, readAccounts)");
+  });
+
   it("keeps login, session restore, and the user list off the JSON catalog", () => {
     const auth = fs.readFileSync(
       path.join(process.cwd(), "backend/server/auth-service.ts"),
@@ -89,6 +174,6 @@ describe("account reads follow the store that saves users", () => {
     expect(auth).to.not.include("readAccountCatalog");
     expect(session).to.not.include("readAccountCatalog");
     expect(auth.match(/readAccounts\(/g)?.length).to.equal(4);
-    expect(session).to.include("readAccounts()");
+    expect(session).to.include("restoreSessionAccount(payload.sub, readAccounts)");
   });
 });
