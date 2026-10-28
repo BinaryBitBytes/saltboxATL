@@ -42,6 +42,7 @@ import {
 import { applyDeliveryNotes, applyDeliveryScan, DeliveryCheckInError } from "@/lib/delivery/check-in";
 import {
   assignPurchaseOrderJobId,
+  findPurchaseOrder,
   jobIdForPurchaseOrder,
   saveBuyerPurchaseOrder,
   upsertPurchaseOrder,
