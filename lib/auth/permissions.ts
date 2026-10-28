@@ -23,6 +23,10 @@ export const PERMISSIONS = {
     "threepl",
     "coordinator",
     "project-manager",
+    "product-developer",
+    "logistics-coordinator",
+    "it-admin",
+    "superintendent",
     "driver",
     "manager",
   ]),
@@ -31,9 +35,21 @@ export const PERMISSIONS = {
     "associate",
     "threepl",
     "project-manager",
+    "product-developer",
+    "logistics-coordinator",
+    "it-admin",
+    "superintendent",
     "manager",
   ]),
-  viewTransactions: withSecurityRoles(["user", "associate", "threepl", "manager"]),
+  viewTransactions: withSecurityRoles([
+    "user",
+    "associate",
+    "threepl",
+    "logistics-coordinator",
+    "it-admin",
+    "superintendent",
+    "manager",
+  ]),
   placeOrder: withSecurityRoles(["user", "associate", "manager"]),
   fulfillOrder: withSecurityRoles(["associate", "threepl", "manager"]),
   receive: withSecurityRoles(["associate", "threepl", "manager"]),
@@ -44,12 +60,14 @@ export const PERMISSIONS = {
   scanLookup: withSecurityRoles(["user", "associate", "threepl", "manager"]),
   adjustInventory: withSecurityRoles(["manager"]),
   reopenReceiving: withSecurityRoles(["manager"]),
-  manageLocations: withSecurityRoles(["manager"]),
-  manageUsers: withSecurityRoles(["manager"]),
+  manageLocations: withSecurityRoles(["manager", "it-admin"]),
+  manageUsers: withSecurityRoles(["manager", "it-admin"]),
   uploadBuyerOrders: withSecurityRoles(["coordinator", "manager"]),
   viewInboundForecast: withSecurityRoles([
     "coordinator",
     "project-manager",
+    "logistics-coordinator",
+    "superintendent",
     "associate",
     "threepl",
     "manager",
@@ -62,6 +80,27 @@ export const PERMISSIONS = {
   ]),
   viewDriverLoad: withSecurityRoles(["driver", "manager"]),
   confirmDelivery: withSecurityRoles(["driver", "manager"]),
+  viewSiteNetwork: [
+    "product-developer",
+    "logistics-coordinator",
+    "it-admin",
+    "superintendent",
+    "project-manager",
+  ],
+  transferBetweenSites: [
+    "product-developer",
+    "logistics-coordinator",
+    "it-admin",
+    "superintendent",
+    "project-manager",
+  ],
+  optimizeLogistics: [
+    "product-developer",
+    "logistics-coordinator",
+    "it-admin",
+    "superintendent",
+    "project-manager",
+  ],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -146,6 +185,9 @@ export function canAccessPath(
   if (path === "/locations" || path.startsWith("/locations/")) {
     return hasPermission(role, "manageLocations");
   }
+  if (path === "/network" || path.startsWith("/network/")) {
+    return hasPermission(role, "viewSiteNetwork");
+  }
   if (path === "/users" || path.startsWith("/users/")) {
     return hasPermission(role, "manageUsers");
   }
@@ -224,6 +266,10 @@ const ROLE_LABELS: Record<UserRole, string> = {
   coordinator: "Coordinator",
   threepl: "3PL",
   "project-manager": "Project Manager",
+  "product-developer": "Product Developer",
+  "logistics-coordinator": "Logistics Coordinator",
+  "it-admin": "IT Admin",
+  superintendent: "Superintendent",
   driver: "Driver",
   "security-associate": "Security Associate",
   "security-manager": "Security Manager",

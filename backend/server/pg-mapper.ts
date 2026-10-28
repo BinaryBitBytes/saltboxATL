@@ -30,6 +30,7 @@ import {
   type Room,
   type ShippingOrder,
   type Site,
+  type SiteTransfer,
   type Trailer,
   type User,
   type Zone,
@@ -130,6 +131,7 @@ export function mapLocation(row: {
   storage_class?: string | null;
   cube_capacity_cubic_inches?: number | string | null;
   division?: string | null;
+  site_id?: string | null;
   bay_id?: string | null;
   slot_kind?: string | null;
   height?: string | null;
@@ -144,6 +146,7 @@ export function mapLocation(row: {
   return {
     id: row.id,
     division: storedDivision(row.division),
+    siteId: row.site_id || undefined,
     code: row.code,
     roomId: row.room_id,
     description: row.description ?? undefined,
@@ -168,6 +171,7 @@ export function mapSite(row: {
   state: string;
   city: string;
   name: string;
+  database_name?: string | null;
 }): Site {
   return {
     id: row.id,
@@ -176,6 +180,7 @@ export function mapSite(row: {
     state: row.state.trim().toUpperCase(),
     city: row.city,
     name: row.name,
+    databaseName: row.database_name || undefined,
   };
 }
 
@@ -374,6 +379,7 @@ export function mapUser(row: {
   updated_at: Date | string | null;
   created_by: string | null;
   division?: string | null;
+  site_id?: string | null;
 }): User {
   return {
     id: row.id,
@@ -383,10 +389,43 @@ export function mapUser(row: {
     passwordHash: row.password_hash,
     role: row.role,
     division: storedDivision(row.division),
+    siteId: row.site_id || undefined,
     isActive: row.is_active,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     createdBy: row.created_by ?? undefined,
+  };
+}
+
+export function mapSiteTransfer(row: {
+  id: string;
+  division?: string | null;
+  status: SiteTransfer["status"];
+  sku: string;
+  batch: string | null;
+  quantity: number | string;
+  source_site_id: string;
+  source_location_id: string;
+  destination_site_id: string;
+  destination_location_id: string;
+  ordered_by: string;
+  ordered_at: Date | string;
+  notes: string | null;
+}): SiteTransfer {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    status: row.status,
+    sku: row.sku,
+    batch: row.batch,
+    quantity: Number(row.quantity),
+    sourceSiteId: row.source_site_id,
+    sourceLocationId: row.source_location_id,
+    destinationSiteId: row.destination_site_id,
+    destinationLocationId: row.destination_location_id,
+    orderedBy: row.ordered_by,
+    orderedAt: isoRequired(row.ordered_at),
+    notes: row.notes ?? undefined,
   };
 }
 

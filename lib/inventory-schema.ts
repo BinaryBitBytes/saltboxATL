@@ -655,6 +655,7 @@ export const INVENTORY_TRANSACTION_TYPES = [
   "shortage",
   "damage",
   "import",
+  "site-transfer",
 ] as const;
 export type InventoryTransactionType = (typeof INVENTORY_TRANSACTION_TYPES)[number];
 
@@ -833,6 +834,11 @@ const OptionalZoneLabelSchema = z.preprocess(
     .refine((value) => value == null || allowsDomText(value), unsafeDomText),
 );
 
+/**
+ * Site is the parent of the warehouse tree:
+ * site → building → zone → aisle → bay → location.
+ * `databaseName` is that site's own inventory database.
+ */
 export const SiteSchema = z.object({
   id: UuidSchema,
   division: DivisionSchema.optional(),
@@ -844,6 +850,10 @@ export const SiteSchema = z.object({
     .regex(/^[A-Z]{2}$/, { error: "State must be a 2-letter code." }),
   city: NonEmptyStringSchema,
   name: NonEmptyStringSchema,
+  databaseName: z
+    .string()
+    .regex(/^saltbox_[a-z0-9_]+$/, { error: "Site database name is invalid." })
+    .optional(),
 });
 export type Site = z.infer<typeof SiteSchema>;
 
@@ -920,6 +930,7 @@ export type Container = z.infer<typeof ContainerSchema>;
 export const LocationSchema = z.object({
   id: UuidSchema,
   division: DivisionSchema.optional(),
+  siteId: UuidSchema.optional(),
   code: LocationCodeSchema,
   roomId: UuidSchema,
   description: z.string().optional(),
@@ -1077,6 +1088,10 @@ export const UserRoleSchema = z.enum([
   "coordinator",
   "threepl",
   "project-manager",
+  "product-developer",
+  "logistics-coordinator",
+  "it-admin",
+  "superintendent",
   "driver",
   "security-associate",
   "security-manager",
@@ -1092,6 +1107,7 @@ export const UserSchema = z.object({
   passwordHash: z.string().min(1).max(512).meta({ scope: "private" }),
   role: UserRoleSchema,
   division: DivisionSchema.optional(),
+  siteId: UuidSchema.optional(),
   isActive: z.boolean().default(true),
   createdAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
@@ -1395,6 +1411,36 @@ export const PurchaseDocumentSchema = z.object({
 });
 export type PurchaseDocument = z.infer<typeof PurchaseDocumentSchema>;
 
+export const SiteTransferStatusSchema = z.enum(["ordered", "completed", "cancelled"]);
+export type SiteTransferStatus = z.infer<typeof SiteTransferStatusSchema>;
+
+export const SiteTransferSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  status: SiteTransferStatusSchema,
+  sku: NonEmptyStringSchema,
+  batch: z.string().nullable().default(null),
+  quantity: z.number().int().positive(),
+  sourceSiteId: UuidSchema,
+  sourceLocationId: UuidSchema,
+  destinationSiteId: UuidSchema,
+  destinationLocationId: UuidSchema,
+  orderedBy: z.string().trim().min(1).max(LIMITS.name),
+  orderedAt: DateTimeSchema,
+  notes: OptionalNotesSchema,
+});
+export type SiteTransfer = z.infer<typeof SiteTransferSchema>;
+
+export const OrderSiteTransferInputSchema = z.object({
+  inventoryItemId: UuidSchema,
+  destinationLocationId: UuidSchema,
+  quantity: QuantitySchema,
+  notes: OptionalNotesSchema,
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
+});
+export type OrderSiteTransferInput = z.infer<typeof OrderSiteTransferInputSchema>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
   purchaseDocuments: z.array(PurchaseDocumentSchema).default([]),
@@ -1417,6 +1463,7 @@ export const InventorySystemSchema = z.object({
   photos: z.array(PhotoAttachmentSchema).default([]),
   users: z.array(UserSchema).default([]),
   itemCubes: z.array(ItemCubeSchema).default([]),
+  siteTransfers: z.array(SiteTransferSchema).optional(),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
 

@@ -107,6 +107,7 @@ const transactionVariant: Record<
   shortage: "destructive",
   damage: "destructive",
   import: "secondary",
+  "site-transfer": "default",
 };
 
 export function TransactionTypeBadge({ type }: { type: string }) {

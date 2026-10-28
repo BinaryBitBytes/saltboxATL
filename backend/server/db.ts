@@ -16,6 +16,7 @@ const MIGRATIONS = [
   { id: "011_license_plate_numbers", file: "011_license_plate_numbers.sql" },
   { id: "012_bin_cartons", file: "012_bin_cartons.sql" },
   { id: "013_receiving_backorder", file: "013_receiving_backorder.sql" },
+  { id: "014_site_databases", file: "014_site_databases.sql" },
 ] as const;
 
 let pool: Pool | undefined;

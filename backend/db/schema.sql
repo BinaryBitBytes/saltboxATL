@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS users (
     'coordinator',
     'threepl',
     'project-manager',
+    'product-developer',
+    'logistics-coordinator',
+    'it-admin',
+    'superintendent',
     'driver',
     'security-associate',
     'security-manager'

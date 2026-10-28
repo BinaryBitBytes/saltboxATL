@@ -1,13 +1,15 @@
 import type { PoolClient } from "pg";
 import { InventorySystemSchema, type InventorySystem } from "@/lib/inventory-schema";
-import {
-  createSeedSystem,
-  ensureDemoUsers,
-  ensureSystemDefaults,
-} from "@/backend/server/seed";
+import { ensureDemoUsers, ensureSystemDefaults } from "@/backend/server/seed";
 import { withInventoryLock } from "@/backend/server/db";
-import { readJsonFile } from "@/backend/server/json-store";
+import { readAssembledSystem } from "@/backend/server/site-files";
 import { asDivision, divisionForRole } from "@/lib/divisions";
+import {
+  applySiteDocuments,
+  parseSiteDatabase,
+  partitionSiteDatabases,
+  siteDatabaseName,
+} from "@/lib/sites/database";
 import { licensePlateRegistryRows } from "@/lib/license-plate/query";
 import {
   assembleSystem,
@@ -28,6 +30,7 @@ import {
   mapCustomerOrder,
   mapShippingOrder,
   mapSite,
+  mapSiteTransfer,
   mapTrailer,
   mapTransaction,
   mapUser,
@@ -71,7 +74,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
     "SELECT next_ordinal, active_users, reservations FROM license_plate_ledger WHERE id = 1",
   );
 
-  return InventorySystemSchema.parse(
+  const system = InventorySystemSchema.parse(
     assembleSystem({
       rooms: rooms.rows.map(mapRoom),
       locations: locations.rows.map(mapLocation),
@@ -96,12 +99,26 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
       containers: containers.rows.map(mapContainer),
     }),
   );
+  const transfers = await client.query(
+    "SELECT * FROM site_transfers ORDER BY ordered_at, id",
+  );
+  system.siteTransfers = transfers.rows.map(mapSiteTransfer);
+  const payloads = await client.query("SELECT payload FROM site_databases");
+  if ((payloads.rowCount ?? 0) > 0) {
+    const documents = payloads.rows.map((row) => parseSiteDatabase(row.payload));
+    const overlaid = applySiteDocuments(system, documents);
+    overlaid.siteTransfers = system.siteTransfers;
+    return overlaid;
+  }
+  return system;
 }
 
 export async function saveSystem(
   client: PoolClient,
   system: InventorySystem,
 ): Promise<void> {
+  await client.query("DELETE FROM site_transfers");
+  await client.query("DELETE FROM site_databases");
   await client.query("DELETE FROM inventory_transactions");
   await client.query("DELETE FROM photos");
   await client.query("DELETE FROM inventory_items");
@@ -133,8 +150,8 @@ export async function saveSystem(
   }
   for (const site of system.sites) {
     await client.query(
-      `INSERT INTO sites (id, division, codename, state, city, name)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO sites (id, division, codename, state, city, name, database_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         site.id,
         asDivision(site.division),
@@ -142,6 +159,7 @@ export async function saveSystem(
         site.state,
         site.city,
         site.name,
+        site.databaseName ?? siteDatabaseName(site),
       ],
     );
   }
@@ -214,8 +232,8 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO locations (
          id, code, room_id, description, is_active, storage_class, cube_capacity_cubic_inches,
-         division, bay_id, slot_kind, height, position, side
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+         division, bay_id, slot_kind, height, position, side, site_id
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         location.id,
         location.code,
@@ -230,6 +248,7 @@ export async function saveSystem(
         location.height ?? null,
         location.position ?? null,
         location.side ?? null,
+        location.siteId ?? null,
       ],
     );
   }
@@ -262,8 +281,8 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO users (
          id, name, username, email, password_hash, role, is_active,
-         created_at, updated_at, created_by, division
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+         created_at, updated_at, created_by, division, site_id
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         user.id,
         user.name,
@@ -278,6 +297,7 @@ export async function saveSystem(
         user.division === "security" || user.division === "hyperscale"
           ? user.division
           : divisionForRole(user.role),
+        user.siteId ?? null,
       ],
     );
   }
@@ -563,6 +583,41 @@ export async function saveSystem(
       [row.number, row.ownerKind, row.ownerId],
     );
   }
+  for (const document of partitionSiteDatabases(system)) {
+    await client.query(
+      `INSERT INTO site_databases (database_name, site_id, division, payload)
+       VALUES ($1, $2, $3, $4::jsonb)`,
+      [
+        document.databaseName,
+        document.siteId,
+        document.division,
+        JSON.stringify(document),
+      ],
+    );
+  }
+  for (const transfer of system.siteTransfers ?? []) {
+    await client.query(
+      `INSERT INTO site_transfers (
+         id, division, status, sku, batch, quantity, source_site_id, source_location_id,
+         destination_site_id, destination_location_id, ordered_by, ordered_at, notes
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        transfer.id,
+        asDivision(transfer.division),
+        transfer.status,
+        transfer.sku,
+        transfer.batch,
+        transfer.quantity,
+        transfer.sourceSiteId,
+        transfer.sourceLocationId,
+        transfer.destinationSiteId,
+        transfer.destinationLocationId,
+        transfer.orderedBy,
+        transfer.orderedAt,
+        transfer.notes ?? null,
+      ],
+    );
+  }
 }
 
 export async function updatePostgres<T>(
@@ -583,7 +638,7 @@ async function loadSeededSystem(client: PoolClient): Promise<InventorySystem> {
     system.users.length === 0 &&
     system.inventoryItems.length === 0;
   if (empty) {
-    system = (await readJsonFile()) ?? createSeedSystem();
+    system = await readAssembledSystem();
   }
   const defaultsChanged = ensureSystemDefaults(system);
   const seededUsers = await ensureDemoUsers(system);

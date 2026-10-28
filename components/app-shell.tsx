@@ -29,6 +29,7 @@ import { LanguageRadio, T, useT } from "@/frontend/client/language";
 import { ThemeToggle } from "@/frontend/client/theme-toggle";
 import { InstallAppButton } from "@/frontend/client/pwa-install";
 import { DivisionSwitcher } from "@/frontend/client/division-switcher";
+import { SiteControl } from "@/frontend/client/site-switcher";
 
 const NAV: Array<{
   href: string;
@@ -50,6 +51,7 @@ const NAV: Array<{
   { href: "/logbook", label: "Logbook", icon: BookOpen02Icon, permission: "viewTransactions" },
   { href: "/transactions", label: "Stock log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
   { href: "/locations", label: "Locations", icon: PinLocation01Icon, permission: "manageLocations" },
+  { href: "/network", label: "Sites", icon: PinLocation01Icon, permission: "viewSiteNetwork" },
   { href: "/users", label: "Users", icon: UserMultipleIcon, permission: "manageUsers" },
 ];
 
@@ -75,11 +77,19 @@ export function AppShell({
   user,
   division,
   canSwitchDivision,
+  siteId,
+  siteLabel,
+  canSwitchSite,
+  siteChoices,
 }: {
   children: ReactNode;
   user: PublicUser;
   division: Division;
   canSwitchDivision: boolean;
+  siteId: string;
+  siteLabel: string;
+  canSwitchSite: boolean;
+  siteChoices: Array<{ id: string; label: string }>;
 }) {
   const pathname = usePathname();
   const t = useT();
@@ -112,12 +122,18 @@ export function AppShell({
               <Button type="submit" variant="ghost" size="sm"><T>Sign out</T></Button>
             </form>
             <LanguageRadio />
+            <SiteControl
+              siteId={siteId}
+              label={siteLabel}
+              canSwitch={canSwitchSite}
+              choices={siteChoices}
+            />
           </div>
         </div>
         <div className="page-container pb-2 short:pb-1">
           <nav
             aria-label={t("Main")}
-            className="scroll-touch -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1"
+            className="scroll-touch relative z-0 -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1"
           >
             {items.map((item) => {
               const active =

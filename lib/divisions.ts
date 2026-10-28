@@ -67,6 +67,9 @@ export function assignableRoles(role: UserRole): readonly UserRole[] {
   if (role === "security-manager") {
     return USER_ROLES.filter((entry) => divisionForRole(entry) === "security");
   }
+  if (role === "it-admin") {
+    return USER_ROLES.filter((entry) => divisionForRole(entry) === divisionForRole(role));
+  }
   return [];
 }
 
@@ -111,6 +114,7 @@ export function scopeSystem(
   scoped.transactions = inDivision(scoped.transactions, division);
   scoped.photos = inDivision(scoped.photos, division);
   scoped.itemCubes = inDivision(scoped.itemCubes, division);
+  scoped.siteTransfers = inDivision(scoped.siteTransfers, division);
   return scoped;
 }
 
@@ -159,6 +163,7 @@ export function mergeDivision(
   full.transactions = replaceDivision(full.transactions, scoped.transactions, division);
   full.photos = replaceDivision(full.photos, scoped.photos, division);
   full.itemCubes = replaceDivision(full.itemCubes, scoped.itemCubes, division);
+  full.siteTransfers = replaceDivision(full.siteTransfers, scoped.siteTransfers, division);
   full.users = scoped.users.map((user) => ({
     ...user,
     division: divisionForRole(user.role),

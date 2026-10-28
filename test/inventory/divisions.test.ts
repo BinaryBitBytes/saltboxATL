@@ -88,8 +88,12 @@ describe("division inventory", () => {
     expect(security.locations.map((location) => location.code)).to.deep.equal([
       "SEC-A1",
       "SEC-HOLD",
+      "SIERRA-001-A01-01-A01",
     ]);
-    expect(security.rooms.map((room) => room.name)).to.deep.equal(["Security Cage"]);
+    expect(security.rooms.map((room) => room.name)).to.deep.equal([
+      "Security Cage",
+      "SIERRA-001",
+    ]);
     expect(security.users.map((user) => user.role).sort()).to.deep.equal([
       "manager",
       "security-associate",
