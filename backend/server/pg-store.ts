@@ -4,6 +4,7 @@ import { ensureDemoUsers, ensureSystemDefaults } from "@/backend/server/seed";
 import { withInventoryLock } from "@/backend/server/db";
 import { readAssembledSystem } from "@/backend/server/site-files";
 import { asDivision, divisionForRole } from "@/lib/divisions";
+import { SITE_TRANSFER_SQL_COLUMNS } from "@/lib/db/persisted-columns";
 import {
   applySiteDocuments,
   parseSiteDatabase,
@@ -100,7 +101,7 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
     }),
   );
   const transfers = await client.query(
-    "SELECT * FROM site_transfers ORDER BY ordered_at, id",
+    `SELECT ${SITE_TRANSFER_SQL_COLUMNS.join(", ")} FROM site_transfers ORDER BY ordered_at, id`,
   );
   system.siteTransfers = transfers.rows.map(mapSiteTransfer);
   const payloads = await client.query("SELECT payload FROM site_databases");

@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS site_transfers (
   CONSTRAINT site_transfers_status_check CHECK (status IN ('ordered', 'completed', 'cancelled'))
 );
 
+-- A site_transfers table created before this column existed is left unchanged
+-- by CREATE TABLE IF NOT EXISTS. Add the column the loader sorts on.
+ALTER TABLE site_transfers ADD COLUMN IF NOT EXISTS ordered_at TIMESTAMPTZ;
+UPDATE site_transfers SET ordered_at = now() WHERE ordered_at IS NULL;
+ALTER TABLE site_transfers ALTER COLUMN ordered_at SET NOT NULL;
+
 DO $$
 DECLARE
   constraint_name text;

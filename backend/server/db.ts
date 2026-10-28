@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Pool, type PoolClient } from "pg";
 
-const MIGRATIONS = [
+export const MIGRATIONS = [
   { id: "001_init", file: "schema.sql" },
   { id: "002_inventory_attributes", file: "002_inventory_attributes.sql" },
   { id: "003_job_id_number", file: "003_job_id_number.sql" },
@@ -17,6 +17,7 @@ const MIGRATIONS = [
   { id: "012_bin_cartons", file: "012_bin_cartons.sql" },
   { id: "013_receiving_backorder", file: "013_receiving_backorder.sql" },
   { id: "014_site_databases", file: "014_site_databases.sql" },
+  { id: "015_site_transfer_columns", file: "015_site_transfer_columns.sql" },
 ] as const;
 
 let pool: Pool | undefined;
