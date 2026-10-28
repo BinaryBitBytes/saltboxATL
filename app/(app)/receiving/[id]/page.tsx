@@ -19,7 +19,7 @@ import { hasPostedPutaway, remainingExpectedPallets } from "@/lib/receiving/reop
 import { inboundReceivingHasStarted } from "@/lib/inbound/entry";
 import {
   canConfirmInboundCancel,
-  type ExpectedArrivalLine,
+  expectedLinesFromPurchaseOrder,
 } from "@/lib/inbound/receiving-transactions";
 import { buildCubingLocations } from "@/lib/cubing/capacity";
 import {
@@ -65,11 +65,7 @@ export default async function ReceivingOrderPage({
         ? "confirm"
         : "hidden"
       : "allow";
-  const expectedLines: ExpectedArrivalLine[] = (purchaseOrder?.lines ?? []).map((line) => ({
-    sku: line.sku,
-    description: line.description,
-    quantity: line.quantity,
-  }));
+  const expectedLines = expectedLinesFromPurchaseOrder(purchaseOrder);
 
   return (
     <div className="grid gap-6">

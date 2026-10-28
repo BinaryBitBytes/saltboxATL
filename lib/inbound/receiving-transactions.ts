@@ -6,6 +6,7 @@ import {
   type PurchaseOrder,
   type ReceivingOrder,
 } from "@/lib/inventory-schema";
+import { receivableInvoiceLines } from "@/lib/documents/inbound-load";
 import { inboundReceivingHasStarted } from "@/lib/inbound/entry";
 import { isCoordinatorPurchaseOrder } from "@/lib/purchase-orders";
 import { hasPostedPutaway } from "@/lib/receiving/reopen";
@@ -84,10 +85,33 @@ function lineKey(sku: string, description: string): string {
   return trimmedSku || description.trim();
 }
 
+/**
+ * Purchase-order text is not what lands on the expected pallet. Staged cases
+ * come from receivableInvoiceLines, which drops rows that cannot be received
+ * and replaces a blank or invalid SKU with a description slug.
+ */
+export function receivableExpectedLines(
+  lines: readonly ExpectedArrivalLine[],
+): ExpectedArrivalLine[] {
+  return receivableInvoiceLines(
+    lines.map((line) => ({
+      sku: line.sku,
+      upc: "",
+      description: line.description,
+      quantity: line.quantity,
+    })),
+  ).map((line) => ({
+    sku: line.sku,
+    description: line.description,
+    quantity: line.quantity,
+  }));
+}
+
 export function backorderLinesForShipment(
   order: Pick<ReceivingOrder, "pallets">,
   expectedLines: readonly ExpectedArrivalLine[],
 ): BackorderLine[] {
+  const stagedLines = receivableExpectedLines(expectedLines);
   if (expectedLines.length > 0) {
     const receivedByKey = new Map<string, number>();
     for (const pallet of order.pallets) {
@@ -98,7 +122,7 @@ export function backorderLinesForShipment(
       }
     }
     const expectedByKey = new Map<string, ExpectedArrivalLine>();
-    for (const line of expectedLines) {
+    for (const line of stagedLines) {
       const key = lineKey(line.sku, line.description);
       if (!key || line.quantity < 1) continue;
       const current = expectedByKey.get(key);
@@ -156,11 +180,13 @@ export function palletHasUnarrivedInventory(
 export function expectedLinesFromPurchaseOrder(
   purchaseOrder: PurchaseOrder | null | undefined,
 ): ExpectedArrivalLine[] {
-  return (purchaseOrder?.lines ?? []).map((line) => ({
-    sku: line.sku,
-    description: line.description,
-    quantity: line.quantity,
-  }));
+  return receivableExpectedLines(
+    (purchaseOrder?.lines ?? []).map((line) => ({
+      sku: line.sku,
+      description: line.description,
+      quantity: line.quantity,
+    })),
+  );
 }
 
 function clearParsedCases(order: ReceivingOrder): void {

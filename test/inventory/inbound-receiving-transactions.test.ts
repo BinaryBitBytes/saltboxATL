@@ -9,7 +9,7 @@ import {
   type PurchaseOrder,
   type ReceivingOrder,
 } from "@/lib/inventory-schema";
-import { buildExpectedInboundLoad } from "@/lib/documents/inbound-load";
+import { buildExpectedInboundLoad, receivableInvoiceLines } from "@/lib/documents/inbound-load";
 import { applyRecognizedPurchase } from "@/lib/documents/apply";
 import { refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
 import { saveBuyerPurchaseOrder, upsertPurchaseOrder } from "@/lib/purchase-orders";
@@ -563,6 +563,97 @@ describe("inbound receiving cancel, partial pallet, and backorder", () => {
       },
     ]);
     expect(load.workingPalletId).to.equal(null);
+  });
+
+  it("does not call a fully staged pallet short when the purchase order sku was rewritten", () => {
+    const rawLines = [
+      {
+        id: LINE_ID,
+        sku: "Bad SKU!",
+        upc: "",
+        description: "Catalyst switch",
+        quantity: 4,
+      },
+      {
+        id: LINE_TWO,
+        sku: "",
+        upc: "",
+        description: "Packing peanuts",
+        quantity: 2,
+      },
+    ];
+    const orders: PurchaseOrder[] = [];
+    saveBuyerPurchaseOrder(orders, {
+      id: PO_ID,
+      purchaseOrderNumber: "PO-100",
+      generatedAt: NOW,
+      projectId: "PRJ-9",
+      jobIdNumber: "JOB-42",
+      vendor: "Corning",
+      carrier: "Estes",
+      expectedArrivalAt: NOW,
+      expectationStatus: "expected",
+      expectedPalletCount: 1,
+      lines: rawLines,
+      uploadedBy: "Morgan Coordinator",
+    });
+    const purchaseOrder = orders[0];
+    if (!purchaseOrder) throw new Error("buyer PO missing");
+    const receivable = receivableInvoiceLines(rawLines);
+    expect(receivable.map((line) => line.sku)).to.deep.equal([
+      "CATALYST-SWITCH",
+      "PACKING-PEANUTS",
+    ]);
+    const load = buildExpectedInboundLoad({
+      id: LOAD_ID,
+      palletId: PALLET_ID,
+      caseIds: [CASE_ID, CASE_TWO],
+      now: NOW,
+      purchaseOrderNumber: "PO-100",
+      vendor: "Corning",
+      carrier: "Estes",
+      palletCount: 1,
+      receiverName: "Jordan Associate",
+      lines: receivable,
+      existingOrderNumbers: [],
+    });
+    expect(backorderLinesForShipment(load, purchaseOrder.lines ?? [])).to.deep.equal([]);
+    const completed = finishReceivingShipment(load, purchaseOrder, {
+      acknowledgeBackorder: false,
+      now: NOW,
+    });
+    expect(completed.ok).to.equal(true);
+    expect(load.status).to.equal("received");
+    expect(load.backorderLines).to.deep.equal([]);
+
+    const short = buildExpectedInboundLoad({
+      id: LOAD_ID,
+      palletId: PALLET_ID,
+      caseIds: [CASE_ID, CASE_TWO],
+      now: NOW,
+      purchaseOrderNumber: "PO-100",
+      vendor: "Corning",
+      carrier: "Estes",
+      palletCount: 1,
+      receiverName: "Jordan Associate",
+      lines: receivable,
+      existingOrderNumbers: [],
+    });
+    short.pallets[0]!.cases[0]!.quantityInCase = 1;
+    expect(backorderLinesForShipment(short, purchaseOrder.lines ?? [])).to.deep.equal([
+      {
+        sku: "CATALYST-SWITCH",
+        description: "Catalyst switch",
+        expectedQuantity: 4,
+        receivedQuantity: 1,
+      },
+    ]);
+    expect(
+      finishReceivingShipment(short, purchaseOrder, {
+        acknowledgeBackorder: false,
+        now: NOW,
+      }),
+    ).to.deep.equal({ ok: false, error: BACKORDER_CONFIRM });
   });
 
   it("completes a full shipment without a backorder acknowledgement", () => {
