@@ -46,13 +46,17 @@ export async function resolveViewerSite(): Promise<ViewerSite> {
     const cookieStore = await cookies();
     const session = verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
     const catalog = await readAccounts();
-    const division = session
-      ? selectDivision(session.role, cookieStore.get(DIVISION_COOKIE)?.value)
-      : "hyperscale";
     const user = session
       ? catalog.users.find((entry) => entry.id === session.sub)
       : undefined;
     const role = user?.role ?? session?.role ?? null;
+    const division = role
+      ? selectDivision(
+          role,
+          cookieStore.get(DIVISION_COOKIE)?.value,
+          user?.allowedDivisions,
+        )
+      : "hyperscale";
     const home = homeSiteForDivision(catalog.sites ?? [], division);
     const visible = role
       ? viewableSites({

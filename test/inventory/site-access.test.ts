@@ -150,6 +150,18 @@ describe("assigned site access", () => {
     ).to.equal(false);
   });
 
+  it("opens the other division's home site when no site there was named", () => {
+    expect(
+      viewableSites({
+        role: "associate",
+        sites: seed.sites,
+        division: "security",
+        homeSiteId: alpha!.id,
+        allowedSiteIds: [alpha!.id, beta!.id],
+      }).map((site) => site.codename),
+    ).to.deep.equal(["SIERRA"]);
+  });
+
   it("keeps the role default when site access has not been assigned", () => {
     expect(
       viewableSites({

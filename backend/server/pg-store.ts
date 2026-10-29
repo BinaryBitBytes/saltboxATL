@@ -282,8 +282,9 @@ export async function saveSystem(
     await client.query(
       `INSERT INTO users (
          id, name, username, email, password_hash, role, is_active,
-         created_at, updated_at, created_by, division, site_id, allowed_site_ids
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
+         created_at, updated_at, created_by, division, site_id, allowed_site_ids,
+         allowed_divisions
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb)`,
       [
         user.id,
         user.name,
@@ -300,6 +301,7 @@ export async function saveSystem(
           : divisionForRole(user.role),
         user.siteId ?? null,
         user.allowedSiteIds == null ? null : JSON.stringify(user.allowedSiteIds),
+        user.allowedDivisions == null ? null : JSON.stringify(user.allowedDivisions),
       ],
     );
   }

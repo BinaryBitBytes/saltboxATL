@@ -7,7 +7,7 @@ import {
   connectionIsSecure,
   SESSION_MAX_AGE,
 } from "@/lib/auth/token";
-import { canSwitchDivision, DIVISION_COOKIE } from "@/lib/divisions";
+import { DIVISION_COOKIE, viewableDivisions } from "@/lib/divisions";
 import type { Division } from "@/lib/inventory-schema";
 
 export type DivisionActionResult =
@@ -24,11 +24,11 @@ export async function setActiveDivision(
   division: Division,
 ): Promise<DivisionActionResult> {
   const user = await requireUser();
-  if (!canSwitchDivision(user.role)) {
-    return { ok: false, error: "Only the admin can change divisions." };
-  }
   if (division !== "hyperscale" && division !== "security") {
     return { ok: false, error: "Unknown division." };
+  }
+  if (!viewableDivisions(user).includes(division)) {
+    return { ok: false, error: "That division is not available." };
   }
 
   const headerStore = await headers();

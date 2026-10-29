@@ -304,6 +304,17 @@ function storedCartons(value: unknown): InventoryItem["cartons"] {
   return cartons.length > 0 ? cartons : undefined;
 }
 
+function storedDivisionList(
+  value: unknown,
+): Array<"hyperscale" | "security"> | undefined {
+  const parsed = storedJson(value);
+  if (!Array.isArray(parsed)) return undefined;
+  return parsed.filter(
+    (entry): entry is "hyperscale" | "security" =>
+      entry === "hyperscale" || entry === "security",
+  );
+}
+
 function storedUuidList(value: unknown): string[] | undefined {
   const parsed = storedJson(value);
   if (!Array.isArray(parsed)) return undefined;
@@ -394,6 +405,7 @@ export function mapUser(row: {
   division?: string | null;
   site_id?: string | null;
   allowed_site_ids?: unknown;
+  allowed_divisions?: unknown;
 }): User {
   return {
     id: row.id,
@@ -405,6 +417,7 @@ export function mapUser(row: {
     division: storedDivision(row.division),
     siteId: row.site_id || undefined,
     allowedSiteIds: storedUuidList(row.allowed_site_ids),
+    allowedDivisions: storedDivisionList(row.allowed_divisions),
     isActive: row.is_active,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),

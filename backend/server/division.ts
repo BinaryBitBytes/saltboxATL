@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
+import { readAccounts } from "@/backend/server/account-store";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
 import {
   DIVISION_COOKIE,
@@ -15,18 +16,31 @@ export type ViewerDivision = {
 /**
  * Active inventory division for this request.
  * Outside a request (tests and scripts) this stays on Hyperscale.
- * A forged division cookie is ignored unless the signed-in role is the admin manager.
+ * A division cookie is honored when that login may open more than one division.
  */
 export async function resolveViewerDivision(): Promise<ViewerDivision> {
   try {
     const cookieStore = await cookies();
     const session = verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
     if (!session) return { role: null, division: "hyperscale" };
+    let role = session.role;
+    let allowedDivisions: Division[] | undefined;
+    try {
+      const accounts = await readAccounts();
+      const user = accounts.users.find((entry) => entry.id === session.sub);
+      if (user) {
+        role = user.role;
+        allowedDivisions = user.allowedDivisions;
+      }
+    } catch (error) {
+      console.error("Could not read division access.", error);
+    }
     return {
-      role: session.role,
+      role,
       division: selectDivision(
-        session.role,
+        role,
         cookieStore.get(DIVISION_COOKIE)?.value,
+        allowedDivisions,
       ),
     };
   } catch (error) {

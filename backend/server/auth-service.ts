@@ -7,10 +7,12 @@ import { parseWithSchema } from "@/backend/server/safeParsing";
 import { readAccounts } from "@/backend/server/account-store";
 import { updateSystem } from "@/backend/server/store";
 import {
+  canAssignDivisions,
   canAssignRole,
   canManageUser,
   divisionForRole,
   divisionOf,
+  resolveAssignedDivisions,
 } from "@/lib/divisions";
 import {
   homeSiteForDivision,
@@ -40,6 +42,7 @@ import {
   RegisterInputSchema,
   ResetPasswordInputSchema,
   UpdateUserInputSchema,
+  type Division,
   type PublicUser,
   type Site,
   type UserRole,
@@ -258,6 +261,18 @@ export async function createUserRecord(
       siteId = granted.siteId;
       allowedSiteIds = granted.allowedSiteIds;
     }
+    let allowedDivisions: Division[] | undefined;
+    if (parsed.data.allowedDivisions) {
+      if (!canAssignDivisions(actor.role)) {
+        throw new ServiceError("You cannot assign divisions.", 403);
+      }
+      const divisions = resolveAssignedDivisions({
+        role: parsed.data.role,
+        allowedDivisions: parsed.data.allowedDivisions,
+      });
+      if (!divisions.ok) throw new ServiceError(divisions.error);
+      allowedDivisions = divisions.allowedDivisions;
+    }
     const user = {
       id: createId(),
       name: parsed.data.name,
@@ -268,6 +283,7 @@ export async function createUserRecord(
       division,
       siteId,
       allowedSiteIds,
+      allowedDivisions,
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -326,6 +342,29 @@ export async function updateUserRecord(
       }
       user.role = parsed.data.role;
       user.division = divisionForRole(parsed.data.role);
+    }
+
+    if (parsed.data.allowedDivisions) {
+      if (!canAssignDivisions(actor.role)) {
+        throw new ServiceError("You cannot assign divisions.", 403);
+      }
+      if (user.id === actor.id) {
+        throw new ServiceError("You cannot change your own division access.");
+      }
+      const divisions = resolveAssignedDivisions({
+        role: user.role,
+        allowedDivisions: parsed.data.allowedDivisions,
+      });
+      if (!divisions.ok) throw new ServiceError(divisions.error);
+      user.allowedDivisions = divisions.allowedDivisions;
+    } else if (parsed.data.role && user.allowedDivisions != null) {
+      const divisions = resolveAssignedDivisions({
+        role: user.role,
+        allowedDivisions: user.allowedDivisions,
+      });
+      user.allowedDivisions = divisions.ok
+        ? divisions.allowedDivisions
+        : [divisionForRole(user.role)];
     }
 
     if (parsed.data.allowedSiteIds) {

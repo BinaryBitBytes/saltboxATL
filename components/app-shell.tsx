@@ -58,12 +58,16 @@ const NAV: Array<{
 function DivisionControl({
   division,
   canSwitchDivision,
+  divisionChoices,
 }: {
   division: Division;
   canSwitchDivision: boolean;
+  divisionChoices: readonly Division[];
 }) {
   if (canSwitchDivision) {
-    return <DivisionSwitcher division={division} />;
+    return (
+      <DivisionSwitcher key={division} division={division} choices={divisionChoices} />
+    );
   }
   return (
     <Badge variant="outline">
@@ -77,6 +81,7 @@ export function AppShell({
   user,
   division,
   canSwitchDivision,
+  divisionChoices,
   siteId,
   siteLabel,
   canSwitchSite,
@@ -86,6 +91,7 @@ export function AppShell({
   user: PublicUser;
   division: Division;
   canSwitchDivision: boolean;
+  divisionChoices: readonly Division[];
   siteId: string;
   siteLabel: string;
   canSwitchSite: boolean;
@@ -117,7 +123,11 @@ export function AppShell({
             <Badge variant="outline" className="hidden sm:inline-flex">
               <T>{roleLabel(user.role)}</T>
             </Badge>
-            <DivisionControl division={division} canSwitchDivision={canSwitchDivision} />
+            <DivisionControl
+              division={division}
+              canSwitchDivision={canSwitchDivision}
+              divisionChoices={divisionChoices}
+            />
             <form action="/api/auth/logout" method="post">
               <Button type="submit" variant="ghost" size="sm"><T>Sign out</T></Button>
             </form>

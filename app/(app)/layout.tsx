@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { requireUser } from "@/backend/server/dal";
 import { resolveActiveDivision } from "@/backend/server/division";
 import { resolveViewerSite } from "@/backend/server/site-context";
-import { canSwitchDivision } from "@/lib/divisions";
+import { canOpenDivisions, viewableDivisions } from "@/lib/divisions";
 import { hydrateForDom } from "@/lib/validation/dom-hydration";
 
 export default async function AuthenticatedLayout({
@@ -18,7 +18,8 @@ export default async function AuthenticatedLayout({
     <AppShell
       user={hydrateForDom(user)}
       division={division}
-      canSwitchDivision={canSwitchDivision(user.role)}
+      canSwitchDivision={canOpenDivisions(user)}
+      divisionChoices={viewableDivisions(user)}
       siteId={site.siteId}
       siteLabel={site.label}
       canSwitchSite={site.canSwitch}

@@ -19,6 +19,7 @@ export const MIGRATIONS = [
   { id: "014_site_databases", file: "014_site_databases.sql" },
   { id: "015_site_transfer_columns", file: "015_site_transfer_columns.sql" },
   { id: "016_user_site_access", file: "016_user_site_access.sql" },
+  { id: "017_user_division_access", file: "017_user_division_access.sql" },
 ] as const;
 
 let pool: Pool | undefined;

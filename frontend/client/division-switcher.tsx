@@ -1,20 +1,22 @@
 "use client";
 
 import { T } from "@/frontend/client/language";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { setActiveDivision } from "@/backend/server/division-actions";
 import { NativeSelect } from "@/frontend/client/field";
-import { DIVISION_CATALOG, divisionLabel } from "@/lib/divisions";
+import { divisionLabel } from "@/lib/divisions";
 import type { Division } from "@/lib/inventory-schema";
 
-export function DivisionSwitcher({ division }: { division: Division }) {
+export function DivisionSwitcher({
+  division,
+  choices,
+}: {
+  division: Division;
+  choices: readonly Division[];
+}) {
   const [value, setValue] = useState(division);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setValue(division);
-  }, [division]);
 
   return (
     <div className="grid gap-0.5">
@@ -38,9 +40,9 @@ export function DivisionSwitcher({ division }: { division: Division }) {
           });
         }}
       >
-        {DIVISION_CATALOG.map((entry) => (
-          <option key={entry.id} value={entry.id}>
-            <T>{divisionLabel(entry.id)}</T>
+        {(choices.length > 0 ? choices : [division]).map((id) => (
+          <option key={id} value={id}>
+            <T>{divisionLabel(id)}</T>
           </option>
         ))}
       </NativeSelect>

@@ -33,7 +33,11 @@ export const SITE_COLUMNS = {
 export const USER_SITE_COLUMN = {
   siteId: "site_id",
   allowedSiteIds: "allowed_site_ids",
-} as const satisfies Record<Extract<keyof User, "siteId" | "allowedSiteIds">, string>;
+  allowedDivisions: "allowed_divisions",
+} as const satisfies Record<
+  Extract<keyof User, "siteId" | "allowedSiteIds" | "allowedDivisions">,
+  string
+>;
 
 export const LOCATION_SITE_COLUMN = {
   siteId: "site_id",

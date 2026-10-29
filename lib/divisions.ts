@@ -46,20 +46,87 @@ export function divisionForRole(role: UserRole): Division {
 
 /**
  * The existing manager is the admin who can open both inventories.
- * Every other role, including the Security manager, stays in one division.
+ * Every other role, including the Security manager, stays in one division
+ * until a manager or IT admin grants more.
  */
 export function canSwitchDivision(role: UserRole): boolean {
   return role === "manager";
 }
 
-export function selectDivision(role: UserRole, requested: unknown): Division {
+/** Managers and IT admins choose which divisions a login may open. */
+export function canAssignDivisions(role: UserRole): boolean {
+  return role === "manager" || role === "it-admin";
+}
+
+/**
+ * Divisions this login may open.
+ * An omitted list keeps the previous default: the manager opens both,
+ * and every other role stays in the division for its role.
+ */
+export function viewableDivisions(input: {
+  role: UserRole;
+  allowedDivisions?: readonly Division[] | null;
+}): Division[] {
+  const catalog = DIVISION_CATALOG.map((entry) => entry.id);
+  const home = divisionForRole(input.role);
+  if (input.allowedDivisions != null) {
+    const allowed = new Set(input.allowedDivisions);
+    const list = catalog.filter((id) => allowed.has(id));
+    if (!list.includes(home)) list.unshift(home);
+    return list;
+  }
+  if (canSwitchDivision(input.role)) return [...catalog];
+  return [home];
+}
+
+export function canOpenDivisions(input: {
+  role: UserRole;
+  allowedDivisions?: readonly Division[] | null;
+}): boolean {
+  return viewableDivisions(input).length > 1;
+}
+
+/**
+ * Managers and IT admins grant an explicit division list.
+ * The role's home division stays allowed.
+ */
+export function resolveAssignedDivisions(input: {
+  role: UserRole;
+  allowedDivisions: readonly Division[];
+}): { ok: true; allowedDivisions: Division[] } | { ok: false; error: string } {
+  const known = new Set(DIVISION_CATALOG.map((entry) => entry.id));
+  if (input.allowedDivisions.some((id) => !known.has(id))) {
+    return { ok: false, error: "That division is not available." };
+  }
+  const allowedDivisions = [
+    ...new Set(input.allowedDivisions.filter((id) => known.has(id))),
+  ];
+  if (allowedDivisions.length === 0) {
+    return { ok: false, error: "Allow at least one division." };
+  }
+  const home = divisionForRole(input.role);
+  if (!allowedDivisions.includes(home)) {
+    return { ok: false, error: "The home division must stay allowed." };
+  }
+  return { ok: true, allowedDivisions };
+}
+
+export function selectDivision(
+  role: UserRole,
+  requested: unknown,
+  allowedDivisions?: readonly Division[] | null,
+): Division {
+  const visible = viewableDivisions({ role, allowedDivisions });
   if (
-    canSwitchDivision(role) &&
-    (requested === "hyperscale" || requested === "security")
+    visible.length > 1 &&
+    (requested === "hyperscale" || requested === "security") &&
+    visible.includes(requested)
   ) {
     return requested;
   }
-  return divisionForRole(role);
+  const home = divisionForRole(role);
+  if (visible.includes(home)) return home;
+  return visible[0] ?? home;
 }
 
 export function assignableRoles(role: UserRole): readonly UserRole[] {

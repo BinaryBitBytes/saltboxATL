@@ -42,7 +42,8 @@ export function viewableSites(input: {
   const list = sitesInDivision(input.sites, input.division);
   if (input.allowedSiteIds != null) {
     const allowed = new Set(input.allowedSiteIds);
-    return list.filter((site) => allowed.has(site.id));
+    const granted = list.filter((site) => allowed.has(site.id));
+    if (granted.length > 0) return granted;
   }
   if (canAccessMultiSite(input.role)) return list;
   const home = list.find((site) => site.id === input.homeSiteId);
