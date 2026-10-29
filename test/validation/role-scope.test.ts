@@ -52,7 +52,6 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "fulfillOrder",
     "receive",
     "putaway",
-    "cube",
     "ship",
     "scanLookup",
     "viewInboundForecast",
@@ -309,6 +308,7 @@ describe("role permission scope", () => {
       "viewDriverLoad",
       "confirmDelivery",
     ]);
+    expect(SCOPE.threepl).to.not.include("cube");
     expect(SCOPE.threepl).to.not.include("placeOrder");
     expect(SCOPE.threepl).to.not.include("adjustInventory");
     expect(SCOPE.threepl).to.not.include("uploadBuyerOrders");
