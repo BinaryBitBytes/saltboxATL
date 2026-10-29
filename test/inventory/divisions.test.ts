@@ -3,14 +3,18 @@ import { expect } from "chai";
 import { createSeedSystem, ensureDemoUsers } from "@/backend/server/seed";
 import {
   assignableRoles,
+  canAssignDivisions,
   canAssignRole,
   canManageUser,
+  canOpenDivisions,
   canSwitchDivision,
   divisionForRole,
   divisionLabel,
   mergeDivision,
+  resolveAssignedDivisions,
   scopeSystem,
   selectDivision,
+  viewableDivisions,
 } from "@/lib/divisions";
 import type { InventorySystem } from "@/lib/inventory-schema";
 import { makeUser } from "../helpers";
@@ -39,6 +43,65 @@ describe("division inventory", () => {
     expect(selectDivision("security-associate", "hyperscale")).to.equal("security");
     expect(selectDivision("associate", "security")).to.equal("hyperscale");
     expect(selectDivision("security-manager", "hyperscale")).to.equal("security");
+  });
+
+  it("lets managers and IT admins grant another division", () => {
+    expect(canAssignDivisions("manager")).to.equal(true);
+    expect(canAssignDivisions("it-admin")).to.equal(true);
+    expect(canAssignDivisions("security-manager")).to.equal(false);
+    expect(canAssignDivisions("associate")).to.equal(false);
+
+    const granted = resolveAssignedDivisions({
+      role: "associate",
+      allowedDivisions: ["hyperscale", "security"],
+    });
+    expect(granted).to.deep.equal({
+      ok: true,
+      allowedDivisions: ["hyperscale", "security"],
+    });
+    expect(
+      selectDivision("associate", "security", ["hyperscale", "security"]),
+    ).to.equal("security");
+    expect(
+      canOpenDivisions({
+        role: "associate",
+        allowedDivisions: ["hyperscale", "security"],
+      }),
+    ).to.equal(true);
+    expect(selectDivision("associate", "security")).to.equal("hyperscale");
+    expect(
+      selectDivision("it-admin", "security", ["hyperscale", "security"]),
+    ).to.equal("security");
+    expect(viewableDivisions({ role: "manager" })).to.deep.equal([
+      "hyperscale",
+      "security",
+    ]);
+    expect(viewableDivisions({ role: "associate" })).to.deep.equal(["hyperscale"]);
+    expect(
+      viewableDivisions({
+        role: "security-associate",
+        allowedDivisions: ["security", "hyperscale"],
+      }),
+    ).to.deep.equal(["hyperscale", "security"]);
+
+    expect(
+      resolveAssignedDivisions({
+        role: "associate",
+        allowedDivisions: ["security"],
+      }),
+    ).to.deep.equal({
+      ok: false,
+      error: "The home division must stay allowed.",
+    });
+    expect(
+      resolveAssignedDivisions({
+        role: "associate",
+        allowedDivisions: [],
+      }),
+    ).to.deep.equal({
+      ok: false,
+      error: "Allow at least one division.",
+    });
   });
 
   it("limits who can assign roles across divisions", () => {
@@ -88,8 +151,12 @@ describe("division inventory", () => {
     expect(security.locations.map((location) => location.code)).to.deep.equal([
       "SEC-A1",
       "SEC-HOLD",
+      "SIERRA-001-A01-01-A01",
     ]);
-    expect(security.rooms.map((room) => room.name)).to.deep.equal(["Security Cage"]);
+    expect(security.rooms.map((room) => room.name)).to.deep.equal([
+      "Security Cage",
+      "SIERRA-001",
+    ]);
     expect(security.users.map((user) => user.role).sort()).to.deep.equal([
       "manager",
       "security-associate",

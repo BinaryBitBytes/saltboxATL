@@ -4,12 +4,21 @@ import { createId, nowIso } from "@/backend/server/helperUtils";
 import { toPublicUser } from "@/lib/validation/user-security";
 import { ServiceError } from "@/backend/server/inventory-service";
 import { parseWithSchema } from "@/backend/server/safeParsing";
-import { readFullSystem, updateSystem } from "@/backend/server/store";
+import { readAccounts } from "@/backend/server/account-store";
+import { updateSystem } from "@/backend/server/store";
 import {
+  canAssignDivisions,
   canAssignRole,
   canManageUser,
   divisionForRole,
+  divisionOf,
+  resolveAssignedDivisions,
 } from "@/lib/divisions";
+import {
+  homeSiteForDivision,
+  resolveAssignedSites,
+  sitesForAssignment,
+} from "@/lib/sites/access";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   accountLoginLockKeys,
@@ -33,7 +42,9 @@ import {
   RegisterInputSchema,
   ResetPasswordInputSchema,
   UpdateUserInputSchema,
+  type Division,
   type PublicUser,
+  type Site,
   type UserRole,
 } from "@/lib/inventory-schema";
 
@@ -75,7 +86,7 @@ export async function authenticateUser(
   const loginId = parsed.data.identifier;
   let system;
   try {
-    system = await readFullSystem();
+    system = await readAccounts();
   } catch {
     throw new ServiceError(
       "Unable to load accounts right now. Try signing in again.",
@@ -152,7 +163,7 @@ export async function recoverUsername(
   const lockKey = usernameRecoveryLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "username recovery");
 
-  const system = await readFullSystem();
+  const system = await readAccounts();
   const user = findUserForUsernameRecovery(
     system.users,
     parsed.data.name,
@@ -180,7 +191,7 @@ export async function resetPasswordWithIdentity(
   const lockKey = passwordResetLockKey(parsed.data.email);
   assertLoginNotLocked(lockKey, Date.now(), "password reset");
 
-  const current = await readFullSystem();
+  const current = await readAccounts();
   const matched = findUserForPasswordReset(current.users, parsed.data);
   if (!matched) {
     await consumePasswordCheck(parsed.data.password);
@@ -204,10 +215,15 @@ export async function resetPasswordWithIdentity(
 }
 
 export async function listPublicUsers(actorRole: UserRole): Promise<PublicUser[]> {
-  const system = await readFullSystem();
+  const system = await readAccounts();
   return system.users
     .filter((user) => canManageUser(actorRole, user.role))
     .map(toPublicUser);
+}
+
+async function registrySites(): Promise<Site[]> {
+  const accounts = await readAccounts();
+  return accounts.sites ?? [];
 }
 
 export async function createUserRecord(
@@ -224,10 +240,39 @@ export async function createUserRecord(
     throw new ServiceError("You cannot assign that role.", 403);
   }
 
+  const knownSites = await registrySites();
   return updateSystem(async (system) => {
     claimUsernameAndEmail(system.users, parsed.data);
 
     const now = nowIso();
+    const division = divisionForRole(parsed.data.role);
+    const sites = sitesForAssignment(system.sites, knownSites);
+    const home = homeSiteForDivision(sites, division);
+    let siteId = home?.id;
+    let allowedSiteIds: string[] | undefined;
+    if (home) {
+      const granted = resolveAssignedSites({
+        sites,
+        division,
+        allowedSiteIds: parsed.data.allowedSiteIds ?? [home.id],
+        siteId: parsed.data.siteId ?? home.id,
+      });
+      if (!granted.ok) throw new ServiceError(granted.error);
+      siteId = granted.siteId;
+      allowedSiteIds = granted.allowedSiteIds;
+    }
+    let allowedDivisions: Division[] | undefined;
+    if (parsed.data.allowedDivisions) {
+      if (!canAssignDivisions(actor.role)) {
+        throw new ServiceError("You cannot assign divisions.", 403);
+      }
+      const divisions = resolveAssignedDivisions({
+        role: parsed.data.role,
+        allowedDivisions: parsed.data.allowedDivisions,
+      });
+      if (!divisions.ok) throw new ServiceError(divisions.error);
+      allowedDivisions = divisions.allowedDivisions;
+    }
     const user = {
       id: createId(),
       name: parsed.data.name,
@@ -235,7 +280,10 @@ export async function createUserRecord(
       email: parsed.data.email,
       passwordHash: await hashPassword(parsed.data.password),
       role: parsed.data.role,
-      division: divisionForRole(parsed.data.role),
+      division,
+      siteId,
+      allowedSiteIds,
+      allowedDivisions,
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -256,6 +304,10 @@ export async function updateUserRecord(
     throw new ServiceError(parsed.error);
   }
 
+  const touchesSites = Boolean(
+    parsed.data.allowedSiteIds || parsed.data.siteId || parsed.data.role,
+  );
+  const knownSites = touchesSites ? await registrySites() : [];
   return updateSystem(async (system) => {
     const user = system.users.find((entry) => entry.id === parsed.data.id);
     if (!user) {
@@ -290,6 +342,66 @@ export async function updateUserRecord(
       }
       user.role = parsed.data.role;
       user.division = divisionForRole(parsed.data.role);
+    }
+
+    if (parsed.data.allowedDivisions) {
+      if (!canAssignDivisions(actor.role)) {
+        throw new ServiceError("You cannot assign divisions.", 403);
+      }
+      if (user.id === actor.id) {
+        throw new ServiceError("You cannot change your own division access.");
+      }
+      const divisions = resolveAssignedDivisions({
+        role: user.role,
+        allowedDivisions: parsed.data.allowedDivisions,
+      });
+      if (!divisions.ok) throw new ServiceError(divisions.error);
+      user.allowedDivisions = divisions.allowedDivisions;
+    } else if (parsed.data.role && user.allowedDivisions != null) {
+      const divisions = resolveAssignedDivisions({
+        role: user.role,
+        allowedDivisions: user.allowedDivisions,
+      });
+      user.allowedDivisions = divisions.ok
+        ? divisions.allowedDivisions
+        : [divisionForRole(user.role)];
+    }
+
+    if (parsed.data.allowedSiteIds) {
+      const sites = sitesForAssignment(system.sites, knownSites);
+      const granted = resolveAssignedSites({
+        sites,
+        division: divisionForRole(user.role),
+        allowedSiteIds: parsed.data.allowedSiteIds,
+        siteId: parsed.data.siteId ?? user.siteId,
+      });
+      if (!granted.ok) throw new ServiceError(granted.error);
+      user.allowedSiteIds = granted.allowedSiteIds;
+      user.siteId = granted.siteId;
+    } else if (parsed.data.role) {
+      const division = divisionForRole(user.role);
+      const sites = sitesForAssignment(system.sites, knownSites);
+      const home = homeSiteForDivision(sites, division);
+      if (user.allowedSiteIds != null) {
+        const granted = resolveAssignedSites({
+          sites,
+          division,
+          allowedSiteIds: user.allowedSiteIds,
+          siteId: user.siteId,
+        });
+        if (granted.ok) {
+          user.allowedSiteIds = granted.allowedSiteIds;
+          user.siteId = granted.siteId;
+        } else if (home) {
+          user.allowedSiteIds = [home.id];
+          user.siteId = home.id;
+        }
+      } else if (home && user.siteId !== home.id) {
+        const stillValid = sites.some(
+          (site) => site.id === user.siteId && divisionOf(site) === division,
+        );
+        if (!stillValid) user.siteId = home.id;
+      }
     }
 
     if (parsed.data.password) {

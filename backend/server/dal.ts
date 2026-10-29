@@ -4,15 +4,15 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ServiceError } from "@/backend/server/inventory-service";
-import { readFullSystem } from "@/backend/server/store";
+import { readAccounts } from "@/backend/server/account-store";
 import {
   hasAnyPermission,
   hasPermission,
   type Permission,
 } from "@/lib/auth/permissions";
+import { restoreSessionAccount } from "@/lib/auth/session-account";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
 import type { PublicUser } from "@/lib/inventory-schema";
-import { toPublicUser } from "@/lib/validation/user-security";
 
 export { toPublicUser } from "@/lib/validation/user-security";
 
@@ -21,10 +21,7 @@ export const getSessionUser = cache(async (): Promise<PublicUser | null> => {
   const payload = verifySessionToken(token);
   if (!payload) return null;
 
-  const system = await readFullSystem();
-  const user = system.users.find((entry) => entry.id === payload.sub);
-  if (!user || !user.isActive) return null;
-  return toPublicUser(user);
+  return restoreSessionAccount(payload.sub, readAccounts);
 });
 
 export async function requireUser(): Promise<PublicUser> {

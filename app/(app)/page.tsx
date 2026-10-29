@@ -42,6 +42,7 @@ export default async function Home() {
   const canUploadBuyer = hasPermission(user.role, "uploadBuyerOrders");
   const canAssignJob = hasPermission(user.role, "assignJobId");
   const canDrive = hasPermission(user.role, "viewDriverLoad");
+  const canNetwork = hasPermission(user.role, "viewSiteNetwork");
   const inventory = canViewInventory ? enrichInventory(system) : [];
   const transactions = canViewTransactions ? enrichTransactions(system) : [];
   const openReceiving = system.receivingOrders.filter(
@@ -76,7 +77,9 @@ export default async function Home() {
     ? "Receive inbound pallets, put away staged cases, place remote orders, and ship from on-hand stock."
     : canUploadBuyer
       ? "Upload buyer purchase orders so the dock knows the carrier, vendor, and lines to expect."
-      : canAssignJob
+      : canNetwork && !canAssignJob
+        ? "Review inventory across work sites, order site-to-site transfers, and logistical flow."
+        : canAssignJob
         ? "Review on-hand inventory and assign job IDs to buyer purchase orders."
         : canDrive
           ? "Open your load, review the manifest and pack list, and check freight in as delivered."
@@ -95,6 +98,11 @@ export default async function Home() {
           {canUploadBuyer ? (
             <Button nativeButton={false} render={<Link href="/inbound" />}>
               Upload buyer PO
+            </Button>
+          ) : null}
+          {canNetwork ? (
+            <Button nativeButton={false} render={<Link href="/network" />}>
+              Site network
             </Button>
           ) : null}
           {canAssignJob ? (

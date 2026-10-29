@@ -10,6 +10,8 @@ import { createId, nowIso } from "@/backend/server/helperUtils";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { divisionForRole, divisionOf } from "@/lib/divisions";
+import { assignLocationSites } from "@/lib/sites/database";
+import { assignUserHomeSites } from "@/lib/sites/access";
 import {
   DEFAULT_HOLD_CUBE_CUBIC_INCHES,
   DEFAULT_PALLET_CUBE_CUBIC_INCHES,
@@ -42,6 +44,23 @@ const AISLE_ALPHA = "dddd4444-4444-4444-8444-444444444444";
 const BAY_ALPHA = "dddd5555-5555-4555-8555-555555555555";
 const ROOM_ALPHA = "dddd6666-6666-4666-8666-666666666666";
 const LOC_ALPHA = "dddd7777-7777-4777-8777-777777777777";
+const SITE_BETA = "eeee1111-1111-4111-8111-111111111111";
+const BUILDING_BETA = "eeee2222-2222-4222-8222-222222222222";
+const ZONE_BETA = "eeee3333-3333-4333-8333-333333333333";
+const AISLE_BETA = "eeee4444-4444-4444-8444-444444444444";
+const BAY_BETA = "eeee5555-5555-4555-8555-555555555555";
+const ROOM_BETA = "eeee6666-6666-4666-8666-666666666666";
+const LOC_BETA = "eeee7777-7777-4777-8777-777777777777";
+const LOC_BETA_PDU = "eeee8888-8888-4888-8888-888888888888";
+const ITEM_BETA_CAT6 = "eeee9999-9999-4999-8999-999999999999";
+const ITEM_BETA_PDU = "eeeeaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const SITE_SIERRA = "ffff1111-1111-4111-8111-111111111111";
+const BUILDING_SIERRA = "ffff2222-2222-4222-8222-222222222222";
+const ZONE_SIERRA = "ffff3333-3333-4333-8333-333333333333";
+const AISLE_SIERRA = "ffff4444-4444-4444-8444-444444444444";
+const BAY_SIERRA = "ffff5555-5555-4555-8555-555555555555";
+const ROOM_SIERRA = "ffff6666-6666-4666-8666-666666666666";
+const LOC_SIERRA = "ffff7777-7777-4777-8777-777777777777";
 const ALPHA_BAY_BUDGET = DEFAULT_RACK_CUBE_CUBIC_INCHES * 48;
 
 export { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
@@ -468,6 +487,335 @@ function ensureAlphaCampus(system: InventorySystem): boolean {
   return changed;
 }
 
+function ensureBetaCampus(system: InventorySystem): boolean {
+  let changed = false;
+  const division = "hyperscale" as const;
+  const cat6Code = formatBinCode({
+    codename: "BETA",
+    building: 1,
+    zone: "B",
+    aisle: 1,
+    bay: 1,
+    slot: { kind: "pick", height: "A", position: 1 },
+  });
+  const pduCode = formatBinCode({
+    codename: "BETA",
+    building: 1,
+    zone: "B",
+    aisle: 1,
+    bay: 1,
+    slot: { kind: "pick", height: "A", position: 2 },
+  });
+  const roomName = `BETA-${padNumber(1, 3)}`;
+
+  let site = system.sites.find(
+    (entry) => entry.codename === "BETA" && divisionOf(entry) === division,
+  );
+  if (!site) {
+    site = {
+      id: SITE_BETA,
+      division,
+      codename: "BETA",
+      state: "GA",
+      city: "Savannah",
+      name: "Beta yard",
+    };
+    system.sites.push(site);
+    changed = true;
+  }
+
+  let room =
+    system.rooms.find((entry) => entry.id === ROOM_BETA) ??
+    system.rooms.find((entry) => entry.name === roomName && divisionOf(entry) === division);
+  if (!room) {
+    room = {
+      id: ROOM_BETA,
+      division,
+      name: roomName,
+      description: "Site BETA, building 001",
+    };
+    system.rooms.push(room);
+    changed = true;
+  }
+
+  let building = system.buildings.find(
+    (entry) => entry.siteId === site.id && entry.number === 1,
+  );
+  if (!building) {
+    building = {
+      id: BUILDING_BETA,
+      division,
+      siteId: site.id,
+      number: 1,
+      roomId: room.id,
+    };
+    system.buildings.push(building);
+    changed = true;
+  }
+
+  let zone = system.zones.find(
+    (entry) => entry.buildingId === building.id && entry.letter === "B",
+  );
+  if (!zone) {
+    zone = {
+      id: ZONE_BETA,
+      division,
+      buildingId: building.id,
+      letter: "B",
+      itemType: "general",
+      cubeSize: "medium",
+      projectId: null,
+      poNumber: null,
+      inboundVelocity: "fast",
+      outboundVelocity: "slow",
+    };
+    system.zones.push(zone);
+    changed = true;
+  }
+
+  let aisle = system.aisles.find((entry) => entry.zoneId === zone.id && entry.number === 1);
+  if (!aisle) {
+    aisle = { id: AISLE_BETA, division, zoneId: zone.id, number: 1 };
+    system.aisles.push(aisle);
+    changed = true;
+  }
+
+  let bay = system.bays.find((entry) => entry.aisleId === aisle.id && entry.number === 1);
+  if (!bay) {
+    bay = {
+      id: BAY_BETA,
+      division,
+      aisleId: aisle.id,
+      number: 1,
+      cubeBudgetCubicInches: ALPHA_BAY_BUDGET,
+    };
+    system.bays.push(bay);
+    changed = true;
+  }
+
+  if (
+    !system.locations.some(
+      (location) => location.code === cat6Code && divisionOf(location) === division,
+    )
+  ) {
+    const location = sampleLocation(
+      LOC_BETA,
+      cat6Code,
+      room.id,
+      describeSlot({ kind: "pick", height: "A", position: 1 }),
+      "rack",
+      DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      division,
+    );
+    system.locations.push({
+      ...location,
+      siteId: site.id,
+      bayId: bay.id,
+      slotKind: "pick",
+      height: "A",
+      position: 1,
+      side: null,
+    });
+    changed = true;
+  }
+
+  if (
+    !system.locations.some(
+      (location) => location.code === pduCode && divisionOf(location) === division,
+    )
+  ) {
+    const location = sampleLocation(
+      LOC_BETA_PDU,
+      pduCode,
+      room.id,
+      describeSlot({ kind: "pick", height: "A", position: 2 }),
+      "rack",
+      DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      division,
+    );
+    system.locations.push({
+      ...location,
+      siteId: site.id,
+      bayId: bay.id,
+      slotKind: "pick",
+      height: "A",
+      position: 2,
+      side: null,
+    });
+    changed = true;
+  }
+
+  const cat6Location = system.locations.find(
+    (location) => location.code === cat6Code && divisionOf(location) === division,
+  );
+  if (
+    cat6Location &&
+    !system.inventoryItems.some(
+      (item) => item.id === ITEM_BETA_CAT6 || (item.sku === "CAT6-BLU-1000" && item.locationId === cat6Location.id),
+    )
+  ) {
+    const item = sampleItem(
+      "CAT6-BLU-1000",
+      "010000000002",
+      cat6Location.id,
+      8,
+      "Cat6 blue 1000ft box",
+      null,
+      division,
+    );
+    item.id = ITEM_BETA_CAT6;
+    system.inventoryItems.push(item);
+    changed = true;
+  }
+
+  const pduLocation = system.locations.find(
+    (location) => location.code === pduCode && divisionOf(location) === division,
+  );
+  if (pduLocation && !system.inventoryItems.some((item) => item.sku === "PWR-PDU-30A")) {
+    const item = sampleItem(
+      "PWR-PDU-30A",
+      "010000000201",
+      pduLocation.id,
+      2,
+      "30A rack PDU",
+      null,
+      division,
+    );
+    item.id = ITEM_BETA_PDU;
+    system.inventoryItems.push(item);
+    changed = true;
+  }
+
+  return changed;
+}
+
+function ensureSierraCampus(system: InventorySystem): boolean {
+  let changed = false;
+  const division = "security" as const;
+  const code = formatBinCode({
+    codename: "SIERRA",
+    building: 1,
+    zone: "A",
+    aisle: 1,
+    bay: 1,
+    slot: { kind: "pick", height: "A", position: 1 },
+  });
+  const roomName = `SIERRA-${padNumber(1, 3)}`;
+
+  let site = system.sites.find(
+    (entry) => entry.codename === "SIERRA" && divisionOf(entry) === division,
+  );
+  if (!site) {
+    site = {
+      id: SITE_SIERRA,
+      division,
+      codename: "SIERRA",
+      state: "GA",
+      city: "Marietta",
+      name: "Sierra cage",
+    };
+    system.sites.push(site);
+    changed = true;
+  }
+
+  let room =
+    system.rooms.find((entry) => entry.id === ROOM_SIERRA) ??
+    system.rooms.find((entry) => entry.name === roomName && divisionOf(entry) === division);
+  if (!room) {
+    room = {
+      id: ROOM_SIERRA,
+      division,
+      name: roomName,
+      description: "Site SIERRA, building 001",
+    };
+    system.rooms.push(room);
+    changed = true;
+  }
+
+  let building = system.buildings.find(
+    (entry) => entry.siteId === site.id && entry.number === 1,
+  );
+  if (!building) {
+    building = {
+      id: BUILDING_SIERRA,
+      division,
+      siteId: site.id,
+      number: 1,
+      roomId: room.id,
+    };
+    system.buildings.push(building);
+    changed = true;
+  }
+
+  let zone = system.zones.find(
+    (entry) => entry.buildingId === building.id && entry.letter === "A",
+  );
+  if (!zone) {
+    zone = {
+      id: ZONE_SIERRA,
+      division,
+      buildingId: building.id,
+      letter: "A",
+      itemType: "security",
+      cubeSize: "medium",
+      projectId: null,
+      poNumber: null,
+      inboundVelocity: "medium",
+      outboundVelocity: "medium",
+    };
+    system.zones.push(zone);
+    changed = true;
+  }
+
+  let aisle = system.aisles.find((entry) => entry.zoneId === zone.id && entry.number === 1);
+  if (!aisle) {
+    aisle = { id: AISLE_SIERRA, division, zoneId: zone.id, number: 1 };
+    system.aisles.push(aisle);
+    changed = true;
+  }
+
+  let bay = system.bays.find((entry) => entry.aisleId === aisle.id && entry.number === 1);
+  if (!bay) {
+    bay = {
+      id: BAY_SIERRA,
+      division,
+      aisleId: aisle.id,
+      number: 1,
+      cubeBudgetCubicInches: ALPHA_BAY_BUDGET,
+    };
+    system.bays.push(bay);
+    changed = true;
+  }
+
+  if (
+    !system.locations.some(
+      (location) => location.code === code && divisionOf(location) === division,
+    )
+  ) {
+    const location = sampleLocation(
+      LOC_SIERRA,
+      code,
+      room.id,
+      describeSlot({ kind: "pick", height: "A", position: 1 }),
+      "rack",
+      DEFAULT_RACK_CUBE_CUBIC_INCHES,
+      division,
+    );
+    system.locations.push({
+      ...location,
+      siteId: site.id,
+      bayId: bay.id,
+      slotKind: "pick",
+      height: "A",
+      position: 1,
+      side: null,
+    });
+    changed = true;
+  }
+
+  return changed;
+}
+
 export function ensureSystemDefaults(system: InventorySystem): boolean {
   let changed = false;
   if (!system.transactions) {
@@ -648,14 +996,10 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
 
   if (ensureSecurityWarehouse(system)) changed = true;
   if (ensureAlphaCampus(system)) changed = true;
-
-  for (const user of system.users) {
-    const division = divisionForRole(user.role);
-    if (user.division !== division) {
-      user.division = division;
-      changed = true;
-    }
-  }
+  if (ensureBetaCampus(system)) changed = true;
+  if (ensureSierraCampus(system)) changed = true;
+  if (assignLocationSites(system)) changed = true;
+  if (assignUserHomeSites(system)) changed = true;
 
   return changed;
 }
@@ -732,6 +1076,7 @@ export async function ensureDemoUsers(
       }
     }
   }
+  if (assignUserHomeSites(system)) changed = true;
   demoPasswordsChecked = true;
   return changed;
 }

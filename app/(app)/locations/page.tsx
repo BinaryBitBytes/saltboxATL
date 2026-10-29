@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/table";
 import type { Location } from "@/lib/inventory-schema";
 import { padNumber } from "@/lib/locations/nomenclature";
+import { buildWarehouseTree } from "@/lib/sites/database";
+import { WarehouseTree } from "@/frontend/client/warehouse-tree";
 
 function slotLabel(location: Location): string {
   if (location.slotKind === "pick" && location.height && location.position) {
@@ -40,6 +42,8 @@ export default async function LocationsPage() {
           </T>
         </p>
       </div>
+
+      <WarehouseTree nodes={buildWarehouseTree(system)} />
 
       <NomenclatureForms
         sites={system.sites}

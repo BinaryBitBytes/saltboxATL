@@ -30,6 +30,7 @@ import {
   type Room,
   type ShippingOrder,
   type Site,
+  type SiteTransfer,
   type Trailer,
   type User,
   type Zone,
@@ -130,6 +131,7 @@ export function mapLocation(row: {
   storage_class?: string | null;
   cube_capacity_cubic_inches?: number | string | null;
   division?: string | null;
+  site_id?: string | null;
   bay_id?: string | null;
   slot_kind?: string | null;
   height?: string | null;
@@ -144,6 +146,7 @@ export function mapLocation(row: {
   return {
     id: row.id,
     division: storedDivision(row.division),
+    siteId: row.site_id || undefined,
     code: row.code,
     roomId: row.room_id,
     description: row.description ?? undefined,
@@ -168,6 +171,7 @@ export function mapSite(row: {
   state: string;
   city: string;
   name: string;
+  database_name?: string | null;
 }): Site {
   return {
     id: row.id,
@@ -176,6 +180,7 @@ export function mapSite(row: {
     state: row.state.trim().toUpperCase(),
     city: row.city,
     name: row.name,
+    databaseName: row.database_name || undefined,
   };
 }
 
@@ -299,6 +304,30 @@ function storedCartons(value: unknown): InventoryItem["cartons"] {
   return cartons.length > 0 ? cartons : undefined;
 }
 
+function storedDivisionList(
+  value: unknown,
+): Array<"hyperscale" | "security"> | undefined {
+  const parsed = storedJson(value);
+  if (!Array.isArray(parsed)) return undefined;
+  return parsed.filter(
+    (entry): entry is "hyperscale" | "security" =>
+      entry === "hyperscale" || entry === "security",
+  );
+}
+
+function storedUuidList(value: unknown): string[] | undefined {
+  const parsed = storedJson(value);
+  if (!Array.isArray(parsed)) return undefined;
+  const ids = parsed.filter(
+    (entry): entry is string =>
+      typeof entry === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        entry,
+      ),
+  );
+  return ids;
+}
+
 function storedJson(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
@@ -374,6 +403,9 @@ export function mapUser(row: {
   updated_at: Date | string | null;
   created_by: string | null;
   division?: string | null;
+  site_id?: string | null;
+  allowed_site_ids?: unknown;
+  allowed_divisions?: unknown;
 }): User {
   return {
     id: row.id,
@@ -383,10 +415,45 @@ export function mapUser(row: {
     passwordHash: row.password_hash,
     role: row.role,
     division: storedDivision(row.division),
+    siteId: row.site_id || undefined,
+    allowedSiteIds: storedUuidList(row.allowed_site_ids),
+    allowedDivisions: storedDivisionList(row.allowed_divisions),
     isActive: row.is_active,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     createdBy: row.created_by ?? undefined,
+  };
+}
+
+export function mapSiteTransfer(row: {
+  id: string;
+  division?: string | null;
+  status: SiteTransfer["status"];
+  sku: string;
+  batch: string | null;
+  quantity: number | string;
+  source_site_id: string;
+  source_location_id: string;
+  destination_site_id: string;
+  destination_location_id: string;
+  ordered_by: string;
+  ordered_at: Date | string;
+  notes: string | null;
+}): SiteTransfer {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    status: row.status,
+    sku: row.sku,
+    batch: row.batch,
+    quantity: Number(row.quantity),
+    sourceSiteId: row.source_site_id,
+    sourceLocationId: row.source_location_id,
+    destinationSiteId: row.destination_site_id,
+    destinationLocationId: row.destination_location_id,
+    orderedBy: row.ordered_by,
+    orderedAt: isoRequired(row.ordered_at),
+    notes: row.notes ?? undefined,
   };
 }
 

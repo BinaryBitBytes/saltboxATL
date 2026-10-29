@@ -10,9 +10,13 @@ Saltbox uses credential login with httpOnly session cookies. Roles:
 | **Associate** | Warehouse execution: receiving, putaway, cubing, shipping, and order fulfillment, plus a read-only inbound forecast |
 | **3PL** | Same warehouse execution as an associate, without placing customer orders, adjusting inventory, or changing buyer POs and job IDs |
 | **Coordinator** | Upload buyer purchase orders (vendor, carrier, project, and expected lines) for inbound forecasting |
-| **Project Manager** | On-hand inventory and assigning job IDs to buyer purchase orders the coordinator uploaded |
+| **Project Manager** | On-hand inventory, job IDs, and multi-site inventory insight, transfers, and logistical flow |
+| **Product Developer** | Multi-site inventory insight, site-to-site transfers, and logistical flow |
+| **Logistics Coordinator** | Inbound forecast plus multi-site inventory insight, transfers, and logistical flow |
+| **IT Admin** | Users, locations, and multi-site inventory insight, transfers, and logistical flow |
+| **Superintendent** | Inventory, the stock log, inbound forecast, and multi-site insight, transfers, and logistical flow |
 | **Driver** | Manifest and pack list for a load, delivery scans, proof photos, and delivery notes |
-| **Manager** | Every process, including adjustments, locations, and user admin. This is the admin who can switch between both division inventories |
+| **Manager** | Every warehouse process, including adjustments, locations, and user admin. This is the admin who can switch between both division inventories. Inventory stays inside the manager's work site |
 | **Security Associate** | Same warehouse execution as an associate, limited to the Security division inventory |
 | **Security Manager** | Same processes as a manager, limited to the Security division inventory and Security logins |
 
@@ -23,7 +27,11 @@ Divisions keep inventory in separate rows:
 | **Division_1** | Hyperscale | Existing Hyperscale roles, and the admin manager when that division is selected |
 | **Division_2** | Security | Security associate, Security manager, and the admin manager when that division is selected |
 
-The manager uses the division menu at the top right of the navigation bar to change which inventory is on screen. Every other login stays in its own division, even if a division cookie is present.
+The manager uses the division menu in the header to change which division inventory is on screen. Every other login stays in its own division, even if a division cookie is present.
+
+Each work site keeps its inventory in a separate database. The active site is shown at the top right of the header. Product Developers, Logistics Coordinators, IT Admins, Superintendents, and Project Managers can open that label and switch work sites. They can also open **Sites** for overall inventory insight, site-to-site transfer orders, and logistical-flow optimization. Every other role stays on its home site and cannot read another site's stock.
+
+Warehouse bins hang from that site in this order: site, building, zone, aisle, bay, location.
 
 Demo accounts (password `saltbox123`) are seeded on first boot:
 
@@ -33,6 +41,10 @@ Demo accounts (password `saltbox123`) are seeded on first boot:
 - `coordinator@saltbox.local`
 - `threepl@saltbox.local`
 - `project@saltbox.local`
+- `developer@saltbox.local`
+- `logistics@saltbox.local`
+- `itadmin@saltbox.local`
+- `superintendent@saltbox.local`
 - `driver@saltbox.local`
 - `security@saltbox.local`
 - `secmanager@saltbox.local`

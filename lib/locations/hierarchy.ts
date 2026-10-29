@@ -6,6 +6,7 @@ import {
   type StorageClass,
 } from "@/lib/cubing/measure";
 import { divisionOf } from "@/lib/divisions";
+import { siteDatabaseName } from "@/lib/sites/database";
 import type {
   Aisle,
   Bay,
@@ -87,6 +88,7 @@ export function addSite(
     state,
     city,
     name,
+    databaseName: siteDatabaseName({ division: input.division, codename }),
   };
   system.sites = [...sitesOf(system), site];
   return site;
@@ -300,6 +302,7 @@ export function addStructuredLocation(
   const location: Location = {
     id: input.id ?? createId(),
     division,
+    siteId: site.id,
     code,
     roomId: building.roomId,
     description: input.description?.trim() || describeSlot(slot),

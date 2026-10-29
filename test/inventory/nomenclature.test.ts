@@ -304,10 +304,11 @@ describe("logistics nomenclature", () => {
     expect(defaultStorageClass("ALPHA-001-A03-12-A01")).to.equal("rack");
 
     const security = scopeSystem(full, "security");
-    expect(security.sites).to.deep.equal([]);
+    expect(security.sites.map((site) => site.codename)).to.deep.equal(["SIERRA"]);
     expect(security.locations.map((location) => location.code)).to.deep.equal([
       "SEC-A1",
       "SEC-HOLD",
+      "SIERRA-001-A01-01-A01",
     ]);
     addSite(security, {
       division: "security",
