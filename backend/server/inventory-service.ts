@@ -66,6 +66,10 @@ import {
   locationHomeError,
   type PutawaySlice,
 } from "@/lib/cubing/putaway-allocation";
+import {
+  allocateReceivingLine,
+  withOpenReceivingReservations,
+} from "@/lib/cubing/receiving-line";
 import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
 import {
   applyPartialInboundPallet,
@@ -487,6 +491,7 @@ function receivingCubeBlocker(
   for (const pallet of order.pallets) {
     const pending = pallet.cases.filter((item) => !isCasePutawayPosted(item));
     if (pending.length === 0) continue;
+    if (pending.every((item) => item.putawayLocationId)) continue;
     const plan = palletCubePlan(system, pending);
     if (plan.status === "fits" || plan.status === "empty") continue;
     return `Pallet ${pallet.palletNumber}: ${plan.directive}`;
@@ -1079,13 +1084,13 @@ export async function addCaseToPallet(
       "case quantity",
     );
 
-    pallet.cases.push(
-      assignHandlingPlate(
-        system,
-        order.createdBy ?? order.receiverName,
-        caseFromInput(system, parsed.data, {}),
-      ),
+    const created = assignHandlingPlate(
+      system,
+      order.createdBy ?? order.receiverName,
+      caseFromInput(system, parsed.data, {}),
     );
+    pallet.cases.push(created);
+    directReceivingLine(system, order, pallet, created, parsed.data.fullPallet);
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -1126,7 +1131,7 @@ export async function updateCaseOnPallet(
     );
 
     const previousPlate = pallet.cases[index]?.licensePlateNumber;
-    pallet.cases[index] = assignHandlingPlate(
+    const updated = assignHandlingPlate(
       system,
       order.createdBy ?? order.receiverName,
       caseFromInput(system, parsed.data, {
@@ -1134,6 +1139,8 @@ export async function updateCaseOnPallet(
       }),
       previousPlate,
     );
+    pallet.cases[index] = updated;
+    directReceivingLine(system, order, pallet, updated, parsed.data.fullPallet);
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -1269,6 +1276,70 @@ export async function assignPutawayLocation(
     order.updatedAt = nowIso();
     return order;
   });
+}
+
+function directReceivingLine(
+  system: InventorySystem,
+  order: ReceivingOrder,
+  pallet: Pallet,
+  caseItem: CaseItem,
+  fullPallet: boolean,
+): void {
+  const cube = system.itemCubes.find((entry) => entry.sku === caseItem.sku);
+  const perUnit = cube && cube.unitsPerCase > 0 ? cube.cubicInches / cube.unitsPerCase : 0;
+  const division = divisionOf(order);
+  const siteId = primarySiteId(system, division) ?? "";
+  const freight = receivingFreight(system, order);
+  const exclude = new Set([caseItem.id]);
+  const slots = withOpenReceivingReservations(
+    buildPutawaySlots({
+      locations: system.locations,
+      bays: system.bays,
+      aisles: system.aisles,
+      zones: system.zones,
+      buildings: system.buildings,
+      items: system.inventoryItems,
+      orders: system.receivingOrders,
+      cubes: system.itemCubes,
+      purchaseOrders: system.purchaseOrders,
+      excludeCaseIds: exclude,
+    }),
+    {
+      orders: system.receivingOrders,
+      cubes: system.itemCubes,
+      purchaseOrders: system.purchaseOrders,
+      excludeCaseIds: exclude,
+    },
+  );
+  const plan = allocateReceivingLine({
+    quantity: caseItem.quantityInCase,
+    cubicInchesPerUnit: perUnit,
+    fullPallet,
+    projectId: freight.jobIdNumber,
+    poNumber: freight.poNumber,
+    sku: caseItem.sku,
+    batch: caseItem.batch,
+    division,
+    siteId,
+    locations: slots,
+  });
+  if (!plan.ok) throw new ServiceError(plan.error);
+  const index = pallet.cases.findIndex((item) => item.id === caseItem.id);
+  if (index < 0) return;
+  if (!plan.directed) {
+    pallet.cases[index] = {
+      ...pallet.cases[index]!,
+      fullPallet: null,
+      putawayLocationId: null,
+      putawayRoomId: null,
+    };
+    return;
+  }
+  const next = casesFromSlices(
+    { ...pallet.cases[index]!, fullPallet: plan.fullPallet },
+    plan.slices,
+  );
+  pallet.cases.splice(index, 1, ...next);
 }
 
 function casesFromSlices(source: CaseItem, slices: PutawaySlice[]): CaseItem[] {

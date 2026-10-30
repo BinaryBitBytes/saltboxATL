@@ -139,6 +139,12 @@ export const CaseItemSchema = z.object({
   putawayPostedAt: DateTimeSchema.nullable().optional().default(null),
   /** True when this case was forced into a location past its cube. */
   cubeForced: z.boolean().optional(),
+  /**
+   * Receiver answer when the line is larger than a shelf slot.
+   * True directs the line to the full pallet zone. False directs it to a rack slot.
+   * Empty when the line fits a shelf slot or has not been cubed.
+   */
+  fullPallet: z.boolean().nullable().optional(),
 });
 export type CaseItem = z.infer<typeof CaseItemSchema>;
 
@@ -147,6 +153,7 @@ export const CaseItemInputSchema = CaseItemSchema.omit({
   sku: true,
   upc: true,
   putawayPostedAt: true,
+  fullPallet: true,
 }).extend({
   id: UuidSchema.optional(),
   sku: z.string().trim().optional().default(""),
@@ -175,6 +182,8 @@ export const CaseItemInputSchema = CaseItemSchema.omit({
   putawayLocationId: UuidSchema.nullable().optional().default(null),
   confirmLargeInput: z.boolean().optional().default(false),
   confirmationQuantity: z.coerce.number().int().optional(),
+  /** Checked when the receiver says this oversized line is a full pallet. */
+  fullPallet: z.boolean().optional().default(false),
 });
 export type CaseItemInput = z.infer<typeof CaseItemInputSchema>;
 

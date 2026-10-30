@@ -29,6 +29,8 @@ export type PutawaySlot = {
   aisleKey: string | null;
   /** Zone dedicated to one project. Empty when the zone is shared. */
   zoneProjectId: string | null;
+  /** Cube class of the zone that owns this slot. Empty for unstructured locations. */
+  zoneCubeSize: Zone["cubeSize"] | null;
   slotKind: "pick" | "overhead" | null;
   isActive: boolean;
   cubeCapacityCubicInches: number;
@@ -121,7 +123,7 @@ function occupantProjects(slot: PutawaySlot): string[] {
   return [...ids];
 }
 
-function projectConflict(projectId: string | null, slot: PutawaySlot): string | null {
+export function projectConflict(projectId: string | null, slot: PutawaySlot): string | null {
   const incoming = projectKey(projectId);
   const present = occupantProjects(slot);
   if (!incoming) {
@@ -311,7 +313,12 @@ function zoneAndAisle(
   bays: readonly Bay[],
   aisles: readonly Aisle[],
   zones: readonly Zone[],
-): { zoneKey: string | null; aisleKey: string | null; zoneProjectId: string | null } {
+): {
+  zoneKey: string | null;
+  aisleKey: string | null;
+  zoneProjectId: string | null;
+  zoneCubeSize: Zone["cubeSize"] | null;
+} {
   const bay = location.bayId ? bays.find((entry) => entry.id === location.bayId) : undefined;
   const aisle = bay ? aisles.find((entry) => entry.id === bay.aisleId) : undefined;
   const zone = aisle ? zones.find((entry) => entry.id === aisle.zoneId) : undefined;
@@ -320,9 +327,10 @@ function zoneAndAisle(
       zoneKey: zone.letter,
       aisleKey: `${zone.letter}-${aisle.number}`,
       zoneProjectId: zone.projectId ?? null,
+      zoneCubeSize: zone.cubeSize,
     };
   }
-  return { zoneKey: null, aisleKey: null, zoneProjectId: null };
+  return { zoneKey: null, aisleKey: null, zoneProjectId: null, zoneCubeSize: null };
 }
 
 export function buildPutawaySlots(input: {
@@ -389,6 +397,7 @@ export function buildPutawaySlots(input: {
       zoneKey: address.zoneKey,
       aisleKey: address.aisleKey,
       zoneProjectId: address.zoneProjectId,
+      zoneCubeSize: address.zoneCubeSize,
       slotKind: location.slotKind ?? null,
       isActive: location.isActive,
       cubeCapacityCubicInches: location.cubeCapacityCubicInches,
