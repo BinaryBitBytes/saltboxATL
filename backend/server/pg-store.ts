@@ -4,7 +4,10 @@ import { ensureDemoUsers, ensureSystemDefaults } from "@/backend/server/seed";
 import { withInventoryLock } from "@/backend/server/db";
 import { readAssembledSystem } from "@/backend/server/site-files";
 import { asDivision, divisionForRole } from "@/lib/divisions";
-import { SITE_TRANSFER_SQL_COLUMNS } from "@/lib/db/persisted-columns";
+import {
+  FACILITY_TRANSFER_SQL_COLUMNS,
+  SITE_TRANSFER_SQL_COLUMNS,
+} from "@/lib/db/persisted-columns";
 import {
   applySiteDocuments,
   parseSiteDatabase,
@@ -30,6 +33,7 @@ import {
   mapRoom,
   mapCustomerOrder,
   mapShippingOrder,
+  mapFacilityTransfer,
   mapSite,
   mapSiteTransfer,
   mapTrailer,
@@ -104,11 +108,16 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
     `SELECT ${SITE_TRANSFER_SQL_COLUMNS.join(", ")} FROM site_transfers ORDER BY ordered_at, id`,
   );
   system.siteTransfers = transfers.rows.map(mapSiteTransfer);
+  const facilityTransfers = await client.query(
+    `SELECT ${FACILITY_TRANSFER_SQL_COLUMNS.join(", ")} FROM facility_transfers ORDER BY loaded_at, id`,
+  );
+  system.facilityTransfers = facilityTransfers.rows.map(mapFacilityTransfer);
   const payloads = await client.query("SELECT payload FROM site_databases");
   if ((payloads.rowCount ?? 0) > 0) {
     const documents = payloads.rows.map((row) => parseSiteDatabase(row.payload));
     const overlaid = applySiteDocuments(system, documents);
     overlaid.siteTransfers = system.siteTransfers;
+    overlaid.facilityTransfers = system.facilityTransfers;
     return overlaid;
   }
   return system;
@@ -118,6 +127,7 @@ export async function saveSystem(
   client: PoolClient,
   system: InventorySystem,
 ): Promise<void> {
+  await client.query("DELETE FROM facility_transfers");
   await client.query("DELETE FROM site_transfers");
   await client.query("DELETE FROM site_databases");
   await client.query("DELETE FROM inventory_transactions");
@@ -622,6 +632,31 @@ export async function saveSystem(
         transfer.orderedBy,
         transfer.orderedAt,
         transfer.notes ?? null,
+      ],
+    );
+  }
+  for (const transfer of system.facilityTransfers ?? []) {
+    await client.query(
+      `INSERT INTO facility_transfers (
+         id, division, status, trailer_code, source_site_id, destination_site_id,
+         source_nomenclature, destination_nomenclature, loaded_by, loaded_at,
+         received_by, received_at, notes, lines
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)`,
+      [
+        transfer.id,
+        asDivision(transfer.division),
+        transfer.status,
+        transfer.trailerCode,
+        transfer.sourceSiteId,
+        transfer.destinationSiteId,
+        transfer.sourceNomenclature,
+        transfer.destinationNomenclature,
+        transfer.loadedBy,
+        transfer.loadedAt,
+        transfer.receivedBy ?? null,
+        transfer.receivedAt ?? null,
+        transfer.notes ?? null,
+        JSON.stringify(transfer.lines ?? []),
       ],
     );
   }

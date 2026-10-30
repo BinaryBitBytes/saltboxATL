@@ -4,6 +4,8 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import { MIGRATIONS } from "@/backend/server/db";
 import {
+  FACILITY_TRANSFER_COLUMNS,
+  FACILITY_TRANSFER_SQL_COLUMNS,
   LOCATION_SITE_COLUMN,
   SITE_COLUMNS,
   SITE_DATABASE_COLUMNS,
@@ -79,5 +81,21 @@ describe("persisted schema matches app types", () => {
     }
     expect(store).to.include("SITE_TRANSFER_SQL_COLUMNS.join");
     expect(store).to.include("ORDER BY ordered_at");
+  });
+
+  it("gives facility_transfers every column the FacilityTransfer type stores", () => {
+    expect(
+      requireColumns(tables, "facility_transfers", Object.values(FACILITY_TRANSFER_COLUMNS)),
+    ).to.deep.equal([]);
+    expect(FACILITY_TRANSFER_SQL_COLUMNS).to.include("lines");
+    expect(FACILITY_TRANSFER_SQL_COLUMNS).to.include("destination_nomenclature");
+    const store = fs.readFileSync(
+      path.join(process.cwd(), "backend/server/pg-store.ts"),
+      "utf8",
+    );
+    for (const column of Object.values(FACILITY_TRANSFER_COLUMNS)) {
+      expect(store, column).to.include(column);
+    }
+    expect(store).to.include("FACILITY_TRANSFER_SQL_COLUMNS.join");
   });
 });

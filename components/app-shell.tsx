@@ -32,6 +32,11 @@ import { InstallAppButton } from "@/frontend/client/pwa-install";
 import { DivisionSwitcher } from "@/frontend/client/division-switcher";
 import { SiteControl } from "@/frontend/client/site-switcher";
 
+const TRANSFER_NAV = [
+  { href: "/transfers/inbound", label: "Inbound Transfers" },
+  { href: "/transfers/outbound", label: "Outbound Transfers" },
+] as const;
+
 const NAV: Array<{
   href: string;
   label: string;
@@ -49,6 +54,7 @@ const NAV: Array<{
   { href: "/cubing", label: "Cubing", icon: CubeIcon, permission: "cube" },
   { href: "/reports", label: "Reports", icon: SearchList01Icon, permission: "viewInventory" },
   { href: "/shipping", label: "Shipping", icon: TruckDeliveryIcon, permission: "ship" },
+  { href: "/transfers", label: "Transfer", icon: ArrowDataTransferHorizontalIcon, permission: "transferFreight" },
   { href: "/loads", label: "My loads", icon: TruckDeliveryIcon, permission: "viewDriverLoad" },
   { href: "/logbook", label: "Logbook", icon: BookOpen02Icon, permission: "viewTransactions" },
   { href: "/transactions", label: "Stock log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
@@ -169,6 +175,30 @@ export function AppShell({
               );
             })}
           </nav>
+          {pathname.startsWith("/transfers") ? (
+            <nav
+              aria-label={t("Transfer")}
+              className="mt-1 flex min-w-0 gap-1 overflow-x-auto"
+            >
+              {TRANSFER_NAV.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-xs/relaxed transition-colors",
+                      active
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                    )}
+                  >
+                    <T>{item.label}</T>
+                  </Link>
+                );
+              })}
+            </nav>
+          ) : null}
         </div>
       </header>
       <main className="page-container flex-1 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-6 short:py-3">

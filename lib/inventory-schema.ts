@@ -661,6 +661,8 @@ export const INVENTORY_TRANSACTION_TYPES = [
   "damage",
   "import",
   "site-transfer",
+  "transfer-outbound",
+  "transfer-inbound",
 ] as const;
 export type InventoryTransactionType = (typeof INVENTORY_TRANSACTION_TYPES)[number];
 
@@ -1457,6 +1459,83 @@ export const OrderSiteTransferInputSchema = z.object({
 });
 export type OrderSiteTransferInput = z.infer<typeof OrderSiteTransferInputSchema>;
 
+export const FacilityTransferStatusSchema = z.enum(["in-transit", "partial", "received"]);
+export type FacilityTransferStatus = z.infer<typeof FacilityTransferStatusSchema>;
+
+export const FacilityTransferRouteSchema = z.object({
+  locationId: UuidSchema,
+  locationCode: LocationCodeSchema,
+  quantity: QuantitySchema,
+  licensePlateNumber: LicensePlateNumberSchema,
+});
+export type FacilityTransferRoute = z.infer<typeof FacilityTransferRouteSchema>;
+
+export const FacilityTransferLineSchema = z.object({
+  id: UuidSchema,
+  inventoryItemId: UuidSchema,
+  sku: SkuSchema,
+  upc: UpcSchema.optional(),
+  batch: z.string().trim().nullable().default(null),
+  description: z.string().trim().max(LIMITS.description).default(""),
+  manufacturer: OptionalSafeTextSchema,
+  color: z.preprocess(
+    (value) => (value == null || value === "" ? null : value),
+    z.string().trim().max(LIMITS.code).nullable(),
+  ),
+  quantityLoaded: QuantitySchema,
+  quantityReceived: NonNegativeCountSchema.default(0),
+  sourceLocationId: UuidSchema,
+  outboundLicensePlateNumber: LicensePlateNumberSchema,
+  routes: z.array(FacilityTransferRouteSchema).max(100).default([]),
+});
+export type FacilityTransferLine = z.infer<typeof FacilityTransferLineSchema>;
+
+export const FacilityTransferSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  status: FacilityTransferStatusSchema,
+  trailerCode: z.string().regex(/^TN\d{6}$/),
+  sourceSiteId: UuidSchema,
+  destinationSiteId: UuidSchema,
+  sourceNomenclature: z.string().trim().min(1).max(LIMITS.code),
+  destinationNomenclature: z.string().trim().min(1).max(LIMITS.code),
+  loadedBy: z.string().trim().min(1).max(LIMITS.name),
+  loadedAt: DateTimeSchema,
+  receivedBy: z.string().trim().min(1).max(LIMITS.name).optional(),
+  receivedAt: DateTimeSchema.optional(),
+  notes: OptionalNotesSchema,
+  lines: z.array(FacilityTransferLineSchema).min(1).max(200),
+});
+export type FacilityTransfer = z.infer<typeof FacilityTransferSchema>;
+
+export const LoadFacilityTransferInputSchema = z.object({
+  inventoryItemId: UuidSchema,
+  destinationSiteId: UuidSchema,
+  trailerCode: z.string().trim().min(1).max(20),
+  quantity: QuantitySchema,
+  notes: OptionalNotesSchema,
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
+});
+export type LoadFacilityTransferInput = z.infer<typeof LoadFacilityTransferInputSchema>;
+
+export const ReceiveFacilityTransferInputSchema = z.object({
+  transferId: UuidSchema,
+  verified: z.boolean(),
+  lines: z
+    .array(
+      z.object({
+        lineId: UuidSchema,
+        quantity: QuantitySchema,
+      }),
+    )
+    .min(1)
+    .max(200),
+  confirmLargeInput: z.boolean().optional().default(false),
+  confirmationQuantity: z.coerce.number().int().optional(),
+});
+export type ReceiveFacilityTransferInput = z.infer<typeof ReceiveFacilityTransferInputSchema>;
+
 export const InventorySystemSchema = z.object({
   purchaseOrders: z.array(PurchaseOrderSchema).default([]),
   purchaseDocuments: z.array(PurchaseDocumentSchema).default([]),
@@ -1480,6 +1559,7 @@ export const InventorySystemSchema = z.object({
   users: z.array(UserSchema).default([]),
   itemCubes: z.array(ItemCubeSchema).default([]),
   siteTransfers: z.array(SiteTransferSchema).optional(),
+  facilityTransfers: z.array(FacilityTransferSchema).optional(),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
 

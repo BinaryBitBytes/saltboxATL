@@ -182,6 +182,7 @@ export function scopeSystem(
   scoped.photos = inDivision(scoped.photos, division);
   scoped.itemCubes = inDivision(scoped.itemCubes, division);
   scoped.siteTransfers = inDivision(scoped.siteTransfers, division);
+  scoped.facilityTransfers = inDivision(scoped.facilityTransfers, division);
   return scoped;
 }
 
@@ -231,6 +232,11 @@ export function mergeDivision(
   full.photos = replaceDivision(full.photos, scoped.photos, division);
   full.itemCubes = replaceDivision(full.itemCubes, scoped.itemCubes, division);
   full.siteTransfers = replaceDivision(full.siteTransfers, scoped.siteTransfers, division);
+  full.facilityTransfers = replaceDivision(
+    full.facilityTransfers,
+    scoped.facilityTransfers,
+    division,
+  );
   full.users = scoped.users.map((user) => ({
     ...user,
     division: divisionForRole(user.role),

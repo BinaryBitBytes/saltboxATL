@@ -96,6 +96,25 @@ export async function readSystem(): Promise<InventorySystem> {
   return readScopedSystem();
 }
 
+/** Every work site in the viewer's division, including transfer trailers between them. */
+export async function readDivisionInventory(): Promise<InventorySystem> {
+  const viewer = await resolveViewerSite();
+  if (usesPostgres()) {
+    const full = await readFromPostgres();
+    const scoped = scopeSystem(full, viewer.division);
+    scoped.users = filterUsersForViewer(scoped.users, viewer.role);
+    return scoped;
+  }
+  const catalog = await readAccountCatalog();
+  const working = openDivisionWorkingCopy(
+    catalog,
+    viewer.division,
+    await readAllSiteDocuments(),
+  );
+  working.users = filterUsersForViewer(working.users, viewer.role);
+  return working;
+}
+
 async function applyScoped<T>(
   full: InventorySystem,
   viewer: ViewerSite,

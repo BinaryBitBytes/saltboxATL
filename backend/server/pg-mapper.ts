@@ -30,6 +30,8 @@ import {
   type Room,
   type ShippingOrder,
   type Site,
+  FacilityTransferLineSchema,
+  type FacilityTransfer,
   type SiteTransfer,
   type Trailer,
   type User,
@@ -454,6 +456,40 @@ export function mapSiteTransfer(row: {
     orderedBy: row.ordered_by,
     orderedAt: isoRequired(row.ordered_at),
     notes: row.notes ?? undefined,
+  };
+}
+
+export function mapFacilityTransfer(row: {
+  id: string;
+  division?: string | null;
+  status: FacilityTransfer["status"];
+  trailer_code: string;
+  source_site_id: string;
+  destination_site_id: string;
+  source_nomenclature: string;
+  destination_nomenclature: string;
+  loaded_by: string;
+  loaded_at: Date | string;
+  received_by: string | null;
+  received_at: Date | string | null;
+  notes: string | null;
+  lines: unknown;
+}): FacilityTransfer {
+  return {
+    id: row.id,
+    division: storedDivision(row.division),
+    status: row.status,
+    trailerCode: row.trailer_code,
+    sourceSiteId: row.source_site_id,
+    destinationSiteId: row.destination_site_id,
+    sourceNomenclature: row.source_nomenclature,
+    destinationNomenclature: row.destination_nomenclature,
+    loadedBy: row.loaded_by,
+    loadedAt: isoRequired(row.loaded_at),
+    receivedBy: row.received_by ?? undefined,
+    receivedAt: iso(row.received_at),
+    notes: row.notes ?? undefined,
+    lines: FacilityTransferLineSchema.array().parse(storedJson(row.lines)),
   };
 }
 

@@ -1,4 +1,10 @@
-import type { Location, Site, SiteTransfer, User } from "@/lib/inventory-schema";
+import type {
+  FacilityTransfer,
+  Location,
+  Site,
+  SiteTransfer,
+  User,
+} from "@/lib/inventory-schema";
 
 /**
  * SQL columns for one persisted app type.
@@ -52,3 +58,22 @@ export const SITE_DATABASE_COLUMNS = [
 ] as const;
 
 export const SITE_TRANSFER_SQL_COLUMNS = Object.values(SITE_TRANSFER_COLUMNS);
+
+export const FACILITY_TRANSFER_COLUMNS = {
+  id: "id",
+  division: "division",
+  status: "status",
+  trailerCode: "trailer_code",
+  sourceSiteId: "source_site_id",
+  destinationSiteId: "destination_site_id",
+  sourceNomenclature: "source_nomenclature",
+  destinationNomenclature: "destination_nomenclature",
+  loadedBy: "loaded_by",
+  loadedAt: "loaded_at",
+  receivedBy: "received_by",
+  receivedAt: "received_at",
+  notes: "notes",
+  lines: "lines",
+} as const satisfies Record<keyof FacilityTransfer, string>;
+
+export const FACILITY_TRANSFER_SQL_COLUMNS = Object.values(FACILITY_TRANSFER_COLUMNS);
