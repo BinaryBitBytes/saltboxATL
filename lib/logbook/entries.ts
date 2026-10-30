@@ -175,7 +175,7 @@ export function buildLogbookEntries(input: {
           units: lines.reduce((sum, line) => sum + line.quantity, 0),
           lines: lines.length,
         },
-        href: "/inventory",
+        href: "/damages",
       };
     },
   );

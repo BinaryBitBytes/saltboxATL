@@ -12,6 +12,10 @@ import {
   type InventoryLineDetails,
 } from "@/lib/inventory/details";
 import { inventoryKey } from "@/lib/inventory/keys";
+import {
+  assertDamageChangesBalance,
+  resolveDamageHoldLocation,
+} from "@/lib/inventory/damage";
 import { ValidationError } from "@/lib/validation/errors";
 import {
   assertEnoughOnHand,
@@ -378,6 +382,11 @@ export function applyAdjustment(input: {
     return { items: result.items, changes: [result.change] };
   }
 
+  const holdLocationId =
+    type === "damage"
+      ? resolveDamageHoldLocation(current.locationId, damagedLocationId)
+      : undefined;
+
   const quantityBefore = current.quantity;
   current.quantity -= quantity;
   assertStockDoesNotGoNegative(quantityBefore, current.quantity);
@@ -394,16 +403,15 @@ export function applyAdjustment(input: {
     quantityBefore,
     quantityAfter: current.quantity,
     description: current.description,
-    destinationLocationId:
-      type === "damage" ? damagedLocationId : undefined,
+    destinationLocationId: holdLocationId,
   };
 
-  if (type === "damage" && damagedLocationId) {
+  if (holdLocationId) {
     const moved = addQuantity(items, {
       sku: current.sku,
       upc: current.upc,
       batch: current.batch,
-      locationId: damagedLocationId,
+      locationId: holdLocationId,
       quantity,
       description: current.description,
       details: {
@@ -414,8 +422,14 @@ export function applyAdjustment(input: {
       now,
     });
     items = moved.items;
-    moved.change.destinationLocationId = damagedLocationId;
-    return { items, changes: [outbound, moved.change] };
+    moved.change.destinationLocationId = holdLocationId;
+    const changes = [outbound, moved.change];
+    assertDamageChangesBalance(changes);
+    return { items, changes };
+  }
+
+  if (type === "damage") {
+    assertDamageChangesBalance([outbound]);
   }
 
   return { items, changes: [outbound] };

@@ -127,7 +127,7 @@ describe("transaction proof photos", () => {
     expect(permissionForPhotoWrite("shipping-order", "proof-of-delivery")).to.equal(
       "confirmDelivery",
     );
-    expect(permissionForPhotoWrite("adjustment")).to.equal("adjustInventory");
+    expect(permissionForPhotoWrite("adjustment")).to.equal("damageInventory");
   });
 
   it("groups photos by PO, shipment, or adjustment reference", () => {

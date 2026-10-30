@@ -107,6 +107,15 @@ describe("user authentication safeguards", () => {
     expect(hasPermission("user", "ship")).to.equal(false);
     expect(hasPermission("user", "adjustInventory")).to.equal(false);
     expect(hasPermission("associate", "adjustInventory")).to.equal(false);
+    expect(hasPermission("associate", "damageInventory")).to.equal(true);
+    expect(hasPermission("manager", "damageInventory")).to.equal(true);
+    expect(hasPermission("user", "damageInventory")).to.equal(false);
+    expect(hasPermission("threepl", "damageInventory")).to.equal(false);
+    expect(canAccessPath("associate", "/damages")).to.equal(true);
+    expect(canAccessPath("manager", "/damages")).to.equal(true);
+    expect(canAccessPath("user", "/damages")).to.equal(false);
+    expect(canAccessPath("threepl", "/damages")).to.equal(false);
+    expect(canAccessPath("security-associate", "/damages")).to.equal(true);
     expect(hasPermission("manager", "manageUsers")).to.equal(true);
     expect(hasPermission("manager", "reopenReceiving")).to.equal(true);
     expect(hasPermission("associate", "reopenReceiving")).to.equal(false);

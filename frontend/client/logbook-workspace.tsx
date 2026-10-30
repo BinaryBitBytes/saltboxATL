@@ -23,6 +23,8 @@ import {
   ShippingStatusBadge,
 } from "@/frontend/client/status-badge";
 import type { LogbookEntry, LogbookKind } from "@/lib/logbook/entries";
+import { DamageLogLegend } from "@/frontend/client/damage-highlight";
+import { DAMAGE_LOG_HIGHLIGHT } from "@/lib/inventory/damage";
 import type { ReceivingOrderStatus, ShippingOrderStatus } from "@/lib/inventory-schema";
 
 
@@ -58,12 +60,12 @@ export function LogbookWorkspace({
   entries,
   canOpenShipments = false,
   canOpenDeliveries = false,
-  canOpenInventory = false,
+  canOpenDamages = false,
 }: {
   entries: LogbookEntry[];
   canOpenShipments?: boolean;
   canOpenDeliveries?: boolean;
-  canOpenInventory?: boolean;
+  canOpenDamages?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | LogbookKind>("all");
@@ -114,6 +116,7 @@ export function LogbookWorkspace({
           </Button>
         ))}
       </div>
+      <DamageLogLegend />
       <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
@@ -130,11 +133,16 @@ export function LogbookWorkspace({
               ? entry.href
               : entry.kind === "delivery" && canOpenDeliveries
                 ? entry.href
-                : entry.kind === "damage" && canOpenInventory
+                : entry.kind === "damage" && canOpenDamages
                   ? entry.href
                   : undefined;
+          const damaged = entry.kind === "damage";
           return (
-            <Card key={entry.id}>
+            <Card
+              key={entry.id}
+              data-damage-highlight={damaged ? "true" : undefined}
+              className={damaged ? DAMAGE_LOG_HIGHLIGHT : undefined}
+            >
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">

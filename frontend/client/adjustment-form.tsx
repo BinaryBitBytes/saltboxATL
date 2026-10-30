@@ -5,9 +5,10 @@ import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createAdjustment } from "@/backend/server/serverAction";
-import type { InventoryRow, ItemCube, Location } from "@/lib/inventory-schema";
+import type { InventoryRow, ItemCube } from "@/lib/inventory-schema";
 import { inventoryQuantityCubeMessage } from "@/lib/cubing/workflow";
 import type { LocationCubeRow } from "@/frontend/client/location-cube-table";
 import { Button } from "@/components/ui/button";
@@ -22,37 +23,28 @@ import {
 import { Field, NativeSelect } from "@/frontend/client/field";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { LargeInputConfirm, largeInputPayload } from "@/frontend/client/large-input-confirm";
-import {
-  PhotoDraftCollector,
-  revokePhotoDrafts,
-  type PhotoDraft,
-} from "@/frontend/client/photo-proof";
-import { uploadProofPhotos } from "@/frontend/client/photo-api";
 import { LIMITS } from "@/lib/validation/limits";
 import { matchesScan, type ScanPayload } from "@/lib/scan-code";
 
 const AdjustmentFormSchema = z.object({
-  type: z.enum(["overage", "shortage", "damage"]),
+  type: z.enum(["overage", "shortage"]),
   inventoryItemId: z.string().optional(),
   locationId: z.string().optional(),
   quantity: z.number().int().min(1),
   reason: z.string().trim().min(1),
   notes: z.string().optional(),
-  moveDamaged: z.boolean(),
 });
 
 type AdjustmentFormValues = z.infer<typeof AdjustmentFormSchema>;
 
 export function AdjustmentForm({
   inventory,
-  locations,
   cubes = [],
   locationCubes = [],
   selectedItemId,
   onSelectedItemIdChange,
 }: {
   inventory: InventoryRow[];
-  locations: Location[];
   cubes?: ItemCube[];
   locationCubes?: LocationCubeRow[];
   selectedItemId?: string;
@@ -62,11 +54,8 @@ export function AdjustmentForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [scannedCode, setScannedCode] = useState<string | undefined>();
-  const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
   const [confirmationQuantity, setConfirmationQuantity] = useState<number | "">("");
-  const damagedLocationId =
-    locations.find((location) => location.code === "DMG-01")?.id ?? "";
 
   const form = useForm<AdjustmentFormValues>({
     resolver: zodResolver(AdjustmentFormSchema),
@@ -77,7 +66,6 @@ export function AdjustmentForm({
       quantity: 1,
       reason: "",
       notes: "",
-      moveDamaged: true,
     },
   });
 
@@ -93,17 +81,13 @@ export function AdjustmentForm({
     control: form.control,
     name: "inventoryItemId",
   });
-  const moveDamaged = useWatch({ control: form.control, name: "moveDamaged" });
   const selected = inventory.find((item) => item.id === selectedId);
   const cubeHint = cubeHintForAdjustment({
     type,
     quantity: Number(quantity) || 0,
     selected,
-    inventory,
     cubes,
     locationCubes,
-    damagedLocationId,
-    moveDamaged: Boolean(moveDamaged),
   });
 
   function applyScan(payload: ScanPayload) {
@@ -140,10 +124,6 @@ export function AdjustmentForm({
                 reason: values.reason,
                 notes: values.notes,
                 scannedCode,
-                moveDamagedToLocationId:
-                  values.type === "damage" && values.moveDamaged
-                    ? damagedLocationId || undefined
-                    : undefined,
                 ...largeInputPayload(
                   Number(values.quantity),
                   confirmLargeInput,
@@ -154,20 +134,6 @@ export function AdjustmentForm({
                 setError(result.error);
                 return;
               }
-              if (values.type === "damage" && photoDrafts.length > 0) {
-                const uploaded = await uploadProofPhotos({
-                  ownerType: "adjustment",
-                  ownerId: result.data.referenceId,
-                  files: photoDrafts.map((draft) => draft.file),
-                });
-                if (!uploaded.ok) {
-                  setError(
-                    `Adjustment posted, but photos failed: ${uploaded.error}`,
-                  );
-                }
-              }
-              revokePhotoDrafts(photoDrafts);
-              setPhotoDrafts([]);
               form.reset({
                 type: values.type,
                 inventoryItemId: values.inventoryItemId,
@@ -175,7 +141,6 @@ export function AdjustmentForm({
                 quantity: 1,
                 reason: "",
                 notes: "",
-                moveDamaged: true,
               });
               setScannedCode(undefined);
               setConfirmLargeInput(false);
@@ -189,7 +154,6 @@ export function AdjustmentForm({
               <NativeSelect {...form.register("type")}>
                 <option value="overage"><T>Overage (+)</T></option>
                 <option value="shortage"><T>Shortage (−)</T></option>
-                <option value="damage"><T>Damage</T></option>
               </NativeSelect>
             </Field>
             <Field
@@ -246,19 +210,11 @@ export function AdjustmentForm({
           <Field label="Notes" htmlFor="notes">
             <Textarea id="notes" rows={2} {...form.register("notes")} />
           </Field>
-          {type === "damage" ? (
-            <PhotoDraftCollector
-              drafts={photoDrafts}
-              onChange={setPhotoDrafts}
-              disabled={pending}
-              title="Proof of damage"
-              description="Photograph crushed cartons, wet freight, or other damage before posting the adjustment."
-            />
-          ) : null}
-          {type === "damage" ? (
-            <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" {...form.register("moveDamaged")} /><T>Move damaged units to DMG-01 instead of writing them off</T></label>
-          ) : null}
+          <p className="text-xs text-muted-foreground">
+            <Link href="/damages" className="underline">
+              <T>Report damaged inventory on the Damages tab.</T>
+            </Link>
+          </p>
           <LargeInputConfirm
             total={Number(quantity) || 0}
             threshold={LIMITS.largeQuantity}
@@ -279,65 +235,35 @@ export function AdjustmentForm({
 }
 
 function cubeHintForAdjustment(input: {
-  type: "overage" | "shortage" | "damage";
+  type: "overage" | "shortage";
   quantity: number;
   selected: InventoryRow | undefined;
-  inventory: InventoryRow[];
   cubes: ItemCube[];
   locationCubes: LocationCubeRow[];
-  damagedLocationId: string;
-  moveDamaged: boolean;
 }): { text: string; blocks: boolean } | null {
   const { selected, quantity, type } = input;
-  if (!selected || quantity < 1 || type === "shortage") return null;
+  if (!selected || quantity < 1 || type !== "overage") return null;
+  const location = input.locationCubes.find((entry) => entry.id === selected.locationId);
+  if (!location) return null;
   const cube = input.cubes.find((entry) => entry.sku === selected.sku);
-  const profile = cube
-    ? {
-        sku: cube.sku,
-        cubicInches: cube.cubicInches,
-        unitsPerCase: cube.unitsPerCase,
-      }
-    : null;
-
-  if (type === "overage") {
-    const location = input.locationCubes.find((entry) => entry.id === selected.locationId);
-    if (!location) return null;
-    if (!profile) {
-      return {
-        blocks: false,
-        text: `${selected.sku} has not been cubed. Open the Cubing tab so this location's capacity can be checked.`,
-      };
-    }
-    const message = inventoryQuantityCubeMessage({
-      sku: selected.sku,
-      locationCode: location.code,
-      capacity: location.cubeCapacityCubicInches,
-      committedCubicInches: location.committedCubicInches,
-      cube: profile,
-      quantityBefore: selected.quantity,
-      quantityAfter: selected.quantity + quantity,
-    });
-    return message ? { text: message, blocks: true } : null;
+  if (!cube) {
+    return {
+      blocks: false,
+      text: `${selected.sku} has not been cubed. Open the Cubing tab so this location's capacity can be checked.`,
+    };
   }
-
-  if (!input.moveDamaged || !input.damagedLocationId) return null;
-  const location = input.locationCubes.find((entry) => entry.id === input.damagedLocationId);
-  if (!location || !profile) return null;
-  const destination = input.inventory.find(
-    (item) =>
-      item.sku === selected.sku &&
-      item.locationId === input.damagedLocationId &&
-      (item.batch ?? null) === (selected.batch ?? null),
-  );
-  const before = destination?.quantity ?? 0;
   const message = inventoryQuantityCubeMessage({
     sku: selected.sku,
     locationCode: location.code,
     capacity: location.cubeCapacityCubicInches,
     committedCubicInches: location.committedCubicInches,
-    cube: profile,
-    quantityBefore: before,
-    quantityAfter: before + quantity,
+    cube: {
+      sku: cube.sku,
+      cubicInches: cube.cubicInches,
+      unitsPerCase: cube.unitsPerCase,
+    },
+    quantityBefore: selected.quantity,
+    quantityAfter: selected.quantity + quantity,
   });
   return message ? { text: message, blocks: true } : null;
 }

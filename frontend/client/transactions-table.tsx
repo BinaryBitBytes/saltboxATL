@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/table";
 import { NativeSelect } from "@/frontend/client/field";
 import { TransactionTypeBadge } from "@/frontend/client/status-badge";
+import { DamageLogLegend } from "@/frontend/client/damage-highlight";
+import { damageLogHighlight } from "@/lib/inventory/damage";
 import { formatSignedInt } from "@/lib/format";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { PhotoThumbnails } from "@/frontend/client/photo-proof";
@@ -147,6 +149,7 @@ export function TransactionsTable({
           <option value="import"><T>Import</T></option>
         </NativeSelect>
       </div>
+      <DamageLogLegend />
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((group) => (
@@ -179,7 +182,8 @@ export function TransactionsTable({
                   </TableCell>
                 ))}
               </TableRow>
-            ))
+              );
+            })
           )}
         </TableBody>
       </Table>

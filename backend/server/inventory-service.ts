@@ -92,6 +92,13 @@ import {
   addStructuredLocation,
   NomenclatureError,
 } from "@/lib/locations/hierarchy";
+import {
+  assertDamageReportedOnTab,
+  buildDamageReport,
+  resolveDamageHoldLocation,
+  type DamageReport,
+  type DamageReportSource,
+} from "@/lib/inventory/damage";
 import { photosForReference } from "@/lib/photos/query";
 import { LIMITS } from "@/lib/validation/limits";
 import {
@@ -2083,6 +2090,11 @@ export async function getTransactionRows(): Promise<InventoryTransactionRow[]> {
   return enrichTransactions(system);
 }
 
+export async function getDamageReport(): Promise<DamageReport> {
+  const system = await readSystem();
+  return buildDamageReport(system.transactions);
+}
+
 export async function lookupInventoryByCode(
   code: string,
 ): Promise<InventoryRow[]> {
@@ -2101,6 +2113,7 @@ export type AdjustmentRecordResult = StockChange & { referenceId: string };
 
 export async function createAdjustmentRecord(
   rawData: unknown,
+  source: DamageReportSource = "adjustment",
 ): Promise<AdjustmentRecordResult> {
   const parsed = parseWithSchema(CreateAdjustmentInputSchema, rawData);
   if (!parsed.success) {
@@ -2111,6 +2124,7 @@ export async function createAdjustmentRecord(
   if (!["overage", "shortage", "damage"].includes(input.type)) {
     throw new ServiceError("Adjustment type must be overage, shortage, or damage.");
   }
+  assertDamageReportedOnTab(input.type, source);
 
   assertLargeInputConfirmed(
     input.quantity,
@@ -2209,6 +2223,7 @@ export async function createAdjustmentRecord(
     }
 
     if (input.type === "damage" && input.moveDamagedToLocationId) {
+      resolveDamageHoldLocation(target.locationId, input.moveDamagedToLocationId);
       const damagedLocation = system.locations.find(
         (location) => location.id === input.moveDamagedToLocationId,
       );

@@ -23,7 +23,7 @@ export function permissionForPhotoWrite(
     if (documentKind === "proof-of-delivery") return "confirmDelivery";
     return "ship";
   }
-  return "adjustInventory";
+  return "damageInventory";
 }
 
 export function resolvePhotoOwner(
