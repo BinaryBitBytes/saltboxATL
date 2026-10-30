@@ -40,6 +40,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "receive",
     "putaway",
     "moveInventory",
+    "damageInventory",
     "cube",
     "ship",
     "scanLookup",
@@ -118,6 +119,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "receive",
     "putaway",
     "moveInventory",
+    "damageInventory",
     "cube",
     "ship",
     "scanLookup",
@@ -141,6 +143,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "receive",
     "putaway",
     "moveInventory",
+    "damageInventory",
     "cube",
     "ship",
     "scanLookup",
@@ -155,6 +158,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "receive",
     "putaway",
     "moveInventory",
+    "damageInventory",
     "cube",
     "ship",
     "scanLookup",
@@ -179,6 +183,7 @@ const PAGE_RULES: Array<{
 }> = [
   { path: "/", permissions: ["viewDashboard"] },
   { path: "/inventory", permissions: ["viewInventory"] },
+  { path: "/damages", permissions: ["damageInventory"] },
   { path: "/reports", permissions: ["viewInventory"] },
   { path: "/reports/items", permissions: ["viewInventory"] },
   { path: "/cubing", permissions: ["cube"] },
@@ -211,6 +216,8 @@ const API_RULES: Array<{
   { method: "POST", path: "/api/users", permissions: ["manageUsers"] },
   { method: "PATCH", path: "/api/users", permissions: ["manageUsers"] },
   { method: "GET", path: "/api/transactions", permissions: ["viewTransactions"] },
+  { method: "GET", path: "/api/damages", permissions: ["damageInventory"] },
+  { method: "POST", path: "/api/damages", permissions: ["damageInventory"] },
   { method: "GET", path: "/api/shipping", permissions: ["ship"] },
   { method: "POST", path: "/api/shipping", permissions: ["ship"] },
   { method: "GET", path: "/api/receiving", permissions: ["receive"] },
@@ -228,12 +235,12 @@ const API_RULES: Array<{
   {
     method: "POST",
     path: "/api/photos",
-    permissions: ["receive", "ship", "adjustInventory", "confirmDelivery"],
+    permissions: ["receive", "ship", "adjustInventory", "damageInventory", "confirmDelivery"],
   },
   {
     method: "DELETE",
     path: `/api/photos/${ORDER_ID}`,
-    permissions: ["receive", "ship", "adjustInventory", "confirmDelivery"],
+    permissions: ["receive", "ship", "adjustInventory", "damageInventory", "confirmDelivery"],
   },
   {
     method: "POST",
@@ -391,7 +398,7 @@ describe("role permission scope", () => {
       { owner: "shipping-order", kind: "load-sheet", permission: "ship" },
       { owner: "shipping-order", kind: "pack-slip", permission: "ship" },
       { owner: "shipping-order", kind: "proof-of-delivery", permission: "confirmDelivery" },
-      { owner: "adjustment", kind: "freight-proof", permission: "adjustInventory" },
+      { owner: "adjustment", kind: "freight-proof", permission: "damageInventory" },
     ];
 
     for (const write of writes) {
@@ -412,7 +419,9 @@ describe("role permission scope", () => {
       false,
     );
     expect(hasPermission("threepl", permissionForPhotoWrite("adjustment"))).to.equal(false);
-    expect(hasPermission("associate", permissionForPhotoWrite("adjustment"))).to.equal(false);
+    expect(hasPermission("user", permissionForPhotoWrite("adjustment"))).to.equal(false);
+    expect(hasPermission("associate", permissionForPhotoWrite("adjustment"))).to.equal(true);
+    expect(hasPermission("manager", permissionForPhotoWrite("adjustment"))).to.equal(true);
     expect(hasPermission("manager", permissionForPhotoWrite("shipping-order", "proof-of-delivery"))).to.equal(
       true,
     );

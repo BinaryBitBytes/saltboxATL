@@ -13,7 +13,7 @@ export default async function TransactionsPage() {
     <div className="grid gap-6">
       <div>
         <h1 className="font-heading text-xl font-semibold"><T>Transaction log</T></h1>
-        <p className="text-sm text-muted-foreground"><T>Every putaway, shipment, spreadsheet import, overage, shortage, and damage adjustment. Use the logbook to review whole shipments, deliveries, and damage events.</T></p>
+        <p className="text-sm text-muted-foreground"><T>Every putaway, shipment, spreadsheet import, overage, shortage, and damage adjustment. Damaged transactions are highlighted. Use the logbook to review whole shipments, deliveries, and damage events.</T></p>
       </div>
       <TransactionsTable initialRows={rows} />
     </div>

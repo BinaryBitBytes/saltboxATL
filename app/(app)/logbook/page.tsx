@@ -30,7 +30,7 @@ export default async function LogbookPage() {
         entries={entries}
         canOpenShipments={hasPermission(user.role, "ship")}
         canOpenDeliveries={hasPermission(user.role, "receive")}
-        canOpenInventory={hasPermission(user.role, "viewInventory")}
+        canOpenDamages={hasPermission(user.role, "damageInventory")}
       />
     </div>
   );

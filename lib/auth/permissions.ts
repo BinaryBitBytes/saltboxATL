@@ -55,6 +55,7 @@ export const PERMISSIONS = {
   receive: withSecurityRoles(["associate", "threepl", "manager"]),
   putaway: withSecurityRoles(["associate", "threepl", "manager"]),
   moveInventory: withSecurityRoles(["associate", "manager"]),
+  damageInventory: withSecurityRoles(["associate", "manager"]),
   cube: withSecurityRoles(["associate", "threepl", "manager"]),
   ship: withSecurityRoles(["associate", "threepl", "manager"]),
   scanLookup: withSecurityRoles(["user", "associate", "threepl", "manager"]),
@@ -147,6 +148,9 @@ export function canAccessPath(
   if (path === "/inventory" || path.startsWith("/inventory/") || path === "/reports" || path.startsWith("/reports/")) {
     return hasPermission(role, "viewInventory");
   }
+  if (path === "/damages" || path.startsWith("/damages/")) {
+    return hasPermission(role, "damageInventory");
+  }
   if (path === "/cubing" || path.startsWith("/cubing/")) {
     return hasPermission(role, "cube");
   }
@@ -201,6 +205,9 @@ export function canAccessPath(
   if (path === "/api/transactions" || path.startsWith("/api/transactions/")) {
     return hasPermission(role, "viewTransactions");
   }
+  if (path === "/api/damages" || path.startsWith("/api/damages/")) {
+    return hasPermission(role, "damageInventory");
+  }
   if (path === "/api/shipping" || path.startsWith("/api/shipping/")) {
     return hasPermission(role, "ship");
   }
@@ -234,6 +241,7 @@ export function canAccessPath(
       "receive",
       "ship",
       "adjustInventory",
+      "damageInventory",
       "confirmDelivery",
     ]);
   }

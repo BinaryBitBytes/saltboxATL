@@ -110,6 +110,8 @@ function revalidateInventory() {
   revalidatePath("/orders");
   revalidatePath("/locations");
   revalidatePath("/transactions");
+  revalidatePath("/logbook");
+  revalidatePath("/damages");
   revalidatePath("/inbound");
   revalidatePath("/loads");
 }
@@ -774,6 +776,36 @@ export async function createAdjustment(
         sku: data.sku,
         quantityDelta: data.quantityDelta,
         referenceId: data.referenceId,
+      },
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function damageOut(
+  rawData: unknown,
+): Promise<
+  ActionResult<{
+    sku: string;
+    quantityDelta: number;
+    referenceId: string;
+    unitsDamaged: number;
+  }>
+> {
+  try {
+    const user = await requireApiPermission("damageInventory");
+    const payload = withCreatedBy(rawData, user);
+    payload.type = "damage";
+    const data = await createAdjustmentRecord(payload, "damage-report");
+    revalidateInventory();
+    return {
+      ok: true,
+      data: {
+        sku: data.sku,
+        quantityDelta: data.quantityDelta,
+        referenceId: data.referenceId,
+        unitsDamaged: Math.abs(data.quantityDelta),
       },
     };
   } catch (error) {

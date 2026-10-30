@@ -38,7 +38,7 @@ export default async function InventoryPage() {
         <p className="text-sm text-muted-foreground">
           {canAdjust
             ? t(
-                "{{division}} on-hand quantities, spreadsheet import/export, barcode/QR labels, and location label printing, plus overage / shortage / damage adjustments.",
+                "{{division}} on-hand quantities, spreadsheet import/export, barcode/QR labels, and location label printing, plus overage and shortage adjustments.",
                 { division: t(divisionLabel(division)) },
               )
             : t(

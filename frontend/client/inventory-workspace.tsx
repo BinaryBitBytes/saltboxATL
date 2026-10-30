@@ -48,7 +48,6 @@ export function InventoryWorkspace({
         {canAdjust ? (
           <AdjustmentForm
             inventory={rows}
-            locations={locations}
             cubes={cubes}
             locationCubes={locationCubes}
             selectedItemId={selectedItemId}

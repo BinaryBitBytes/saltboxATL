@@ -23,6 +23,7 @@ import {
   TransactionTypeBadge,
 } from "@/frontend/client/status-badge";
 import { formatSignedInt, uniqueSkuCount } from "@/lib/format";
+import { damageLogHighlight } from "@/lib/inventory/damage";
 import { emptyActiveLocations } from "@/lib/locations/availability";
 
 export default async function Home() {
@@ -36,6 +37,7 @@ export default async function Home() {
   const canShip = hasPermission(user.role, "ship");
   const canPlaceOrder = hasPermission(user.role, "placeOrder");
   const canViewInventory = hasPermission(user.role, "viewInventory");
+  const canDamage = hasPermission(user.role, "damageInventory");
   const canViewTransactions = hasPermission(user.role, "viewTransactions");
   const canManageLocations = hasPermission(user.role, "manageLocations");
   const canForecast = hasPermission(user.role, "viewInboundForecast");
@@ -158,6 +160,15 @@ export default async function Home() {
               render={<Link href="/shipping" />}
             >
               New shipment
+            </Button>
+          ) : null}
+          {canDamage ? (
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/damages" />}
+            >
+              Damages
             </Button>
           ) : null}
           {canViewInventory ? (
@@ -443,10 +454,13 @@ export default async function Home() {
             {transactions.length === 0 ? (
               <p className="text-muted-foreground"><T>No stock movements yet. Complete putaway or post an adjustment.</T></p>
             ) : (
-              transactions.slice(0, 8).map((entry) => (
+              transactions.slice(0, 8).map((entry) => {
+                const highlight = damageLogHighlight(entry.type);
+                return (
                 <div
                   key={entry.id}
-                  className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+                  data-damage-highlight={highlight ? "true" : undefined}
+                  className={`flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 ${highlight ?? "border-border"}`}
                 >
                   <span className="min-w-0 truncate">
                     {entry.sku}
@@ -460,7 +474,8 @@ export default async function Home() {
                     <TransactionTypeBadge type={entry.type} />
                   </span>
                 </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
