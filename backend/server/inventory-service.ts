@@ -58,6 +58,14 @@ import {
 } from "@/lib/inventory/bin-container";
 import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import { createId, nowIso } from "@/backend/server/helperUtils";
+import { divisionOf } from "@/lib/divisions";
+import { primarySiteId } from "@/lib/sites/database";
+import {
+  allocatePutawayQuantity,
+  buildPutawaySlots,
+  locationHomeError,
+  type PutawaySlice,
+} from "@/lib/cubing/putaway-allocation";
 import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
 import {
   applyPartialInboundPallet,
@@ -112,7 +120,7 @@ import {
   hasPostedPutaway,
   isCasePutawayPosted,
 } from "@/lib/receiving/reopen";
-import { caseCubicInches, defaultCubeCapacity, measureCaseCube } from "@/lib/cubing/measure";
+import { caseCubicInches, defaultCubeCapacity, measureCaseCube, roundCube } from "@/lib/cubing/measure";
 import {
   buildCubingLocations,
   committedCubeForLocation,
@@ -256,12 +264,15 @@ function appendTransactions(
       quantityDelta: change.quantityDelta,
       quantityBefore: change.quantityBefore,
       quantityAfter: change.quantityAfter,
-      reason: extra.reason,
+      reason: change.cubeForced
+        ? [extra.reason, "Forced cube override"].filter(Boolean).join(" · ")
+        : extra.reason,
       referenceType: extra.referenceType,
       referenceId: extra.referenceId,
       scannedCode: extra.scannedCode,
       createdBy: extra.createdBy,
       notes: extra.notes,
+      cubeForced: change.cubeForced === true,
     });
   }
   if (system.transactions.length > MAX_TRANSACTIONS) {
@@ -510,6 +521,7 @@ function assertDirectedCasesFit(
   locationId: string,
   cases: CaseItem[],
   freight: { poNumber?: string | null; jobIdNumber?: string | null },
+  options?: { ignoreCube?: boolean },
 ): void {
   const location = system.locations.find((entry) => entry.id === locationId);
   if (!location) {
@@ -566,7 +578,7 @@ function assertDirectedCasesFit(
       jobIdNumber: freight.jobIdNumber,
     });
   }
-  if (!origin) return;
+  if (options?.ignoreCube || !origin) return;
   const placement = checkBinPlacement({
     location: origin,
     occupants: occupants.get(locationId) ?? [],
@@ -1249,37 +1261,140 @@ export async function assignPutawayLocation(
     }
 
     if (putaway.putawayLocationId) {
-      assertDirectedCasesFit(
-        system,
-        pallet,
-        putaway.putawayLocationId,
-        targets,
-        receivingFreight(system, order),
-      );
+      applyCubeAllocation(system, order, pallet, targets, putaway.putawayLocationId, {
+        force: parsed.data.forceCube,
+      });
     }
 
-    for (const caseItem of targets) {
-      caseItem.putawayRoomId = putaway.putawayRoomId;
-      caseItem.putawayLocationId = putaway.putawayLocationId;
-    }
     order.updatedAt = nowIso();
     return order;
   });
 }
 
+function casesFromSlices(source: CaseItem, slices: PutawaySlice[]): CaseItem[] {
+  return slices.map((slice, index) => ({
+    ...source,
+    id: index === 0 ? source.id : createId(),
+    quantityInCase: slice.quantity,
+    putawayRoomId: slice.roomId,
+    putawayLocationId: slice.locationId,
+    putawayPostedAt: null,
+    licensePlateNumber: index === 0 ? source.licensePlateNumber : null,
+    cubeForced: slice.role === "forced",
+  }));
+}
+
+function applyCubeAllocation(
+  system: InventorySystem,
+  order: ReceivingOrder,
+  pallet: Pallet,
+  targets: CaseItem[],
+  locationId: string,
+  options: { force: boolean },
+): void {
+  const division = divisionOf(order);
+  const siteId = primarySiteId(system, division) ?? "";
+  const freight = receivingFreight(system, order);
+  const slots = buildPutawaySlots({
+    locations: system.locations,
+    bays: system.bays,
+    aisles: system.aisles,
+    zones: system.zones,
+    buildings: system.buildings,
+    items: system.inventoryItems,
+    orders: system.receivingOrders,
+    cubes: system.itemCubes,
+    purchaseOrders: system.purchaseOrders,
+    excludeCaseIds: new Set(targets.map((item) => item.id)),
+  });
+  const chosen = slots.find((slot) => slot.id === locationId);
+  if (!chosen) {
+    throw new ServiceError("Putaway location was not found.", 404);
+  }
+  const homeError = locationHomeError(chosen, division, siteId);
+  if (homeError) throw new ServiceError(homeError);
+
+  const working = slots.map((slot) => ({
+    ...slot,
+    occupants: slot.occupants.map((occupant) => ({ ...occupant })),
+  }));
+  const replacements = new Map<string, CaseItem[]>();
+
+  for (const caseItem of targets) {
+    const cube = system.itemCubes.find((entry) => entry.sku === caseItem.sku);
+    const plan = allocatePutawayQuantity({
+      quantity: caseItem.quantityInCase,
+      cubicInchesPerUnit: cube ? cube.cubicInches / cube.unitsPerCase : 0,
+      projectId: freight.jobIdNumber,
+      poNumber: freight.poNumber,
+      sku: caseItem.sku,
+      batch: caseItem.batch,
+      division,
+      siteId,
+      locationId,
+      locations: working,
+      force: options.force,
+    });
+    if (!plan.ok) throw new ServiceError(plan.error);
+    for (const slice of plan.slices) {
+      const slot = working.find((entry) => entry.id === slice.locationId);
+      if (!slot) continue;
+      slot.committedCubicInches = roundCube(slot.committedCubicInches + slice.cubicInches);
+      slot.occupants.push({
+        sku: caseItem.sku,
+        batch: caseItem.batch,
+        quantity: slice.quantity,
+        poNumber: freight.poNumber,
+        jobIdNumber: freight.jobIdNumber,
+      });
+    }
+    replacements.set(caseItem.id, casesFromSlices(caseItem, plan.slices));
+  }
+
+  for (const [caseId, nextCases] of replacements) {
+    const index = pallet.cases.findIndex((item) => item.id === caseId);
+    if (index < 0) continue;
+    pallet.cases.splice(index, 1, ...nextCases);
+  }
+  Object.assign(pallet, recountPallet(pallet));
+}
+
 export async function completePutawayOrder(
   orderId: string,
-  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+  confirmation?: {
+    confirmLargeInput?: boolean;
+    confirmationQuantity?: number;
+    confirmCubeFit?: boolean;
+  },
 ): Promise<ReceivingOrder> {
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
     requireAwaitingPutaway(order);
+    if (confirmation?.confirmCubeFit !== true) {
+      throw new ServiceError(
+        "Verify that this inventory will fit before completing putaway.",
+      );
+    }
 
     const pending = casesPendingPutaway(order);
     if (pending.length === 0) {
       throw new ServiceError("There are no received cases to put away.");
     }
     assertPutawayReady(pending);
+    const division = divisionOf(order);
+    const siteId = primarySiteId(system, division) ?? "";
+    const slots = buildPutawaySlots({
+      locations: system.locations,
+      bays: system.bays,
+      aisles: system.aisles,
+      zones: system.zones,
+      buildings: system.buildings,
+      items: system.inventoryItems,
+      orders: system.receivingOrders,
+      cubes: system.itemCubes,
+      purchaseOrders: system.purchaseOrders,
+      excludeCaseIds: new Set(pending.map((item) => item.id)),
+    });
     const byLocation = new Map<string, CaseItem[]>();
     for (const item of pending) {
       if (!item.putawayLocationId) continue;
@@ -1288,10 +1403,21 @@ export async function completePutawayOrder(
       byLocation.set(item.putawayLocationId, group);
     }
     for (const [locationId, group] of byLocation) {
+      const slot = slots.find((entry) => entry.id === locationId);
+      const homeError = slot ? locationHomeError(slot, division, siteId) : "Putaway location was not found.";
+      if (homeError) throw new ServiceError(homeError);
       const pallet = order.pallets.find((entry) =>
         entry.cases.some((item) => group.some((candidate) => candidate.id === item.id)),
       );
-      assertDirectedCasesFit(system, pallet, locationId, group, receivingFreight(system, order));
+      const forced = group.every((item) => item.cubeForced === true);
+      assertDirectedCasesFit(
+        system,
+        pallet,
+        locationId,
+        group,
+        receivingFreight(system, order),
+        { ignoreCube: forced },
+      );
     }
     const totalUnits = pending.reduce((sum, item) => sum + item.quantityInCase, 0);
     assertLargeInputConfirmed(

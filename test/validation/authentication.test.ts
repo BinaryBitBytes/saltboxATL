@@ -89,9 +89,15 @@ describe("user authentication safeguards", () => {
     expect(hasPermission("user", "moveInventory")).to.equal(false);
     expect(hasPermission("threepl", "moveInventory")).to.equal(false);
     expect(hasPermission("associate", "cube")).to.equal(true);
+    expect(hasPermission("manager", "cube")).to.equal(true);
+    expect(hasPermission("security-associate", "cube")).to.equal(true);
+    expect(hasPermission("security-manager", "cube")).to.equal(true);
     expect(hasPermission("user", "cube")).to.equal(false);
+    expect(hasPermission("threepl", "cube")).to.equal(false);
     expect(canAccessPath("associate", "/cubing")).to.equal(true);
+    expect(canAccessPath("manager", "/cubing")).to.equal(true);
     expect(canAccessPath("user", "/cubing")).to.equal(false);
+    expect(canAccessPath("threepl", "/cubing")).to.equal(false);
     expect(hasPermission("user", "placeOrder")).to.equal(true);
     expect(hasPermission("user", "fulfillOrder")).to.equal(false);
     expect(hasPermission("associate", "fulfillOrder")).to.equal(true);

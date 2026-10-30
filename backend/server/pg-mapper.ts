@@ -480,6 +480,7 @@ export function mapItem(row: {
   job_id_number?: string | null;
   cartons?: unknown;
   container_id?: string | null;
+  cube_forced?: boolean | null;
 }): InventoryItem {
   const strandCount =
     row.strand_count == null || row.strand_count === ""
@@ -530,6 +531,7 @@ export function mapItem(row: {
       : null,
     lastMovedAt: iso(row.last_moved_at),
     updatedAt: iso(row.updated_at),
+    cubeForced: row.cube_forced === true,
   };
 }
 
@@ -553,6 +555,7 @@ export function mapTransaction(row: {
   created_by: string | null;
   notes: string | null;
   division?: string | null;
+  cube_forced?: boolean | null;
 }): InventoryTransaction {
   return {
     id: row.id,
@@ -574,6 +577,7 @@ export function mapTransaction(row: {
     scannedCode: row.scanned_code ?? undefined,
     createdBy: row.created_by ?? undefined,
     notes: row.notes ?? undefined,
+    cubeForced: row.cube_forced === true,
   };
 }
 

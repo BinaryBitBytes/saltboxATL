@@ -26,6 +26,8 @@ import { formatSignedInt } from "@/lib/format";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { PhotoThumbnails } from "@/frontend/client/photo-proof";
 import { matchesScan } from "@/lib/scan-code";
+import { FORCED_CUBE_LABEL, FORCED_CUBE_ROW_CLASS, isForcedCube } from "@/lib/cubing/forced-cube";
+import { Badge } from "@/components/ui/badge";
 
 const features = tableFeatures({});
 const columnHelper =
@@ -53,7 +55,15 @@ const columns = columnHelper.columns([
   }),
   columnHelper.accessor("reason", {
     header: () => <T>Reason</T>,
-    cell: ({ getValue }) => getValue() || "—",
+    cell: ({ row, getValue }) =>
+      isForcedCube(row.original) ? (
+        <span className="inline-flex items-center gap-1">
+          <Badge variant="destructive"><T>{FORCED_CUBE_LABEL}</T></Badge>
+          <span>{getValue() || FORCED_CUBE_LABEL}</span>
+        </span>
+      ) : (
+        getValue() || "—"
+      ),
   }),
   columnHelper.accessor("photos", {
     header: () => <T>Photos</T>,
@@ -160,13 +170,11 @@ export function TransactionsTable({
               <TableCell colSpan={columns.length} className="text-muted-foreground"><T>No transactions yet.</T></TableCell>
             </TableRow>
           ) : (
-            table.getRowModel().rows.map((row) => {
-              const highlight = damageLogHighlight(row.original.type);
-              return (
+            table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
-                data-damage-highlight={highlight ? "true" : undefined}
-                className={highlight}
+                data-cube-forced={isForcedCube(row.original) ? "true" : undefined}
+                className={isForcedCube(row.original) ? FORCED_CUBE_ROW_CLASS : undefined}
               >
                 {row.getAllCells().map((cell) => (
                   <TableCell key={cell.id}>

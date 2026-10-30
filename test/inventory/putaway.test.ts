@@ -53,6 +53,7 @@ describe("receiving and putaway process split", () => {
     expect(parsed.success).to.equal(true);
     if (parsed.success) {
       expect(parsed.data.applyToPallet).to.equal(true);
+      expect(parsed.data.forceCube).to.equal(false);
     }
   });
 });
