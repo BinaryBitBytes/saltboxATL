@@ -137,6 +137,8 @@ export const CaseItemSchema = z.object({
   putawayRoomId: UuidSchema.nullable().default(null),
   putawayLocationId: UuidSchema.nullable().default(null),
   putawayPostedAt: DateTimeSchema.nullable().optional().default(null),
+  /** True when this case was forced into a location past its cube. */
+  cubeForced: z.boolean().optional(),
 });
 export type CaseItem = z.infer<typeof CaseItemSchema>;
 
@@ -210,6 +212,8 @@ export const PutawayLocationInputSchema = z.object({
   putawayRoomId: UuidSchema.nullable().optional().default(null),
   putawayLocationId: UuidSchema,
   applyToPallet: z.boolean().optional().default(false),
+  /** Put the full quantity in the location even when it exceeds the cube. */
+  forceCube: z.boolean().optional().default(false),
 });
 export type PutawayLocationInput = z.infer<typeof PutawayLocationInputSchema>;
 
@@ -642,6 +646,7 @@ export const InventoryItemSchema = z.object({
   fiber: FiberItemSchema.nullable().default(null),
   lastMovedAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
+  cubeForced: z.boolean().optional(),
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
@@ -696,6 +701,7 @@ export const InventoryTransactionSchema = z.object({
   scannedCode: z.string().optional(),
   createdBy: z.string().optional(),
   notes: OptionalNotesSchema,
+  cubeForced: z.boolean().optional(),
 });
 export type InventoryTransaction = z.infer<typeof InventoryTransactionSchema>;
 

@@ -34,6 +34,7 @@ export type StockChange = {
   quantityBefore: number;
   quantityAfter: number;
   description?: string;
+  cubeForced?: boolean;
 };
 
 export function caseItemAttributesFromInbound(
@@ -185,11 +186,12 @@ export function putAwayCases(
         ...(caseItem.manufacturer ? { manufacturer: caseItem.manufacturer } : {}),
         ...(caseItem.color ? { color: caseItem.color } : {}),
         ...(caseItem.fiber ? { fiber: caseItem.fiber } : {}),
+        ...(caseItem.cubeForced ? { cubeForced: true } : {}),
       },
       now,
     });
     next = result.items;
-    changes.push(result.change);
+    changes.push({ ...result.change, cubeForced: caseItem.cubeForced === true });
   }
 
   return { items: next, changes };

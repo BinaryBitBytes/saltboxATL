@@ -8,6 +8,7 @@ export type InventoryLineDetails = {
   manufacturer?: string;
   color?: string | null;
   fiber?: FiberItem | null;
+  cubeForced?: boolean;
 };
 
 export function fibersEqual(
@@ -38,6 +39,7 @@ export function applyInventoryDetails(
         : (item.manufacturer ?? ""),
     color: details.color !== undefined ? details.color : (item.color ?? null),
     fiber: details.fiber !== undefined ? details.fiber : (item.fiber ?? null),
+    cubeForced: item.cubeForced === true || details.cubeForced === true,
   };
 }
 

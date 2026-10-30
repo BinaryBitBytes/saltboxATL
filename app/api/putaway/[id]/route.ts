@@ -35,6 +35,7 @@ export async function POST(
       putaway?: unknown;
       confirmLargeInput?: boolean;
       confirmationQuantity?: number;
+      confirmCubeFit?: boolean;
     };
 
     if (body.action === "assign-location" && body.palletId && body.caseId) {
@@ -47,6 +48,7 @@ export async function POST(
         await completePutawayOrder(id, {
           confirmLargeInput: body.confirmLargeInput,
           confirmationQuantity: body.confirmationQuantity,
+          confirmCubeFit: body.confirmCubeFit,
         }),
       );
     }

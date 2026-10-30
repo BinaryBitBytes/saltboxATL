@@ -521,7 +521,11 @@ export async function assignReceivingPutawayLocation(
 
 export async function completePutaway(
   orderId: string,
-  confirmation?: { confirmLargeInput?: boolean; confirmationQuantity?: number },
+  confirmation?: {
+    confirmLargeInput?: boolean;
+    confirmationQuantity?: number;
+    confirmCubeFit?: boolean;
+  },
 ): Promise<ActionResult<ReceivingOrder>> {
   try {
     await requireApiPermission("putaway");
