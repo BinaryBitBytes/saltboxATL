@@ -95,6 +95,16 @@ export const PERMISSIONS = {
     "superintendent",
     "project-manager",
   ],
+  transferFreight: withSecurityRoles([
+    "associate",
+    "threepl",
+    "manager",
+    "project-manager",
+    "product-developer",
+    "logistics-coordinator",
+    "it-admin",
+    "superintendent",
+  ]),
   optimizeLogistics: [
     "product-developer",
     "logistics-coordinator",
@@ -185,6 +195,9 @@ export function canAccessPath(
   }
   if (path === "/shipping" || path.startsWith("/shipping/")) {
     return hasPermission(role, "ship");
+  }
+  if (path === "/transfers" || path.startsWith("/transfers/")) {
+    return hasPermission(role, "transferFreight");
   }
   if (path === "/locations" || path.startsWith("/locations/")) {
     return hasPermission(role, "manageLocations");

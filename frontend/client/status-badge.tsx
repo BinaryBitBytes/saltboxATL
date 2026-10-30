@@ -108,6 +108,8 @@ const transactionVariant: Record<
   damage: "destructive",
   import: "secondary",
   "site-transfer": "default",
+  "transfer-outbound": "outline",
+  "transfer-inbound": "secondary",
 };
 
 export function TransactionTypeBadge({ type }: { type: string }) {

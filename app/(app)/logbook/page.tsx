@@ -18,19 +18,22 @@ export default async function LogbookPage() {
     photos: system.photos ?? [],
     locationCodes,
     purchaseOrders: system.purchaseOrders,
+    facilityTransfers: system.facilityTransfers ?? [],
+    siteId: system.sites.length === 1 ? system.sites[0]?.id : undefined,
   });
 
   return (
     <div className="grid gap-6">
       <div>
         <h1 className="font-heading text-xl font-semibold"><T>Logbook</T></h1>
-        <p className="text-sm text-muted-foreground"><T>Review outbound shipments, inbound deliveries, and damage write-offs, including packing documents and proof photos.</T></p>
+        <p className="text-sm text-muted-foreground"><T>Review outbound shipments, inbound deliveries, facility transfers, and damage write-offs, including packing documents and proof photos.</T></p>
       </div>
       <LogbookWorkspace
         entries={entries}
         canOpenShipments={hasPermission(user.role, "ship")}
         canOpenDeliveries={hasPermission(user.role, "receive")}
         canOpenDamages={hasPermission(user.role, "damageInventory")}
+        canOpenTransfers={hasPermission(user.role, "transferFreight")}
       />
     </div>
   );

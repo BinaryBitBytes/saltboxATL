@@ -48,6 +48,12 @@ export function collectIssuedValues(system: InventorySystem): Set<number> {
     }
   }
   for (const plate of system.licensePlates ?? []) addIssued(values, plate.code);
+  for (const transfer of system.facilityTransfers ?? []) {
+    for (const line of transfer.lines ?? []) {
+      addIssued(values, line.outboundLicensePlateNumber);
+      for (const route of line.routes ?? []) addIssued(values, route.licensePlateNumber);
+    }
+  }
   return values;
 }
 
@@ -88,6 +94,11 @@ export function currentEntryUsers(
   for (const order of system.shippingOrders ?? []) {
     if (order.status === "shipped" || order.status === "cancelled") continue;
     const who = order.createdBy?.trim() || order.shipperName?.trim();
+    if (who) ids.add(normalizeUserId(who));
+  }
+  for (const transfer of system.facilityTransfers ?? []) {
+    if (transfer.status === "received") continue;
+    const who = transfer.loadedBy?.trim();
     if (who) ids.add(normalizeUserId(who));
   }
   if (ids.size === 0) ids.add("system");

@@ -45,6 +45,7 @@ export default async function Home() {
   const canAssignJob = hasPermission(user.role, "assignJobId");
   const canDrive = hasPermission(user.role, "viewDriverLoad");
   const canNetwork = hasPermission(user.role, "viewSiteNetwork");
+  const canTransfer = hasPermission(user.role, "transferFreight");
   const inventory = canViewInventory ? enrichInventory(system) : [];
   const transactions = canViewTransactions ? enrichTransactions(system) : [];
   const openReceiving = system.receivingOrders.filter(
@@ -124,6 +125,11 @@ export default async function Home() {
           {canReceive ? (
             <Button nativeButton={false} render={<Link href="/receiving" />}>
               New receiving
+            </Button>
+          ) : null}
+          {canTransfer ? (
+            <Button nativeButton={false} render={<Link href="/transfers" />}>
+              <T>Transfer</T>
             </Button>
           ) : null}
           {canPutaway ? (

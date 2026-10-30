@@ -1,16 +1,23 @@
 import type {
+  FacilityTransfer,
   InventoryTransaction,
   PhotoAttachment,
   PurchaseOrder,
   ReceivingOrder,
   ShippingOrder,
 } from "@/lib/inventory-schema";
+import { transferUnitBalance } from "@/lib/transfers/math";
 import { jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import type { PackSlipDocument, LoadManifestDocument } from "@/lib/shipping/documents";
 import { buildLoadManifest, buildPackSlip } from "@/lib/shipping/documents";
 import { photosForOwner, photosForOwnerKind } from "@/lib/photos/query";
 
-export type LogbookKind = "shipment" | "delivery" | "damage";
+export type LogbookKind =
+  | "shipment"
+  | "delivery"
+  | "damage"
+  | "transfer-outbound"
+  | "transfer-inbound";
 
 export type LogbookLine = {
   sku: string;
@@ -53,6 +60,8 @@ export function buildLogbookEntries(input: {
   photos: PhotoAttachment[];
   locationCodes: Map<string, string>;
   purchaseOrders?: PurchaseOrder[];
+  facilityTransfers?: FacilityTransfer[];
+  siteId?: string | null;
 }): LogbookEntry[] {
   const photos = input.photos ?? [];
   const deliveries: LogbookEntry[] = input.receivingOrders.map((order) => {
@@ -180,7 +189,84 @@ export function buildLogbookEntries(input: {
     },
   );
 
-  return [...deliveries, ...shipments, ...damages].sort((a, b) =>
+  const transfers = transferLogEntries(input);
+
+  return [...deliveries, ...shipments, ...damages, ...transfers].sort((a, b) =>
     a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : 0,
   );
+}
+
+function transferLogEntries(input: {
+  facilityTransfers?: FacilityTransfer[];
+  locationCodes: Map<string, string>;
+  siteId?: string | null;
+}): LogbookEntry[] {
+  const entries: LogbookEntry[] = [];
+  for (const transfer of input.facilityTransfers ?? []) {
+    const balance = transferUnitBalance(transfer);
+    const showOutbound = !input.siteId || transfer.sourceSiteId === input.siteId;
+    const showInbound = !input.siteId || transfer.destinationSiteId === input.siteId;
+    if (showOutbound) {
+      entries.push({
+        id: `transfer-out:${transfer.id}`,
+        kind: "transfer-outbound",
+        occurredAt: transfer.loadedAt,
+        title: `Outbound transfer ${transfer.trailerCode}`,
+        subtitle: `To ${transfer.destinationNomenclature} · loaded ${balance.loaded} · in transit ${balance.inTransit}`,
+        status: transfer.status,
+        actor: transfer.loadedBy,
+        carrier: transfer.trailerCode,
+        notes: transfer.notes,
+        photos: [],
+        lines: transfer.lines.map((line) => ({
+          sku: line.sku,
+          description: line.description,
+          manufacturer: line.manufacturer,
+          color: line.color,
+          quantity: line.quantityLoaded,
+          location: input.locationCodes.get(line.sourceLocationId) ?? line.sourceLocationId,
+          batch: line.batch,
+        })),
+        totals: {
+          units: balance.loaded,
+          lines: transfer.lines.length,
+        },
+        href: "/transfers/outbound",
+      });
+    }
+    if (showInbound && balance.received > 0) {
+      const lines = transfer.lines
+        .filter((line) => line.quantityReceived > 0)
+        .map((line) => ({
+          sku: line.sku,
+          description: line.description,
+          manufacturer: line.manufacturer,
+          color: line.color,
+          quantity: line.quantityReceived,
+          location: line.routes
+            .map((route) => `${route.locationCode} × ${route.quantity}`)
+            .join(", "),
+          batch: line.batch,
+        }));
+      entries.push({
+        id: `transfer-in:${transfer.id}`,
+        kind: "transfer-inbound",
+        occurredAt: transfer.receivedAt ?? transfer.loadedAt,
+        title: `Inbound transfer ${transfer.trailerCode}`,
+        subtitle: `From ${transfer.sourceNomenclature} · received ${balance.received} · in transit ${balance.inTransit}`,
+        status: transfer.status,
+        actor: transfer.receivedBy,
+        carrier: transfer.trailerCode,
+        notes: transfer.notes,
+        photos: [],
+        lines,
+        totals: {
+          units: balance.received,
+          lines: lines.length,
+        },
+        href: "/transfers/inbound",
+      });
+    }
+  }
+  return entries;
 }

@@ -32,12 +32,16 @@ const FILTERS: Array<{ id: "all" | LogbookKind; label: string }> = [
   { id: "all", label: "All" },
   { id: "shipment", label: "Shipments" },
   { id: "delivery", label: "Deliveries" },
+  { id: "transfer-outbound", label: "Outbound transfers" },
+  { id: "transfer-inbound", label: "Inbound transfers" },
   { id: "damage", label: "Damages" },
 ];
 
 function KindBadge({ kind }: { kind: LogbookKind }) {
   if (kind === "shipment") return <Badge><T>shipment</T></Badge>;
   if (kind === "delivery") return <Badge variant="secondary"><T>delivery</T></Badge>;
+  if (kind === "transfer-outbound") return <Badge variant="outline"><T>outbound transfer</T></Badge>;
+  if (kind === "transfer-inbound") return <Badge variant="secondary"><T>inbound transfer</T></Badge>;
   return <Badge variant="destructive"><T>damage</T></Badge>;
 }
 
@@ -53,6 +57,12 @@ function StatusMark({ entry }: { entry: LogbookEntry }) {
       />
     );
   }
+  if (
+    (entry.kind === "transfer-outbound" || entry.kind === "transfer-inbound") &&
+    entry.status
+  ) {
+    return <Badge variant="outline"><T>{entry.status}</T></Badge>;
+  }
   return null;
 }
 
@@ -61,11 +71,13 @@ export function LogbookWorkspace({
   canOpenShipments = false,
   canOpenDeliveries = false,
   canOpenDamages = false,
+  canOpenTransfers = false,
 }: {
   entries: LogbookEntry[];
   canOpenShipments?: boolean;
   canOpenDeliveries?: boolean;
   canOpenDamages?: boolean;
+  canOpenTransfers?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | LogbookKind>("all");
@@ -92,11 +104,14 @@ export function LogbookWorkspace({
     });
   }, [entries, kind, query]);
 
-  const counts = {
-    shipment: entries.filter((entry) => entry.kind === "shipment").length,
-    delivery: entries.filter((entry) => entry.kind === "delivery").length,
-    damage: entries.filter((entry) => entry.kind === "damage").length,
+  const counts: Record<LogbookKind, number> = {
+    shipment: 0,
+    delivery: 0,
+    damage: 0,
+    "transfer-outbound": 0,
+    "transfer-inbound": 0,
   };
+  for (const entry of entries) counts[entry.kind] += 1;
 
   return (
     <div className="grid gap-4">
@@ -135,7 +150,10 @@ export function LogbookWorkspace({
                 ? entry.href
                 : entry.kind === "damage" && canOpenDamages
                   ? entry.href
-                  : undefined;
+                  : (entry.kind === "transfer-outbound" || entry.kind === "transfer-inbound") &&
+                      canOpenTransfers
+                    ? entry.href
+                    : undefined;
           const damaged = entry.kind === "damage";
           return (
             <Card
