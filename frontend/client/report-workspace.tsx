@@ -33,6 +33,7 @@ import {
   type ItemReportRow,
 } from "@/lib/reports/item-report";
 import { formatDateTime } from "@/lib/format";
+import { FORCED_CUBE_LABEL, FORCED_CUBE_ROW_CLASS, isForcedCube } from "@/lib/cubing/forced-cube";
 import { LIMITS } from "@/lib/validation/limits";
 import type { ScanPayload } from "@/lib/scan-code";
 
@@ -235,16 +236,25 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                     <th className="py-1 font-semibold"><T>Source</T></th>
                     <th className="py-1 font-semibold"><T>Job ID</T></th>
                     <th className="py-1 text-right font-semibold"><T>Qty</T></th>
+                    <th className="py-1 font-semibold"><T>Cube</T></th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.rows.length === 0 ? (
                     <tr>
-                      <td className="py-3 text-neutral-600" colSpan={9}><T>No items matched that query.</T></td>
+                      <td className="py-3 text-neutral-600" colSpan={10}><T>No items matched that query.</T></td>
                     </tr>
                   ) : (
                     report.rows.map((row) => (
-                      <tr key={row.id} className="border-b border-neutral-300">
+                      <tr
+                        key={row.id}
+                        data-cube-forced={isForcedCube(row) ? "true" : undefined}
+                        className={
+                          isForcedCube(row)
+                            ? "border-b border-neutral-300 bg-neutral-200 font-semibold"
+                            : "border-b border-neutral-300"
+                        }
+                      >
                         <td className="py-1.5 font-medium">{row.sku}</td>
                         <td className="py-1.5">{row.upc || "—"}</td>
                         <td className="py-1.5">{row.description}</td>
@@ -256,6 +266,7 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                         <td className="py-1.5">{row.sourceLabel}</td>
                         <td className="py-1.5">{row.jobIdNumber || "—"}</td>
                         <td className="py-1.5 text-right">{row.quantity}</td>
+                        <td className="py-1.5">{isForcedCube(row) ? FORCED_CUBE_LABEL : ""}</td>
                       </tr>
                     ))
                   )}
@@ -277,16 +288,21 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                   <TableHead><T>Source</T></TableHead>
                   <TableHead><T>Job ID</T></TableHead>
                   <TableHead className="text-right"><T>Qty</T></TableHead>
+                  <TableHead><T>Cube</T></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {report.rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-muted-foreground"><T>No items matched that query.</T></TableCell>
+                    <TableCell colSpan={10} className="text-muted-foreground"><T>No items matched that query.</T></TableCell>
                   </TableRow>
                 ) : (
                   report.rows.map((row) => (
-                    <TableRow key={row.id}>
+                    <TableRow
+                      key={row.id}
+                      data-cube-forced={isForcedCube(row) ? "true" : undefined}
+                      className={isForcedCube(row) ? FORCED_CUBE_ROW_CLASS : undefined}
+                    >
                       <TableCell>
                         <div className="font-medium">{row.sku}</div>
                         {row.batch ? (
@@ -312,6 +328,13 @@ export function ReportWorkspace({ catalog }: { catalog: ItemReportRow[] }) {
                       </TableCell>
                       <TableCell>{row.jobIdNumber || "—"}</TableCell>
                       <TableCell className="text-right">{row.quantity}</TableCell>
+                      <TableCell>
+                        {isForcedCube(row) ? (
+                          <Badge variant="destructive"><T>{FORCED_CUBE_LABEL}</T></Badge>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}

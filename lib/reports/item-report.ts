@@ -38,6 +38,7 @@ export type ItemReportRow = {
   poNumber?: string;
   jobIdNumber?: string;
   status?: string;
+  cubeForced?: boolean;
 };
 
 export type ItemReport = {
@@ -130,6 +131,7 @@ export function buildItemCatalog(input: {
       roomName: slot.roomName,
       source: "on-hand",
       sourceLabel: "On hand",
+      cubeForced: item.cubeForced === true,
     };
   });
 
@@ -158,6 +160,7 @@ export function buildItemCatalog(input: {
           poNumber: order.poNumber,
           jobIdNumber: jobIdNumber ?? undefined,
           status: order.status,
+          cubeForced: item.cubeForced === true,
         };
       }),
     ),
@@ -238,6 +241,7 @@ export function itemReportToCsv(report: ItemReport): string {
     "Source",
     "PO",
     "Job ID",
+    "Forced cube",
   ];
   const lines = [
     headers.join(","),
@@ -255,6 +259,7 @@ export function itemReportToCsv(report: ItemReport): string {
         row.sourceLabel,
         row.poNumber ?? "",
         row.jobIdNumber ?? "",
+        row.cubeForced ? "yes" : "",
       ]
         .map(csvCell)
         .join(","),

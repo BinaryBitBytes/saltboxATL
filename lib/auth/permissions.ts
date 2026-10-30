@@ -55,7 +55,7 @@ export const PERMISSIONS = {
   receive: withSecurityRoles(["associate", "threepl", "manager"]),
   putaway: withSecurityRoles(["associate", "threepl", "manager"]),
   moveInventory: withSecurityRoles(["associate", "manager"]),
-  cube: withSecurityRoles(["associate", "threepl", "manager"]),
+  cube: withSecurityRoles(["associate", "manager"]),
   ship: withSecurityRoles(["associate", "threepl", "manager"]),
   scanLookup: withSecurityRoles(["user", "associate", "threepl", "manager"]),
   adjustInventory: withSecurityRoles(["manager"]),

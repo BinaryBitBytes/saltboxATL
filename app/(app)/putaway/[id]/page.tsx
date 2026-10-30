@@ -8,6 +8,10 @@ import { ReceivingStatusBadge } from "@/frontend/client/status-badge";
 
 import { formatJobId, jobIdForPurchaseOrder } from "@/lib/purchase-orders";
 import { buildCubingLocations } from "@/lib/cubing/capacity";
+import { buildPutawaySlots } from "@/lib/cubing/putaway-allocation";
+import { divisionOf } from "@/lib/divisions";
+import { primarySiteId } from "@/lib/sites/database";
+import type { InventorySystem } from "@/lib/inventory-schema";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -87,6 +91,23 @@ export default async function PutawayOrderPage({
           orders: system.receivingOrders,
           cubes: system.itemCubes,
         })}
+        allocation={{
+          division: divisionOf(order),
+          siteId: primarySiteId(system as unknown as InventorySystem, divisionOf(order)) ?? "",
+          projectId: jobIdNumber,
+          poNumber: order.poNumber,
+          slots: buildPutawaySlots({
+            locations: system.locations,
+            bays: system.bays,
+            aisles: system.aisles,
+            zones: system.zones,
+            buildings: system.buildings,
+            items: system.inventoryItems,
+            orders: system.receivingOrders,
+            cubes: system.itemCubes,
+            purchaseOrders: system.purchaseOrders,
+          }),
+        }}
       />
     </div>
   );

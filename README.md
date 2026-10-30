@@ -8,7 +8,7 @@ Saltbox uses credential login with httpOnly session cookies. Roles:
 | --- | --- |
 | **User** | Dashboard, on-hand inventory, the transaction log, and placing orders |
 | **Associate** | Warehouse execution: receiving, putaway, cubing, shipping, and order fulfillment, plus a read-only inbound forecast |
-| **3PL** | Same warehouse execution as an associate, without placing customer orders, adjusting inventory, or changing buyer POs and job IDs |
+| **3PL** | Same warehouse execution as an associate, without cubing, placing customer orders, adjusting inventory, or changing buyer POs and job IDs |
 | **Coordinator** | Upload buyer purchase orders (vendor, carrier, project, and expected lines) for inbound forecasting |
 | **Project Manager** | On-hand inventory, job IDs, and multi-site inventory insight, transfers, and logistical flow |
 | **Product Developer** | Multi-site inventory insight, site-to-site transfers, and logistical flow |
