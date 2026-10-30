@@ -23,6 +23,7 @@ import { TransactionTypeBadge } from "@/frontend/client/status-badge";
 import { DamageLogLegend } from "@/frontend/client/damage-highlight";
 import { damageLogHighlight } from "@/lib/inventory/damage";
 import { formatSignedInt } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { ScanInput } from "@/frontend/client/scan-input";
 import { PhotoThumbnails } from "@/frontend/client/photo-proof";
 import { matchesScan } from "@/lib/scan-code";
@@ -170,18 +171,22 @@ export function TransactionsTable({
               <TableCell colSpan={columns.length} className="text-muted-foreground"><T>No transactions yet.</T></TableCell>
             </TableRow>
           ) : (
-            table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                data-cube-forced={isForcedCube(row.original) ? "true" : undefined}
-                className={isForcedCube(row.original) ? FORCED_CUBE_ROW_CLASS : undefined}
-              >
-                {row.getAllCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    <table.FlexRender cell={cell} />
-                  </TableCell>
-                ))}
-              </TableRow>
+            table.getRowModel().rows.map((row) => {
+              const damageHighlight = damageLogHighlight(row.original.type);
+              const forced = isForcedCube(row.original);
+              return (
+                <TableRow
+                  key={row.id}
+                  data-damage-highlight={damageHighlight ? "true" : undefined}
+                  data-cube-forced={forced ? "true" : undefined}
+                  className={cn(damageHighlight, forced && FORCED_CUBE_ROW_CLASS)}
+                >
+                  {row.getAllCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      <table.FlexRender cell={cell} />
+                    </TableCell>
+                  ))}
+                </TableRow>
               );
             })
           )}
