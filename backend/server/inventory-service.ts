@@ -37,6 +37,7 @@ import {
   type ReceivingOrder,
   type Room,
   type CustomerOrder,
+  type InventoryAllocation,
   type ShippingOrder,
 } from "@/lib/inventory-schema";
 import { applyDeliveryNotes, applyDeliveryScan, DeliveryCheckInError } from "@/lib/delivery/check-in";
@@ -67,9 +68,33 @@ import {
   type PutawaySlice,
 } from "@/lib/cubing/putaway-allocation";
 import {
-  allocateReceivingLine,
-  withOpenReceivingReservations,
-} from "@/lib/cubing/receiving-line";
+  assertUnallocatedQuantity,
+  InitiatePickAllocationInputSchema,
+  InitiateSlottingInputSchema,
+  locationHeldByOther,
+  pickAllocatedQuantity,
+  ReleaseAllocationInputSchema,
+  reservedSlotMessage,
+  withAllocationHolds,
+  openLocationHold,
+} from "@/lib/allocation/workflow";
+import { ValidationError } from "@/lib/validation/errors";
+import {
+  applyItemCube,
+  applyLocationCapacity,
+  applyPickAllocation,
+  applySlotting,
+  consumeAllocatedPicks,
+  directReceivedCase,
+  finishSlotHolds,
+  logCompletedReceiving,
+  logPartialPallet,
+  logReopenedReceiving,
+  releaseAllocationOnSystem,
+  releaseHoldForCase,
+  releaseHoldsForOrder,
+  syncAllocationHolds,
+} from "@/lib/inventory/logged-actions";
 import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
 import {
   applyPartialInboundPallet,
@@ -148,7 +173,7 @@ import {
   attributesFromReceiving,
   backfillOnHandAttributes,
 } from "@/lib/inventory/details";
-import { assertAvailableQuantity, reservedQuantity } from "@/lib/orders/availability";
+import { reservedQuantity } from "@/lib/orders/availability";
 import { applyInventoryMove } from "@/lib/inventory/move";
 import { warehouseLabelPrinterName } from "@/lib/orders/documents";
 import {
@@ -510,13 +535,15 @@ function placementLocationsFor(
     storageClass: location.storageClass,
     division: location.division,
     cubeCapacityCubicInches: location.cubeCapacityCubicInches,
-    committedCubicInches: committedCubeForLocation(
-      location.id,
-      system.inventoryItems,
-      system.receivingOrders,
-      system.itemCubes,
-      excludeCaseIds,
-    ),
+    committedCubicInches: locationHeldByOther(system.allocations, location.id, excludeCaseIds)
+      ? location.cubeCapacityCubicInches
+      : committedCubeForLocation(
+          location.id,
+          system.inventoryItems,
+          system.receivingOrders,
+          system.itemCubes,
+          excludeCaseIds,
+        ),
   }));
 }
 
@@ -532,13 +559,19 @@ function assertDirectedCasesFit(
   if (!location) {
     throw new ServiceError("Putaway location was not found.", 404);
   }
+  const exclude = new Set(cases.map((item) => item.id));
+  if (locationHeldByOther(system.allocations, locationId, exclude)) {
+    const hold = openLocationHold(system.allocations, locationId);
+    throw new ServiceError(
+      hold ? reservedSlotMessage(location.code, hold) : "That location is reserved.",
+    );
+  }
   const incoming = incomingCaseCube(cases, system.itemCubes);
   if (incoming.missingSkus.length > 0) {
     throw new ServiceError(
       `Cube ${incoming.missingSkus.join(", ")} on the Cubing tab before directing this quantity. Enter length, width, and height in inches.`,
     );
   }
-  const exclude = new Set(cases.map((item) => item.id));
   const occupants = occupantsByLocation(system.inventoryItems);
   const views = placementLocationsFor(system, exclude);
   const origin = views.find((entry) => entry.id === locationId);
@@ -674,6 +707,10 @@ function assertInventoryIncreaseFits(
 ): void {
   const location = system.locations.find((entry) => entry.id === locationId);
   if (!location) return;
+  const hold = openLocationHold(system.allocations, locationId);
+  if (hold) {
+    throw new ServiceError(reservedSlotMessage(location.code, hold));
+  }
   const existing = system.inventoryItems.find(
     (item) => item.locationId === locationId && item.sku === sku,
   );
@@ -1091,6 +1128,7 @@ export async function addCaseToPallet(
     );
     pallet.cases.push(created);
     directReceivingLine(system, order, pallet, created, parsed.data.fullPallet);
+    syncAllocationHolds(system, order, nowIso(), order.createdBy);
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -1141,6 +1179,7 @@ export async function updateCaseOnPallet(
     );
     pallet.cases[index] = updated;
     directReceivingLine(system, order, pallet, updated, parsed.data.fullPallet);
+    syncAllocationHolds(system, order, nowIso(), order.createdBy);
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -1166,6 +1205,7 @@ export async function removeCaseFromPallet(
         "That case is already on-hand and cannot be removed.",
       );
     }
+    releaseHoldForCase(system, caseId, nowIso(), order.createdBy);
     pallet.cases.splice(index, 1);
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
@@ -1204,6 +1244,7 @@ export async function completeReceivingOrder(
       now: nowIso(),
     });
     if (!finished.ok) throw new ServiceError(finished.error);
+    logCompletedReceiving(system, order, finished.backorderLines, nowIso());
     return order;
   });
 }
@@ -1221,12 +1262,14 @@ export async function reopenReceivingOrder(
   return updateSystem((system) => {
     const order = requireOrder(system, orderId);
     try {
+      const now = nowIso();
       applyReopenAsPartial(
         order,
         actorName,
-        nowIso(),
+        now,
         parsed.data.expectedPalletCount,
       );
+      logReopenedReceiving(system, order, actorName, now);
     } catch (error) {
       throw new ServiceError(
         error instanceof Error ? error.message : "Unable to reopen this order.",
@@ -1284,62 +1327,15 @@ function directReceivingLine(
   pallet: Pallet,
   caseItem: CaseItem,
   fullPallet: boolean,
-): void {
-  const cube = system.itemCubes.find((entry) => entry.sku === caseItem.sku);
-  const perUnit = cube && cube.unitsPerCase > 0 ? cube.cubicInches / cube.unitsPerCase : 0;
-  const division = divisionOf(order);
-  const siteId = primarySiteId(system, division) ?? "";
-  const freight = receivingFreight(system, order);
-  const exclude = new Set([caseItem.id]);
-  const slots = withOpenReceivingReservations(
-    buildPutawaySlots({
-      locations: system.locations,
-      bays: system.bays,
-      aisles: system.aisles,
-      zones: system.zones,
-      buildings: system.buildings,
-      items: system.inventoryItems,
-      orders: system.receivingOrders,
-      cubes: system.itemCubes,
-      purchaseOrders: system.purchaseOrders,
-      excludeCaseIds: exclude,
-    }),
-    {
-      orders: system.receivingOrders,
-      cubes: system.itemCubes,
-      purchaseOrders: system.purchaseOrders,
-      excludeCaseIds: exclude,
-    },
-  );
-  const plan = allocateReceivingLine({
-    quantity: caseItem.quantityInCase,
-    cubicInchesPerUnit: perUnit,
-    fullPallet,
-    projectId: freight.jobIdNumber,
-    poNumber: freight.poNumber,
-    sku: caseItem.sku,
-    batch: caseItem.batch,
-    division,
-    siteId,
-    locations: slots,
-  });
-  if (!plan.ok) throw new ServiceError(plan.error);
-  const index = pallet.cases.findIndex((item) => item.id === caseItem.id);
-  if (index < 0) return;
-  if (!plan.directed) {
-    pallet.cases[index] = {
-      ...pallet.cases[index]!,
-      fullPallet: null,
-      putawayLocationId: null,
-      putawayRoomId: null,
-    };
-    return;
+): CaseItem[] {
+  try {
+    return directReceivedCase(system, order, pallet, caseItem, fullPallet);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw new ServiceError(error.message, error.status);
+    }
+    throw error;
   }
-  const next = casesFromSlices(
-    { ...pallet.cases[index]!, fullPallet: plan.fullPallet },
-    plan.slices,
-  );
-  pallet.cases.splice(index, 1, ...next);
 }
 
 function casesFromSlices(source: CaseItem, slices: PutawaySlice[]): CaseItem[] {
@@ -1366,18 +1362,23 @@ function applyCubeAllocation(
   const division = divisionOf(order);
   const siteId = primarySiteId(system, division) ?? "";
   const freight = receivingFreight(system, order);
-  const slots = buildPutawaySlots({
-    locations: system.locations,
-    bays: system.bays,
-    aisles: system.aisles,
-    zones: system.zones,
-    buildings: system.buildings,
-    items: system.inventoryItems,
-    orders: system.receivingOrders,
-    cubes: system.itemCubes,
-    purchaseOrders: system.purchaseOrders,
-    excludeCaseIds: new Set(targets.map((item) => item.id)),
-  });
+  const caseIds = new Set(targets.map((item) => item.id));
+  const slots = withAllocationHolds(
+    buildPutawaySlots({
+      locations: system.locations,
+      bays: system.bays,
+      aisles: system.aisles,
+      zones: system.zones,
+      buildings: system.buildings,
+      items: system.inventoryItems,
+      orders: system.receivingOrders,
+      cubes: system.itemCubes,
+      purchaseOrders: system.purchaseOrders,
+      excludeCaseIds: caseIds,
+    }),
+    system.allocations,
+    { caseIds },
+  );
   const chosen = slots.find((slot) => slot.id === locationId);
   if (!chosen) {
     throw new ServiceError("Putaway location was not found.", 404);
@@ -1408,6 +1409,14 @@ function applyCubeAllocation(
     });
     if (!plan.ok) throw new ServiceError(plan.error);
     for (const slice of plan.slices) {
+      if (locationHeldByOther(system.allocations, slice.locationId, caseIds)) {
+        const hold = openLocationHold(system.allocations, slice.locationId);
+        throw new ServiceError(
+          hold
+            ? reservedSlotMessage(slice.locationCode, hold)
+            : `Location ${slice.locationCode} is reserved.`,
+        );
+      }
       const slot = working.find((entry) => entry.id === slice.locationId);
       if (!slot) continue;
       slot.committedCubicInches = roundCube(slot.committedCubicInches + slice.cubicInches);
@@ -1427,6 +1436,7 @@ function applyCubeAllocation(
     if (index < 0) continue;
     pallet.cases.splice(index, 1, ...nextCases);
   }
+  syncAllocationHolds(system, order, nowIso());
   Object.assign(pallet, recountPallet(pallet));
 }
 
@@ -1525,6 +1535,12 @@ export async function completePutawayOrder(
     for (const item of pending) {
       item.putawayPostedAt = now;
     }
+    finishSlotHolds(
+      system,
+      new Set(pending.map((item) => item.id)),
+      now,
+      order.createdBy ?? order.receiverName,
+    );
     order.status = "completed";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
@@ -1548,6 +1564,7 @@ export async function partialReceivingPalletRecord(
       now: nowIso(),
     });
     if (!result.ok) throw new ServiceError(result.error);
+    logPartialPallet(system, order, palletId, partialedBy, nowIso());
     return order;
   });
 }
@@ -1595,8 +1612,10 @@ export async function cancelReceivingOrder(
         nextId: createId,
       });
       if (!result.ok) throw new ServiceError(result.error);
+      releaseHoldsForOrder(system, order.id, nowIso(), actor?.id);
       return { order, documentIds: result.documentIds };
     }
+    releaseHoldsForOrder(system, order.id, nowIso(), actor?.id);
     order.status = "cancelled";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
@@ -1632,13 +1651,14 @@ export async function createShippingOrderRecord(
         system.locations.find((entry) => entry.id === item.locationId),
         "shipping",
       );
-      assertAvailableQuantity(
-        item.quantity,
-        reservedQuantity(system.customerOrders ?? [], item.id),
-        pick.quantity,
-        item.sku,
-        "ship",
-      );
+      assertUnallocatedQuantity({
+        onHand: item.quantity,
+        orderReserved: reservedQuantity(system.customerOrders ?? [], item.id),
+        pickAllocated: pickAllocatedQuantity(system.allocations, item.id),
+        requested: pick.quantity,
+        sku: item.sku,
+        purpose: "ship",
+      });
     }
 
     const now = nowIso();
@@ -1806,6 +1826,7 @@ export async function completeCustomerOrderPickRecord(
     }
     const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
     system.customerOrders[index] = result.order;
+    consumeAllocatedPicks(system, result.order.lines, now, completedBy);
     return result.order;
   });
 }
@@ -1957,13 +1978,7 @@ export async function saveItemCubeRecord(rawData: unknown): Promise<ItemCube> {
     cubedBy: parsed.data.cubedBy,
   };
 
-  return updateSystem((system) => {
-    const index = system.itemCubes.findIndex((entry) => entry.sku === cube.sku);
-    if (index >= 0) system.itemCubes[index] = cube;
-    else system.itemCubes.push(cube);
-    system.itemCubes.sort((left, right) => left.sku.localeCompare(right.sku));
-    return cube;
-  });
+  return updateSystem((system) => applyItemCube(system, cube));
 }
 
 export async function updateLocationCapacityRecord(
@@ -1974,14 +1989,16 @@ export async function updateLocationCapacityRecord(
     throw new ServiceError(parsed.error);
   }
 
+  const actor =
+    rawData && typeof rawData === "object" && !Array.isArray(rawData)
+      ? (rawData as { createdBy?: string }).createdBy
+      : undefined;
   return updateSystem((system) => {
-    const location = system.locations.find((entry) => entry.id === parsed.data.id);
-    if (!location) {
-      throw new ServiceError("Location was not found.", 404);
+    try {
+      return applyLocationCapacity(system, { ...parsed.data, createdBy: actor });
+    } catch (error) {
+      allocationError(error);
     }
-    location.storageClass = parsed.data.storageClass;
-    location.cubeCapacityCubicInches = parsed.data.cubeCapacityCubicInches;
-    return location;
   });
 }
 
@@ -2316,6 +2333,17 @@ export async function createAdjustmentRecord(
       );
     }
 
+    if (input.type !== "overage") {
+      assertUnallocatedQuantity({
+        onHand: target.quantity,
+        orderReserved: reservedQuantity(system.customerOrders ?? [], target.id),
+        pickAllocated: pickAllocatedQuantity(system.allocations, target.id),
+        requested: input.quantity,
+        sku: target.sku,
+        purpose: "adjust",
+      });
+    }
+
     if (input.type === "overage") {
       assertInventoryIncreaseFits(
         system,
@@ -2349,6 +2377,53 @@ export async function createAdjustmentRecord(
       throw new ServiceError("Adjustment did not produce a stock change.");
     }
     return { ...change, referenceId: adjustmentId };
+  });
+}
+
+function allocationError(error: unknown): never {
+  if (error instanceof ValidationError) {
+    throw new ServiceError(error.message, error.status);
+  }
+  throw error;
+}
+
+export async function initiatePickAllocationRecord(
+  rawData: unknown,
+): Promise<InventoryAllocation> {
+  const parsed = parseWithSchema(InitiatePickAllocationInputSchema, rawData);
+  if (!parsed.success) throw new ServiceError(parsed.error);
+  return updateSystem((system) => {
+    try {
+      return applyPickAllocation(system, parsed.data);
+    } catch (error) {
+      allocationError(error);
+    }
+  });
+}
+
+export async function initiateSlottingRecord(
+  rawData: unknown,
+): Promise<InventoryAllocation[]> {
+  const parsed = parseWithSchema(InitiateSlottingInputSchema, rawData);
+  if (!parsed.success) throw new ServiceError(parsed.error);
+  return updateSystem((system) => {
+    try {
+      return applySlotting(system, parsed.data);
+    } catch (error) {
+      allocationError(error);
+    }
+  });
+}
+
+export async function releaseAllocationRecord(rawData: unknown): Promise<InventoryAllocation> {
+  const parsed = parseWithSchema(ReleaseAllocationInputSchema, rawData);
+  if (!parsed.success) throw new ServiceError(parsed.error);
+  return updateSystem((system) => {
+    try {
+      return releaseAllocationOnSystem(system, parsed.data.allocationId);
+    } catch (error) {
+      allocationError(error);
+    }
   });
 }
 

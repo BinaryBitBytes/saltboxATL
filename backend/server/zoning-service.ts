@@ -22,13 +22,14 @@ function failZoning(error: unknown): never {
 
 export async function generateZoneLocationsRecord(
   rawData: unknown,
+  actor?: string,
 ): Promise<ZoneGenerationResult> {
   const division = await resolveActiveDivision();
   const parsed = parseWithSchema(GenerateZoneLocationsInputSchema, rawData);
   if (!parsed.success) throw new ServiceError(parsed.error);
   return updateSystem((system) => {
     try {
-      return applyZoneLocations(system, division, parsed.data);
+      return applyZoneLocations(system, division, parsed.data, actor);
     } catch (error) {
       failZoning(error);
     }
@@ -37,13 +38,14 @@ export async function generateZoneLocationsRecord(
 
 export async function categorizeInventoryLinesRecord(
   rawData: unknown,
+  actor?: string,
 ): Promise<{ updated: number }> {
   const division = await resolveActiveDivision();
   const parsed = parseWithSchema(CategorizeInventoryLinesInputSchema, rawData);
   if (!parsed.success) throw new ServiceError(parsed.error);
   const updated = await updateSystem((system) => {
     try {
-      return categorizeInventoryLines(system, division, parsed.data);
+      return categorizeInventoryLines(system, division, parsed.data, actor);
     } catch (error) {
       failZoning(error);
     }

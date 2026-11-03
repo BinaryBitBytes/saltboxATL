@@ -31,6 +31,9 @@ import {
   removeCaseFromPallet,
   assignPutawayLocation,
   completePutawayOrder,
+  initiatePickAllocationRecord,
+  initiateSlottingRecord,
+  releaseAllocationRecord,
   breakDownPalletForCube,
   saveItemCubeRecord,
   updateLocationCapacityRecord,
@@ -107,6 +110,7 @@ function revalidateInventory() {
   revalidatePath("/");
   revalidatePath("/receiving");
   revalidatePath("/putaway");
+  revalidatePath("/allocation");
   revalidatePath("/moves");
   revalidatePath("/inventory");
   revalidatePath("/cubing");
@@ -667,8 +671,8 @@ export async function updateLocationCapacity(
   rawData: unknown,
 ): Promise<ActionResult<Location>> {
   try {
-    await requireApiPermission("manageLocations");
-    const data = await updateLocationCapacityRecord(rawData);
+    const user = await requireApiPermission("manageLocations");
+    const data = await updateLocationCapacityRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     revalidatePath("/locations");
     revalidatePath("/cubing");
@@ -704,9 +708,10 @@ export async function generateZoneLocations(rawData: unknown): Promise<
   }>
 > {
   try {
-    await requireApiPermission("zoneWarehouse");
-    const data = await generateZoneLocationsRecord(rawData);
+    const user = await requireApiPermission("zoneWarehouse");
+    const data = await generateZoneLocationsRecord(rawData, user.name);
     revalidatePath("/zoning");
+    revalidatePath("/transactions");
     revalidatePath("/locations");
     revalidatePath("/inventory");
     revalidatePath("/cubing");
@@ -720,11 +725,69 @@ export async function categorizeZoneLines(
   rawData: unknown,
 ): Promise<ActionResult<{ updated: number }>> {
   try {
-    await requireApiPermission("zoneWarehouse");
-    const data = await categorizeInventoryLinesRecord(rawData);
+    const user = await requireApiPermission("zoneWarehouse");
+    const data = await categorizeInventoryLinesRecord(rawData, user.name);
     revalidatePath("/zoning");
+    revalidatePath("/transactions");
     revalidatePath("/inventory");
     return { ok: true, data: clientPayload(data) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function initiatePickAllocation(
+  inventoryItemId: string,
+  quantity?: number,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireApiPermission("allocateInventory");
+    const data = await initiatePickAllocationRecord(
+      withCreatedBy(
+        quantity == null ? { inventoryItemId } : { inventoryItemId, quantity },
+        user,
+      ),
+    );
+    revalidateInventory();
+    revalidatePath("/allocation");
+    return { ok: true, data: clientPayload({ id: data.id }) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function initiateSlotting(
+  receivingOrderId: string,
+  caseId?: string,
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    const user = await requireApiPermission("allocateInventory");
+    const data = await initiateSlottingRecord(
+      withCreatedBy(
+        caseId ? { receivingOrderId, caseId } : { receivingOrderId },
+        user,
+      ),
+    );
+    revalidateInventory();
+    revalidatePath("/allocation");
+    revalidatePath("/putaway");
+    revalidatePath(`/putaway/${receivingOrderId}`);
+    revalidatePath(`/receiving/${receivingOrderId}`);
+    return { ok: true, data: clientPayload({ count: data.length }) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function releaseAllocation(
+  allocationId: string,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireApiPermission("allocateInventory");
+    const data = await releaseAllocationRecord({ allocationId });
+    revalidateInventory();
+    revalidatePath("/allocation");
+    return { ok: true, data: clientPayload({ id: data.id }) };
   } catch (error) {
     return fail(error);
   }

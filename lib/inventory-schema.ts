@@ -664,10 +664,19 @@ export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
 export const INVENTORY_TRANSACTION_TYPES = [
   "receiving",
+  "receiving-direct",
+  "partial-pallet",
+  "reopen-receiving",
+  "allocation",
+  "allocation-release",
   "putaway",
   "move",
   "shipping",
   "pick",
+  "cube",
+  "zone",
+  "zone-locations",
+  "location-capacity",
   "overage",
   "shortage",
   "damage",
@@ -675,6 +684,9 @@ export const INVENTORY_TRANSACTION_TYPES = [
   "site-transfer",
   "transfer-outbound",
   "transfer-inbound",
+  "inbound-po-cancel",
+  "dock-freight-delete",
+  "check-in",
 ] as const;
 export type InventoryTransactionType = (typeof INVENTORY_TRANSACTION_TYPES)[number];
 
@@ -1434,6 +1446,49 @@ export const CustomerOrderSchema = z.object({
 });
 export type CustomerOrder = z.infer<typeof CustomerOrderSchema>;
 
+export const AllocationKindSchema = z.enum(["pick", "slot"]);
+export type AllocationKind = z.infer<typeof AllocationKindSchema>;
+
+export const AllocationStatusSchema = z.enum(["open", "released", "completed"]);
+export type AllocationStatus = z.infer<typeof AllocationStatusSchema>;
+
+export const AllocationPickSchema = z.object({
+  customerOrderId: UuidSchema,
+  orderNumber: NonEmptyStringSchema,
+  pickRequestNumber: NonEmptyStringSchema,
+  lineId: UuidSchema,
+  sku: SkuSchema,
+  quantityNeeded: QuantitySchema,
+  quantityCovered: NonNegativeCountSchema,
+  pickLocationId: UuidSchema,
+});
+export type AllocationPick = z.infer<typeof AllocationPickSchema>;
+
+/**
+ * A hold on one location.
+ * `pick` reserves received on-hand stock and reports open picks that SKU could fill.
+ * `slot` reserves the putaway location for a received line until that line is posted.
+ */
+export const InventoryAllocationSchema = z.object({
+  id: UuidSchema,
+  division: DivisionSchema.optional(),
+  kind: AllocationKindSchema,
+  status: AllocationStatusSchema,
+  sku: SkuSchema,
+  batch: z.string().nullable().default(null),
+  quantity: QuantitySchema,
+  locationId: UuidSchema,
+  receivingOrderId: UuidSchema.nullable().optional(),
+  caseId: UuidSchema.nullable().optional(),
+  inventoryItemId: UuidSchema.nullable().optional(),
+  picks: z.array(AllocationPickSchema).default([]),
+  createdAt: DateTimeSchema,
+  createdBy: z.string().optional(),
+  releasedAt: DateTimeSchema.nullable().optional(),
+  completedAt: DateTimeSchema.nullable().optional(),
+});
+export type InventoryAllocation = z.infer<typeof InventoryAllocationSchema>;
+
 export const CreateCustomerOrderLineSchema = z.object({
   inventoryItemId: UuidSchema,
   quantity: QuantitySchema,
@@ -1637,6 +1692,7 @@ export const InventorySystemSchema = z.object({
   itemCubes: z.array(ItemCubeSchema).default([]),
   siteTransfers: z.array(SiteTransferSchema).optional(),
   facilityTransfers: z.array(FacilityTransferSchema).optional(),
+  allocations: z.array(InventoryAllocationSchema).optional(),
 });
 export type InventorySystem = z.infer<typeof InventorySystemSchema>;
 

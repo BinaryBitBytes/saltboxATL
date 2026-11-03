@@ -48,6 +48,7 @@ const NAV: Array<{
   { href: "/inbound", label: "Inbound", icon: SearchList01Icon, permission: "viewInboundForecast" },
   { href: "/receiving", label: "Receiving", icon: PackageOpenIcon, permission: "receive" },
   { href: "/putaway", label: "Putaway", icon: PackageMovingIcon, permission: "putaway" },
+  { href: "/allocation", label: "Allocation", icon: PackageMovingIcon, permission: "allocateInventory" },
   { href: "/moves", label: "RF Moves", icon: ArrowDataTransferHorizontalIcon, permission: "moveInventory" },
   { href: "/inventory", label: "Inventory", icon: WarehouseIcon, permission: "viewInventory" },
   { href: "/damages", label: "Damages", icon: Alert02Icon, permission: "damageInventory" },

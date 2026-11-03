@@ -1,3 +1,4 @@
+import { nowIso } from "@/backend/server/helperUtils";
 import { committedCubeForLocation } from "@/lib/cubing/capacity";
 import {
   defaultCubeCapacity,
@@ -25,6 +26,7 @@ import {
   type PickHeight,
   type SlotAddress,
 } from "@/lib/locations/nomenclature";
+import { pushStockHistory } from "@/lib/inventory/stock-log";
 import { locationSiteId } from "@/lib/sites/database";
 
 export { NomenclatureError } from "@/lib/locations/nomenclature";
@@ -262,13 +264,16 @@ export function applyZoneLocations(
   system: InventorySystem,
   division: Division,
   input: GenerateZoneLocationsInput,
+  actor?: string,
 ): ZoneGenerationResult {
   const plan = planZoneLocations(system, division, input);
   if (plan.bays.length === 0) {
     throw new NomenclatureError("Every location in that range already exists.");
   }
 
-  return withZoneTransaction(system, () => writePlannedLocations(system, division, input, plan));
+  return withZoneTransaction(system, () =>
+    writePlannedLocations(system, division, input, plan, actor),
+  );
 }
 
 function writePlannedLocations(
@@ -276,6 +281,7 @@ function writePlannedLocations(
   division: Division,
   input: GenerateZoneLocationsInput,
   plan: ZoneLocationPlan,
+  actor?: string,
 ): ZoneGenerationResult {
   const zone = plan.zoneId
     ? requireZone(system, division, plan.zoneId)
@@ -331,6 +337,22 @@ function writePlannedLocations(
   }
 
   const skipped = plan.drafts.length - created.length;
+  if (created.length > 0) {
+    const first = created[0]!;
+    const last = created[created.length - 1]!;
+    pushStockHistory(system, {
+      type: "zone-locations",
+      sku: first.code,
+      occurredAt: nowIso(),
+      quantityDelta: created.length,
+      locationId: first.id,
+      reason: `Generated ${created.length} locations in zone ${zone.letter}, ${first.code} through ${last.code}.`,
+      createdBy: actor,
+      referenceType: "zone",
+      referenceId: zone.id,
+      division,
+    });
+  }
   return {
     created: created.length,
     skipped,
@@ -346,6 +368,7 @@ export function categorizeInventoryLines(
   system: InventorySystem,
   division: Division,
   input: CategorizeInventoryLinesInput,
+  actor?: string,
 ): number {
   const ids = [...new Set(input.inventoryItemIds)];
   if (ids.length === 0) {
@@ -379,6 +402,24 @@ export function categorizeInventoryLines(
     if ((item.zoneId ?? null) !== next) {
       item.zoneId = next;
       updated += 1;
+      const zone = next
+        ? (system.zones ?? []).find((entry) => entry.id === next)
+        : undefined;
+      pushStockHistory(system, {
+        type: "zone",
+        sku: item.sku,
+        occurredAt: nowIso(),
+        quantityDelta: 0,
+        inventoryItemId: item.id,
+        locationId: item.locationId,
+        reason: zone
+          ? `Categorized ${item.sku} into zone ${zone.letter}.`
+          : `Cleared the zone category on ${item.sku}.`,
+        createdBy: actor,
+        referenceType: "zone",
+        referenceId: next ?? undefined,
+        division,
+      });
     }
   }
   return updated;

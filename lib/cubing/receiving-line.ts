@@ -287,7 +287,7 @@ export function allocateReceivingLine(input: ReceivingLineInput): ReceivingLineR
     const place = route === "rack" ? "rack slot" : "shelf slot";
     return {
       ok: false,
-      error: `No open ${place} in this division and site can hold the remaining ${remaining} units of ${input.sku} without mixing project IDs.`,
+      error: `No open ${place} in this division and site can hold the remaining ${remaining} units of ${input.sku}.`,
     };
   }
 

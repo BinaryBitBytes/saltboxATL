@@ -1,5 +1,6 @@
 import type {
   FacilityTransfer,
+  InventoryAllocation,
   Location,
   Site,
   SiteTransfer,
@@ -77,3 +78,24 @@ export const FACILITY_TRANSFER_COLUMNS = {
 } as const satisfies Record<keyof FacilityTransfer, string>;
 
 export const FACILITY_TRANSFER_SQL_COLUMNS = Object.values(FACILITY_TRANSFER_COLUMNS);
+
+export const ALLOCATION_COLUMNS = {
+  id: "id",
+  division: "division",
+  kind: "kind",
+  status: "status",
+  sku: "sku",
+  batch: "batch",
+  quantity: "quantity",
+  locationId: "location_id",
+  receivingOrderId: "receiving_order_id",
+  caseId: "case_id",
+  inventoryItemId: "inventory_item_id",
+  picks: "picks",
+  createdAt: "created_at",
+  createdBy: "created_by",
+  releasedAt: "released_at",
+  completedAt: "completed_at",
+} as const satisfies Record<keyof InventoryAllocation, string>;
+
+export const ALLOCATION_SQL_COLUMNS = Object.values(ALLOCATION_COLUMNS);

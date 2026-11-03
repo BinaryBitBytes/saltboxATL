@@ -10,6 +10,7 @@ import { createId, nowIso } from "@/backend/server/helperUtils";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { divisionForRole, divisionOf } from "@/lib/divisions";
+import { reconcilePersistedAllocations } from "@/lib/allocation/persist";
 import { assignLocationSites } from "@/lib/sites/database";
 import { assignUserHomeSites } from "@/lib/sites/access";
 import {
@@ -834,6 +835,10 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
     system.customerOrders = [];
     changed = true;
   }
+  if (!system.allocations) {
+    system.allocations = [];
+    changed = true;
+  }
   if (!system.purchaseDocuments) {
     system.purchaseDocuments = [];
     changed = true;
@@ -889,6 +894,7 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
   if (stampDivision(system.receivingOrders, "hyperscale")) changed = true;
   if (stampDivision(system.shippingOrders, "hyperscale")) changed = true;
   if (stampDivision(system.customerOrders, "hyperscale")) changed = true;
+  if (stampDivision(system.allocations, "hyperscale")) changed = true;
   if (stampDivision(system.itemCubes, "hyperscale")) changed = true;
   if (stampDivision(system.sites, "hyperscale")) changed = true;
   if (stampDivision(system.buildings, "hyperscale")) changed = true;
@@ -1000,6 +1006,7 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
   if (ensureSierraCampus(system)) changed = true;
   if (assignLocationSites(system)) changed = true;
   if (assignUserHomeSites(system)) changed = true;
+  if (reconcilePersistedAllocations(system, nowIso())) changed = true;
 
   return changed;
 }

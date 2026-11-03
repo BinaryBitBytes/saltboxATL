@@ -23,6 +23,7 @@ export const MIGRATIONS = [
   { id: "018_cube_forced", file: "018_cube_forced.sql" },
   { id: "019_facility_transfers", file: "019_facility_transfers.sql" },
   { id: "020_inventory_zone", file: "020_inventory_zone.sql" },
+  { id: "021_inventory_allocations", file: "021_inventory_allocations.sql" },
 ] as const;
 
 let pool: Pool | undefined;

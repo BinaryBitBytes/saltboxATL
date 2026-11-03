@@ -11,8 +11,15 @@ import {
   type PlacementLocation,
 } from "@/lib/inventory/bin-container";
 import { allocateLicensePlate } from "@/lib/license-plate/assign";
+import {
+  assertLocationNotReserved,
+  assertUnallocatedQuantity,
+  locationHeldByOther,
+  pickAllocatedQuantity,
+} from "@/lib/allocation/workflow";
 import type {
   CustomerOrder,
+  InventoryAllocation,
   InventoryItem,
   InventorySystem,
   ItemCube,
@@ -21,7 +28,7 @@ import type {
   MoveInventoryInput,
   ReceivingOrder,
 } from "@/lib/inventory-schema";
-import { assertAvailableQuantity, reservedQuantity } from "@/lib/orders/availability";
+import { reservedQuantity } from "@/lib/orders/availability";
 import { assertActiveLocation } from "@/lib/validation/inventory-guards";
 import { assertLargeInputConfirmed } from "@/lib/validation/large-input";
 import { LIMITS } from "@/lib/validation/limits";
@@ -34,6 +41,7 @@ export type MoveInventorySystem = {
   receivingOrders?: ReceivingOrder[];
   customerOrders?: CustomerOrder[];
   licensePlates?: LicensePlate[];
+  allocations?: InventoryAllocation[];
 };
 
 export function findLocationForScan<T extends { code: string }>(
@@ -70,13 +78,15 @@ export function applyInventoryMove(
     throw new ValidationError("Move stock inside one division.");
   }
 
-  assertAvailableQuantity(
-    source.quantity,
-    reservedQuantity(system.customerOrders ?? [], source.id),
-    input.quantity,
-    source.sku,
-    "move",
-  );
+  assertLocationNotReserved(system.allocations, destination.id, destination.code);
+  assertUnallocatedQuantity({
+    onHand: source.quantity,
+    orderReserved: reservedQuantity(system.customerOrders ?? [], source.id),
+    pickAllocated: pickAllocatedQuantity(system.allocations, source.id),
+    requested: input.quantity,
+    sku: source.sku,
+    purpose: "move",
+  });
   assertLargeInputConfirmed(
     input.quantity,
     input,
@@ -187,11 +197,13 @@ function placementViews(system: MoveInventorySystem): PlacementLocation[] {
     storageClass: location.storageClass,
     division: location.division,
     cubeCapacityCubicInches: location.cubeCapacityCubicInches,
-    committedCubicInches: committedCubeForLocation(
-      location.id,
-      system.inventoryItems,
-      system.receivingOrders ?? [],
-      system.itemCubes ?? [],
-    ),
+    committedCubicInches: locationHeldByOther(system.allocations, location.id)
+      ? location.cubeCapacityCubicInches
+      : committedCubeForLocation(
+          location.id,
+          system.inventoryItems,
+          system.receivingOrders ?? [],
+          system.itemCubes ?? [],
+        ),
   }));
 }

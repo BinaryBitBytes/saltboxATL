@@ -958,7 +958,7 @@ function WorkingCaseForm({
             <div className="grid gap-1 rounded-md border border-border px-3 py-2">
               <label className="flex items-center gap-2 text-xs font-medium">
                 <input type="checkbox" {...form.register("fullPallet")} />
-                <T>Full pallet of inventory</T>
+                <T>Is this a full pallet of inventory?</T>
               </label>
               <p className="text-xs text-muted-foreground">
                 {t(

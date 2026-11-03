@@ -409,6 +409,11 @@ export function commitWorkingCopy(
     working.facilityTransfers,
     division,
   );
+  next.allocations = replaceDivisionRecords(
+    catalog.allocations,
+    working.allocations,
+    division,
+  );
   next.users = working.users;
   if (working.licensePlateLedger) next.licensePlateLedger = working.licensePlateLedger;
 
@@ -486,6 +491,7 @@ export function mergeSite(
   rebuilt.itemCubes = scoped.itemCubes ?? [];
   rebuilt.siteTransfers = scoped.siteTransfers ?? [];
   rebuilt.facilityTransfers = scoped.facilityTransfers ?? [];
+  rebuilt.allocations = scoped.allocations ?? [];
   rebuilt.users = scoped.users;
   if (scoped.licensePlateLedger) rebuilt.licensePlateLedger = scoped.licensePlateLedger;
   const siteMap = new Map((target.sites ?? []).map((site) => [site.id, site]));

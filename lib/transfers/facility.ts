@@ -15,6 +15,7 @@ import type {
 import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import { parsePlateNumber } from "@/lib/license-plate/sequence";
 import { formatTrailerCode, parseTrailerCode } from "@/lib/locations/nomenclature";
+import { openLocationHold, pickAllocatedQuantity, reservedSlotMessage } from "@/lib/allocation/workflow";
 import { reservedQuantity } from "@/lib/orders/availability";
 import { locationSiteId } from "@/lib/sites/database";
 import { routeTransferQuantity, type TransferRouteSlot } from "@/lib/transfers/route";
@@ -120,13 +121,26 @@ function slotsForReceipt(
 ): TransferRouteSlot[] {
   const cube = cubeForSku(system, sku, division);
   const perUnit = cube ? caseCubicInches(1, cube) : 0;
-  const locations = (system.locations ?? [])
+  const held = new Set(
+    (system.allocations ?? [])
+      .filter((allocation) => allocation.status === "open")
+      .map((allocation) => allocation.locationId),
+  );
+  const eligible = (system.locations ?? [])
     .filter((location) => {
       if (!location.isActive || location.storageClass === "hold") return false;
       if (divisionOf(location) !== division) return false;
       return locationSiteId(system, location) === destinationSiteId;
     })
     .sort((left, right) => left.code.localeCompare(right.code));
+  const locations = eligible.filter((location) => !held.has(location.id));
+  if (locations.length === 0 && eligible.length > 0) {
+    const reserved = eligible.find((location) => held.has(location.id));
+    const hold = reserved ? openLocationHold(system.allocations, reserved.id) : undefined;
+    if (reserved && hold) {
+      throw new ValidationError(reservedSlotMessage(reserved.code, hold));
+    }
+  }
 
   return locations.map((location) => ({
     locationId: location.id,
@@ -230,7 +244,9 @@ export function loadFacilityTransfer(
   assertPositiveQuantity(input.quantity, "Load quantity");
   const available = Math.max(
     0,
-    source.quantity - reservedQuantity(system.customerOrders ?? [], source.id),
+    source.quantity -
+      reservedQuantity(system.customerOrders ?? [], source.id) -
+      pickAllocatedQuantity(system.allocations, source.id),
   );
   assertEnoughOnHand(available, input.quantity, source.sku);
   assertLargeInputConfirmed(

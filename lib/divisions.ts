@@ -183,6 +183,7 @@ export function scopeSystem(
   scoped.itemCubes = inDivision(scoped.itemCubes, division);
   scoped.siteTransfers = inDivision(scoped.siteTransfers, division);
   scoped.facilityTransfers = inDivision(scoped.facilityTransfers, division);
+  scoped.allocations = inDivision(scoped.allocations, division);
   return scoped;
 }
 
@@ -237,6 +238,7 @@ export function mergeDivision(
     scoped.facilityTransfers,
     division,
   );
+  full.allocations = replaceDivision(full.allocations, scoped.allocations, division);
   full.users = scoped.users.map((user) => ({
     ...user,
     division: divisionForRole(user.role),
