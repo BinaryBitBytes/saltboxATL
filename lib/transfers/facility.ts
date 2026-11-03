@@ -15,7 +15,7 @@ import type {
 import { allocateLicensePlate } from "@/lib/license-plate/assign";
 import { parsePlateNumber } from "@/lib/license-plate/sequence";
 import { formatTrailerCode, parseTrailerCode } from "@/lib/locations/nomenclature";
-import { openLocationHold, reservedSlotMessage } from "@/lib/allocation/workflow";
+import { openLocationHold, pickAllocatedQuantity, reservedSlotMessage } from "@/lib/allocation/workflow";
 import { reservedQuantity } from "@/lib/orders/availability";
 import { locationSiteId } from "@/lib/sites/database";
 import { routeTransferQuantity, type TransferRouteSlot } from "@/lib/transfers/route";
@@ -244,7 +244,9 @@ export function loadFacilityTransfer(
   assertPositiveQuantity(input.quantity, "Load quantity");
   const available = Math.max(
     0,
-    source.quantity - reservedQuantity(system.customerOrders ?? [], source.id),
+    source.quantity -
+      reservedQuantity(system.customerOrders ?? [], source.id) -
+      pickAllocatedQuantity(system.allocations, source.id),
   );
   assertEnoughOnHand(available, input.quantity, source.sku);
   assertLargeInputConfirmed(

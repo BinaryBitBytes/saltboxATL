@@ -10,6 +10,7 @@ import { createId, nowIso } from "@/backend/server/helperUtils";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/auth/demo-accounts";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { divisionForRole, divisionOf } from "@/lib/divisions";
+import { reconcilePersistedAllocations } from "@/lib/allocation/persist";
 import { assignLocationSites } from "@/lib/sites/database";
 import { assignUserHomeSites } from "@/lib/sites/access";
 import {
@@ -1005,6 +1006,7 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
   if (ensureSierraCampus(system)) changed = true;
   if (assignLocationSites(system)) changed = true;
   if (assignUserHomeSites(system)) changed = true;
+  if (reconcilePersistedAllocations(system, nowIso())) changed = true;
 
   return changed;
 }
