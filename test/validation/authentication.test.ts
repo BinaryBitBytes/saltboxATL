@@ -98,6 +98,11 @@ describe("user authentication safeguards", () => {
     expect(canAccessPath("manager", "/cubing")).to.equal(true);
     expect(canAccessPath("user", "/cubing")).to.equal(false);
     expect(canAccessPath("threepl", "/cubing")).to.equal(false);
+    expect(canAccessPath("manager", "/allocation")).to.equal(true);
+    expect(canAccessPath("associate", "/allocation")).to.equal(true);
+    expect(canAccessPath("threepl", "/allocation")).to.equal(true);
+    expect(canAccessPath("user", "/allocation")).to.equal(false);
+    expect(canAccessPath("coordinator", "/allocation")).to.equal(false);
     expect(hasPermission("manager", "zoneWarehouse")).to.equal(true);
     expect(hasPermission("security-manager", "zoneWarehouse")).to.equal(true);
     expect(hasPermission("associate", "zoneWarehouse")).to.equal(false);

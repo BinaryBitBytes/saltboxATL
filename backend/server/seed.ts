@@ -834,6 +834,10 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
     system.customerOrders = [];
     changed = true;
   }
+  if (!system.allocations) {
+    system.allocations = [];
+    changed = true;
+  }
   if (!system.purchaseDocuments) {
     system.purchaseDocuments = [];
     changed = true;
@@ -889,6 +893,7 @@ export function ensureSystemDefaults(system: InventorySystem): boolean {
   if (stampDivision(system.receivingOrders, "hyperscale")) changed = true;
   if (stampDivision(system.shippingOrders, "hyperscale")) changed = true;
   if (stampDivision(system.customerOrders, "hyperscale")) changed = true;
+  if (stampDivision(system.allocations, "hyperscale")) changed = true;
   if (stampDivision(system.itemCubes, "hyperscale")) changed = true;
   if (stampDivision(system.sites, "hyperscale")) changed = true;
   if (stampDivision(system.buildings, "hyperscale")) changed = true;

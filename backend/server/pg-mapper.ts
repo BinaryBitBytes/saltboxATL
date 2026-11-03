@@ -31,7 +31,9 @@ import {
   type ShippingOrder,
   type Site,
   FacilityTransferLineSchema,
+  InventoryAllocationSchema,
   type FacilityTransfer,
+  type InventoryAllocation,
   type SiteTransfer,
   type Trailer,
   type User,
@@ -491,6 +493,44 @@ export function mapFacilityTransfer(row: {
     notes: row.notes ?? undefined,
     lines: FacilityTransferLineSchema.array().parse(storedJson(row.lines)),
   };
+}
+
+export function mapInventoryAllocation(row: {
+  id: string;
+  division?: string | null;
+  kind: InventoryAllocation["kind"];
+  status: InventoryAllocation["status"];
+  sku: string;
+  batch: string | null;
+  quantity: number | string;
+  location_id: string;
+  receiving_order_id: string | null;
+  case_id: string | null;
+  inventory_item_id: string | null;
+  picks: unknown;
+  created_at: Date | string;
+  created_by: string | null;
+  released_at: Date | string | null;
+  completed_at: Date | string | null;
+}): InventoryAllocation {
+  return InventoryAllocationSchema.parse({
+    id: row.id,
+    division: storedDivision(row.division),
+    kind: row.kind,
+    status: row.status,
+    sku: row.sku,
+    batch: row.batch,
+    quantity: Number(row.quantity),
+    locationId: row.location_id,
+    receivingOrderId: row.receiving_order_id,
+    caseId: row.case_id,
+    inventoryItemId: row.inventory_item_id,
+    picks: storedJson(row.picks) ?? [],
+    createdAt: isoRequired(row.created_at),
+    createdBy: row.created_by ?? undefined,
+    releasedAt: iso(row.released_at) ?? null,
+    completedAt: iso(row.completed_at) ?? null,
+  });
 }
 
 export function mapItem(row: {

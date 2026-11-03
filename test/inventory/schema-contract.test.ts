@@ -4,6 +4,8 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import { MIGRATIONS } from "@/backend/server/db";
 import {
+  ALLOCATION_COLUMNS,
+  ALLOCATION_SQL_COLUMNS,
   FACILITY_TRANSFER_COLUMNS,
   FACILITY_TRANSFER_SQL_COLUMNS,
   LOCATION_SITE_COLUMN,
@@ -97,5 +99,21 @@ describe("persisted schema matches app types", () => {
       expect(store, column).to.include(column);
     }
     expect(store).to.include("FACILITY_TRANSFER_SQL_COLUMNS.join");
+  });
+
+  it("gives inventory_allocations every column the InventoryAllocation type stores", () => {
+    expect(
+      requireColumns(tables, "inventory_allocations", Object.values(ALLOCATION_COLUMNS)),
+    ).to.deep.equal([]);
+    expect(ALLOCATION_SQL_COLUMNS).to.include("picks");
+    expect(ALLOCATION_SQL_COLUMNS).to.include("location_id");
+    const store = fs.readFileSync(
+      path.join(process.cwd(), "backend/server/pg-store.ts"),
+      "utf8",
+    );
+    for (const column of Object.values(ALLOCATION_COLUMNS)) {
+      expect(store, column).to.include(column);
+    }
+    expect(store).to.include("ALLOCATION_SQL_COLUMNS.join");
   });
 });

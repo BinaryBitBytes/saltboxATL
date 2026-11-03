@@ -5,6 +5,7 @@ import { withInventoryLock } from "@/backend/server/db";
 import { readAssembledSystem } from "@/backend/server/site-files";
 import { asDivision, divisionForRole } from "@/lib/divisions";
 import {
+  ALLOCATION_SQL_COLUMNS,
   FACILITY_TRANSFER_SQL_COLUMNS,
   SITE_TRANSFER_SQL_COLUMNS,
 } from "@/lib/db/persisted-columns";
@@ -34,6 +35,7 @@ import {
   mapCustomerOrder,
   mapShippingOrder,
   mapFacilityTransfer,
+  mapInventoryAllocation,
   mapSite,
   mapSiteTransfer,
   mapTrailer,
@@ -112,12 +114,17 @@ export async function loadSystem(client: PoolClient): Promise<InventorySystem> {
     `SELECT ${FACILITY_TRANSFER_SQL_COLUMNS.join(", ")} FROM facility_transfers ORDER BY loaded_at, id`,
   );
   system.facilityTransfers = facilityTransfers.rows.map(mapFacilityTransfer);
+  const allocations = await client.query(
+    `SELECT ${ALLOCATION_SQL_COLUMNS.join(", ")} FROM inventory_allocations ORDER BY created_at, id`,
+  );
+  system.allocations = allocations.rows.map(mapInventoryAllocation);
   const payloads = await client.query("SELECT payload FROM site_databases");
   if ((payloads.rowCount ?? 0) > 0) {
     const documents = payloads.rows.map((row) => parseSiteDatabase(row.payload));
     const overlaid = applySiteDocuments(system, documents);
     overlaid.siteTransfers = system.siteTransfers;
     overlaid.facilityTransfers = system.facilityTransfers;
+    overlaid.allocations = system.allocations;
     return overlaid;
   }
   return system;
@@ -127,6 +134,7 @@ export async function saveSystem(
   client: PoolClient,
   system: InventorySystem,
 ): Promise<void> {
+  await client.query("DELETE FROM inventory_allocations");
   await client.query("DELETE FROM facility_transfers");
   await client.query("DELETE FROM site_transfers");
   await client.query("DELETE FROM site_databases");
@@ -658,6 +666,35 @@ export async function saveSystem(
         transfer.receivedAt ?? null,
         transfer.notes ?? null,
         JSON.stringify(transfer.lines ?? []),
+      ],
+    );
+  }
+  for (const allocation of system.allocations ?? []) {
+    await client.query(
+      `INSERT INTO inventory_allocations (
+         id, division, kind, status, sku, batch, quantity, location_id,
+         receiving_order_id, case_id, inventory_item_id, picks, created_at,
+         created_by, released_at, completed_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16
+       )`,
+      [
+        allocation.id,
+        asDivision(allocation.division),
+        allocation.kind,
+        allocation.status,
+        allocation.sku,
+        allocation.batch ?? null,
+        allocation.quantity,
+        allocation.locationId,
+        allocation.receivingOrderId ?? null,
+        allocation.caseId ?? null,
+        allocation.inventoryItemId ?? null,
+        JSON.stringify(allocation.picks ?? []),
+        allocation.createdAt,
+        allocation.createdBy ?? null,
+        allocation.releasedAt ?? null,
+        allocation.completedAt ?? null,
       ],
     );
   }

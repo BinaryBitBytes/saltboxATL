@@ -2,6 +2,7 @@ import { T } from "@/frontend/client/language";
 import { getSystem } from "@/backend/server/store";
 import { requirePermission } from "@/backend/server/dal";
 import { enrichInventory, enrichTransactions } from "@/backend/server/inventory-service";
+import { pickAllocatedQuantity } from "@/lib/allocation/workflow";
 import { reservedQuantity } from "@/lib/orders/availability";
 import { RfMoveForm, type MoveLine } from "@/frontend/client/rf-move-form";
 
@@ -10,7 +11,12 @@ export default async function MovesPage() {
   const system = await getSystem();
   const lines: MoveLine[] = enrichInventory(system).map((row) => ({
     ...row,
-    available: Math.max(0, row.quantity - reservedQuantity(system.customerOrders, row.id)),
+    available: Math.max(
+      0,
+      row.quantity -
+        reservedQuantity(system.customerOrders, row.id) -
+        pickAllocatedQuantity(system.allocations, row.id),
+    ),
   }));
   const recent = enrichTransactions(system)
     .filter((entry) => entry.type === "move" && entry.quantityDelta < 0)
@@ -31,7 +37,7 @@ export default async function MovesPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           <T>
-            Scan the bin you are taking from, then the bin you are putting into. Open-order reservations stay in place, and the destination cube still has to fit.
+            Scan the bin you are taking from, then the bin you are putting into. Open-order reservations and allocated slots stay in place, and the destination cube still has to fit.
           </T>
         </p>
       </div>

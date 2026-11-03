@@ -33,6 +33,7 @@ export default async function Home() {
   const system = await getSystem();
   const canReceive = hasPermission(user.role, "receive");
   const canPutaway = hasPermission(user.role, "putaway");
+  const canAllocate = hasPermission(user.role, "allocateInventory");
   const canMove = hasPermission(user.role, "moveInventory");
   const canShip = hasPermission(user.role, "ship");
   const canPlaceOrder = hasPermission(user.role, "placeOrder");
@@ -54,6 +55,9 @@ export default async function Home() {
   const awaitingPutaway = system.receivingOrders.filter((order) =>
     isAwaitingPutaway(order.status),
   );
+  const openAllocationCount = (system.allocations ?? []).filter(
+    (allocation) => allocation.status === "open",
+  ).length;
   const unitsOnHand = inventory.reduce((sum, item) => sum + item.quantity, 0);
   const activeLocations = system.locations.filter((location) => location.isActive);
   const availableLocations = canViewInventory
@@ -141,6 +145,15 @@ export default async function Home() {
               Putaway
             </Button>
           ) : null}
+          {canAllocate ? (
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/allocation" />}
+            >
+              Allocation
+            </Button>
+          ) : null}
           {canMove ? (
             <Button
               variant="outline"
@@ -204,6 +217,9 @@ export default async function Home() {
         ) : null}
         {canPutaway ? (
           <StatCard label="Awaiting putaway" value={awaitingPutaway.length} />
+        ) : null}
+        {canAllocate ? (
+          <StatCard label="Open allocations" value={openAllocationCount} />
         ) : null}
         {canManageLocations ? (
           <>

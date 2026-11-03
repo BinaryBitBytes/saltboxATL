@@ -54,6 +54,7 @@ export const PERMISSIONS = {
   fulfillOrder: withSecurityRoles(["associate", "threepl", "manager"]),
   receive: withSecurityRoles(["associate", "threepl", "manager"]),
   putaway: withSecurityRoles(["associate", "threepl", "manager"]),
+  allocateInventory: withSecurityRoles(["associate", "threepl", "manager"]),
   moveInventory: withSecurityRoles(["associate", "manager"]),
   damageInventory: withSecurityRoles(["associate", "manager"]),
   cube: withSecurityRoles(["associate", "manager"]),
@@ -178,6 +179,9 @@ export function canAccessPath(
   }
   if (path === "/putaway" || path.startsWith("/putaway/")) {
     return hasPermission(role, "putaway");
+  }
+  if (path === "/allocation" || path.startsWith("/allocation/")) {
+    return hasPermission(role, "allocateInventory");
   }
   if (path === "/moves" || path.startsWith("/moves/")) {
     return hasPermission(role, "moveInventory");
