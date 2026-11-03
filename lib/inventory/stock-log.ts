@@ -1,6 +1,12 @@
 import { createId } from "@/backend/server/helperUtils";
 import { damageLogHighlight } from "@/lib/inventory/damage";
-import type { InventoryAllocation, InventorySystem, InventoryTransaction } from "@/lib/inventory-schema";
+import {
+  INVENTORY_TRANSACTION_TYPES,
+  type InventoryAllocation,
+  type InventorySystem,
+  type InventoryTransaction,
+  type InventoryTransactionType,
+} from "@/lib/inventory-schema";
 
 /** Light blue row for a new or updated allocation hold. */
 export const ALLOCATION_LOG_HIGHLIGHT =
@@ -12,32 +18,38 @@ export const RELEASE_LOG_HIGHLIGHT =
 
 const STOCK_LOG_LIMIT = 5000;
 
-export const STOCK_LOG_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "receiving", label: "Receiving" },
-  { value: "receiving-direct", label: "Receiving direction" },
-  { value: "partial-pallet", label: "Partial pallet" },
-  { value: "reopen-receiving", label: "Reopen receiving" },
-  { value: "allocation", label: "Allocation" },
-  { value: "allocation-release", label: "Allocation release" },
-  { value: "putaway", label: "Putaway" },
-  { value: "move", label: "Move" },
-  { value: "pick", label: "Pick" },
-  { value: "shipping", label: "Shipping" },
-  { value: "cube", label: "Cubing" },
-  { value: "zone", label: "Zoning" },
-  { value: "zone-locations", label: "Zone locations" },
-  { value: "location-capacity", label: "Location capacity" },
-  { value: "overage", label: "Overage" },
-  { value: "shortage", label: "Shortage" },
-  { value: "damage", label: "Damage" },
-  { value: "import", label: "Import" },
-  { value: "site-transfer", label: "Site transfer" },
-  { value: "transfer-outbound", label: "Outbound transfer" },
-  { value: "transfer-inbound", label: "Inbound transfer" },
-  { value: "inbound-po-cancel", label: "Inbound PO cancel" },
-  { value: "dock-freight-delete", label: "Dock freight delete" },
-  { value: "check-in", label: "Check-in" },
-];
+const STOCK_LOG_TYPE_LABELS = {
+  receiving: "Receiving",
+  "receiving-direct": "Receiving direction",
+  "partial-pallet": "Partial pallet",
+  "reopen-receiving": "Reopen receiving",
+  allocation: "Allocation",
+  "allocation-release": "Allocation release",
+  putaway: "Putaway",
+  move: "Move",
+  shipping: "Shipping",
+  pick: "Pick",
+  cube: "Cubing",
+  zone: "Zoning",
+  "zone-locations": "Zone locations",
+  "location-capacity": "Location capacity",
+  overage: "Overage",
+  shortage: "Shortage",
+  damage: "Damage",
+  import: "Import",
+  "site-transfer": "Site transfer",
+  "transfer-outbound": "Outbound transfer",
+  "transfer-inbound": "Inbound transfer",
+  "inbound-po-cancel": "Inbound PO cancel",
+  "dock-freight-delete": "Dock freight delete",
+  "check-in": "Check-in",
+} as const satisfies Record<InventoryTransactionType, string>;
+
+export const STOCK_LOG_TYPE_OPTIONS: ReadonlyArray<{ value: InventoryTransactionType; label: string }> =
+  INVENTORY_TRANSACTION_TYPES.map((value) => ({
+    value,
+    label: STOCK_LOG_TYPE_LABELS[value],
+  }));
 
 export function stockLogHighlight(type: string): string | undefined {
   if (type === "allocation") return ALLOCATION_LOG_HIGHLIGHT;

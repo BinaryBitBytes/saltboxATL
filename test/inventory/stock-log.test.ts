@@ -2,9 +2,11 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import { createId } from "@/backend/server/helperUtils";
 import { DAMAGE_LOG_HIGHLIGHT } from "@/lib/inventory/damage";
+import { INVENTORY_TRANSACTION_TYPES } from "@/lib/inventory-schema";
 import {
   ALLOCATION_LOG_HIGHLIGHT,
   RELEASE_LOG_HIGHLIGHT,
+  STOCK_LOG_TYPE_OPTIONS,
   allocationHistorySince,
   describeAllocationHistory,
   pushStockHistory,
@@ -26,6 +28,14 @@ describe("stock log highlights", () => {
     expect(RELEASE_LOG_HIGHLIGHT).to.include("bg-yellow-100");
     expect(stockLogHighlight("putaway")).to.equal(undefined);
     expect(stockLogHighlight("cube")).to.equal(undefined);
+    expect(stockLogHighlight("receiving-direct")).to.equal(undefined);
+    expect(stockLogHighlight("zone")).to.equal(undefined);
+  });
+
+  it("offers every stored transaction type in the stock log filter", () => {
+    expect(STOCK_LOG_TYPE_OPTIONS.map((option) => option.value)).to.deep.equal([
+      ...INVENTORY_TRANSACTION_TYPES,
+    ]);
   });
 
   it("records an allocation and its release without changing on-hand", () => {
