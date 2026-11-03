@@ -232,7 +232,7 @@ export function planZoneLocations(
       const budget = budgetForBay(
         system,
         existingBay,
-        incoming,
+        bayDrafts.map(() => cube.cubeCapacityCubicInches),
         input.bayCubeBudgetCubicInches,
         aisle,
         bay,
@@ -268,6 +268,15 @@ export function applyZoneLocations(
     throw new NomenclatureError("Every location in that range already exists.");
   }
 
+  return withZoneTransaction(system, () => writePlannedLocations(system, division, input, plan));
+}
+
+function writePlannedLocations(
+  system: InventorySystem,
+  division: Division,
+  input: GenerateZoneLocationsInput,
+  plan: ZoneLocationPlan,
+): ZoneGenerationResult {
   const zone = plan.zoneId
     ? requireZone(system, division, plan.zoneId)
     : addZone(system, {
@@ -446,7 +455,7 @@ function findBay(
   );
 }
 
-function committedInBay(system: ZoneWarehouse, bayId: string): number {
+function bayCubeParts(system: ZoneWarehouse, bayId: string): { reserved: number; stored: number } {
   const siblings = (system.locations ?? []).filter((location) => location.bayId === bayId);
   const reserved = siblings.reduce(
     (sum, location) => sum + location.cubeCapacityCubicInches,
@@ -463,36 +472,75 @@ function committedInBay(system: ZoneWarehouse, bayId: string): number {
       ),
     0,
   );
-  return Math.max(reserved, stored);
+  return { reserved, stored };
+}
+
+/**
+ * Replay the same one-slot cube check `addStructuredLocation` uses. A batch is
+ * accepted only when every new slot still fits after the slots before it are
+ * reserved. Stored cube counts only while it is larger than the reserved total,
+ * so a slot is not rejected twice.
+ */
+function slotsFitBudget(
+  budget: number,
+  reserved: number,
+  stored: number,
+  slotCubes: readonly number[],
+): boolean {
+  let reservedNow = reserved;
+  for (const slotCube of slotCubes) {
+    if (
+      !slotFitsBayCube({
+        bayCubeBudgetCubicInches: budget,
+        committedCubicInches: Math.max(reservedNow, stored),
+        incomingCubicInches: slotCube,
+      })
+    ) {
+      return false;
+    }
+    reservedNow += slotCube;
+  }
+  return true;
 }
 
 function budgetForBay(
   system: ZoneWarehouse,
   existing: Bay | undefined,
-  incoming: number,
+  slotCubes: readonly number[],
   requested: number | undefined,
   aisleNumber: number,
   bayNumber: number,
 ): number {
-  const committed = existing ? committedInBay(system, existing.id) : 0;
+  const parts = existing ? bayCubeParts(system, existing.id) : { reserved: 0, stored: 0 };
+  const incoming = slotCubes.reduce((sum, slotCube) => sum + slotCube, 0);
   const budget =
     existing == null
       ? (requested ?? Math.max(DEFAULT_BAY_CUBE_BUDGET, incoming))
       : requested == null
         ? existing.cubeBudgetCubicInches
         : Math.max(existing.cubeBudgetCubicInches, requested);
-  if (
-    !slotFitsBayCube({
-      bayCubeBudgetCubicInches: budget,
-      committedCubicInches: committed,
-      incomingCubicInches: incoming,
-    })
-  ) {
+  if (!slotsFitBudget(budget, parts.reserved, parts.stored, slotCubes)) {
     throw new NomenclatureError(
       `Bay ${padNumber(bayNumber, 2)} in aisle ${padNumber(aisleNumber, 2)} cannot hold this cube setting.`,
     );
   }
   return budget;
+}
+
+function withZoneTransaction<T>(system: InventorySystem, work: () => T): T {
+  const zones = (system.zones ?? []).map((zone) => ({ ...zone }));
+  const aisles = (system.aisles ?? []).map((aisle) => ({ ...aisle }));
+  const bays = (system.bays ?? []).map((bay) => ({ ...bay }));
+  const locations = (system.locations ?? []).map((location) => ({ ...location }));
+  try {
+    return work();
+  } catch (error) {
+    system.zones = zones;
+    system.aisles = aisles;
+    system.bays = bays;
+    system.locations = locations;
+    throw error;
+  }
 }
 
 function requireZone(system: ZoneWarehouse, division: Division, zoneId: string): Zone {
