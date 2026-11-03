@@ -517,6 +517,7 @@ export function mapItem(row: {
   cartons?: unknown;
   container_id?: string | null;
   cube_forced?: boolean | null;
+  zone_id?: string | null;
 }): InventoryItem {
   const strandCount =
     row.strand_count == null || row.strand_count === ""
@@ -568,6 +569,7 @@ export function mapItem(row: {
     lastMovedAt: iso(row.last_moved_at),
     updatedAt: iso(row.updated_at),
     cubeForced: row.cube_forced === true,
+    zoneId: row.zone_id ?? null,
   };
 }
 

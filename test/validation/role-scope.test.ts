@@ -133,6 +133,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "adjustInventory",
     "reopenReceiving",
     "manageLocations",
+    "zoneWarehouse",
     "manageUsers",
     "uploadBuyerOrders",
     "viewInboundForecast",
@@ -174,6 +175,7 @@ const SCOPE: Record<UserRole, readonly Permission[]> = {
     "adjustInventory",
     "reopenReceiving",
     "manageLocations",
+    "zoneWarehouse",
     "manageUsers",
     "uploadBuyerOrders",
     "viewInboundForecast",
@@ -215,6 +217,7 @@ const PAGE_RULES: Array<{
   { path: "/transfers/inbound", permissions: ["transferFreight"] },
   { path: "/transfers/outbound", permissions: ["transferFreight"] },
   { path: "/locations", permissions: ["manageLocations"] },
+  { path: "/zoning", permissions: ["zoneWarehouse"] },
   { path: "/network", permissions: ["viewSiteNetwork"] },
   { path: "/users", permissions: ["manageUsers"] },
 ];

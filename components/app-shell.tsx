@@ -10,6 +10,7 @@ import {
   PackageMovingIcon,
   WarehouseIcon,
   CubeIcon,
+  GridIcon,
   ShoppingBag01Icon,
   TruckDeliveryIcon,
   ArrowDataTransferHorizontalIcon,
@@ -59,6 +60,7 @@ const NAV: Array<{
   { href: "/logbook", label: "Logbook", icon: BookOpen02Icon, permission: "viewTransactions" },
   { href: "/transactions", label: "Stock log", icon: TransactionHistoryIcon, permission: "viewTransactions" },
   { href: "/locations", label: "Locations", icon: PinLocation01Icon, permission: "manageLocations" },
+  { href: "/zoning", label: "Zoning", icon: GridIcon, permission: "zoneWarehouse" },
   { href: "/network", label: "Sites", icon: PinLocation01Icon, permission: "viewSiteNetwork" },
   { href: "/users", label: "Users", icon: UserMultipleIcon, permission: "manageUsers" },
 ];

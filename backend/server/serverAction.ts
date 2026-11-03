@@ -72,6 +72,10 @@ import {
   createTrailerRecord,
   createZoneRecord,
 } from "@/backend/server/nomenclature-service";
+import {
+  categorizeInventoryLinesRecord,
+  generateZoneLocationsRecord,
+} from "@/backend/server/zoning-service";
 import { deletePurchaseDocumentFile } from "@/backend/server/document-store";
 
 export type ActionFailure = {
@@ -681,6 +685,44 @@ export async function createLocation(
     await requireApiPermission("manageLocations");
     const data = await createLocationRecord(rawData);
     revalidatePath("/locations");
+    revalidatePath("/inventory");
+    return { ok: true, data: clientPayload(data) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function generateZoneLocations(rawData: unknown): Promise<
+  ActionResult<{
+    created: number;
+    skipped: number;
+    zoneId: string;
+    cubeCapacityCubicInches: number;
+    storageClass: string;
+    firstCode: string | null;
+    lastCode: string | null;
+  }>
+> {
+  try {
+    await requireApiPermission("zoneWarehouse");
+    const data = await generateZoneLocationsRecord(rawData);
+    revalidatePath("/zoning");
+    revalidatePath("/locations");
+    revalidatePath("/inventory");
+    revalidatePath("/cubing");
+    return { ok: true, data: clientPayload(data) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function categorizeZoneLines(
+  rawData: unknown,
+): Promise<ActionResult<{ updated: number }>> {
+  try {
+    await requireApiPermission("zoneWarehouse");
+    const data = await categorizeInventoryLinesRecord(rawData);
+    revalidatePath("/zoning");
     revalidatePath("/inventory");
     return { ok: true, data: clientPayload(data) };
   } catch (error) {
