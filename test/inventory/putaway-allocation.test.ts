@@ -22,6 +22,7 @@ function slot(overrides: Partial<PutawaySlot> & Pick<PutawaySlot, "id" | "code">
     zoneKey: "A",
     aisleKey: "A-1",
     zoneProjectId: null,
+    zoneCubeSize: null,
     slotKind: "pick",
     isActive: true,
     cubeCapacityCubicInches: 1000,

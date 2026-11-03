@@ -125,7 +125,13 @@ export function PutawayWorkspace({
                           rooms={rooms}
                           locations={locations}
                           cubingLocations={cubingLocations}
-                          preferredRoute={pallet.cubeRoute}
+                          preferredRoute={
+                            item.fullPallet === true
+                              ? "pallet"
+                              : item.fullPallet === false
+                                ? "rack"
+                                : pallet.cubeRoute
+                          }
                           allocation={allocation}
                           cubes={cubes}
                         />
@@ -267,6 +273,15 @@ function PutawayCaseRow({
     <div className="grid gap-2 rounded-md border border-border px-2 py-2">
       <p className="text-xs">{formatCaseItemLine(item)}</p>
       <p className="text-xs text-muted-foreground">{item.description}</p>
+      {item.fullPallet === true ? (
+        <p className="text-xs text-muted-foreground">
+          <T>Directed to the full pallet zone during receiving.</T>
+        </p>
+      ) : item.fullPallet === false ? (
+        <p className="text-xs text-muted-foreground">
+          <T>Directed to a rack slot during receiving.</T>
+        </p>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
         <Field label="Room">
           <NativeSelect

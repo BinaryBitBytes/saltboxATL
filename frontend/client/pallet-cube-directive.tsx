@@ -39,6 +39,8 @@ export function PalletCubeDirective({
   });
 
   if (plan.status === "empty") return null;
+  const directed =
+    pendingCases.length > 0 && pendingCases.every((item) => item.putawayLocationId);
 
   return (
     <div className="grid gap-2 border-t border-border px-3 py-3">
@@ -53,11 +55,17 @@ export function PalletCubeDirective({
             ? " · directed to a full pallet location"
             : ""}
       </p>
-      <p className="text-xs text-muted-foreground">{plan.directive}</p>
+      <p className="text-xs text-muted-foreground">
+        {directed ? (
+          <T>Each line already has a putaway location from receiving.</T>
+        ) : (
+          plan.directive
+        )}
+      </p>
       {plan.status === "missing-cube" ? (
         <Link href="/cubing" className="text-xs underline"><T>Open the Cubing tab</T></Link>
       ) : null}
-      {canBreakDown && plan.status === "break-down" ? (
+      {canBreakDown && !directed && plan.status === "break-down" ? (
         <div>
           <Button
             type="button"

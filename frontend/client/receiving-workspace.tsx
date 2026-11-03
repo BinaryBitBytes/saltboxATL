@@ -53,6 +53,12 @@ import { LabelPrintSheet } from "@/frontend/client/label-sheet";
 import { buildInboundLabels } from "@/lib/labels/build-labels";
 import type { ItemCube } from "@/lib/inventory-schema";
 import type { CubingLocation } from "@/lib/cubing/workflow";
+import {
+  caseCubicInches,
+  cubeExceeds,
+  DEFAULT_RACK_CUBE_CUBIC_INCHES,
+  formatCubicInches,
+} from "@/lib/cubing/measure";
 import { PalletCubeDirective } from "@/frontend/client/pallet-cube-directive";
 import {
   backorderLinesForShipment,
@@ -87,6 +93,7 @@ const CaseFormSchema = z
     connectionType: z.string().nullable(),
     strandCount: z.number().nullable(),
     lengthMeters: z.number().nullable(),
+    fullPallet: z.boolean(),
   })
   .superRefine((values, ctx) => {
     if (!values.generateSku && values.sku.length === 0) {
@@ -131,6 +138,7 @@ function emptyCaseValues(): CaseFormValues {
     connectionType: null,
     strandCount: null,
     lengthMeters: null,
+    fullPallet: false,
   };
 }
 
@@ -149,6 +157,7 @@ function valuesFromCase(item: CaseItem): CaseFormValues {
     connectionType: item.fiber?.connectionType ?? null,
     strandCount: item.fiber?.strandCount ?? null,
     lengthMeters: item.fiber?.lengthMeters ?? null,
+    fullPallet: item.fullPallet === true,
   };
 }
 
@@ -161,6 +170,7 @@ export function ReceivingWorkspace({
   cubingLocations = [],
   expectedLines = [],
   cancelMode = "allow",
+  shelfCube = DEFAULT_RACK_CUBE_CUBIC_INCHES,
 }: {
   order: ReceivingOrder;
   knownProducts: KnownProduct[];
@@ -170,6 +180,8 @@ export function ReceivingWorkspace({
   cubingLocations?: CubingLocation[];
   expectedLines?: ExpectedArrivalLine[];
   cancelMode?: ReceivingCancelMode;
+  /** Cube of a shelf slot. Lines larger than this ask if they are a full pallet. */
+  shelfCube?: number;
 }) {
   const router = useRouter();
   const editable = isReceivingEditable(order.status);
@@ -223,6 +235,8 @@ export function ReceivingWorkspace({
             pallet={workingPallet}
             knownProducts={knownProducts}
             editingCase={editingCase}
+            cubes={cubes}
+            shelfCube={shelfCube}
             onCancelEdit={() => setEditing(null)}
             onSaved={() => setEditing(null)}
           />
@@ -348,6 +362,7 @@ function PalletCard({
   canBreakDown: boolean;
 }) {
   const router = useRouter();
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const shortPallet =
@@ -390,6 +405,26 @@ function PalletCard({
               <div className="min-w-0 text-muted-foreground">
                 <p>{formatCaseItemLine(item)}</p>
                 <p>{item.description}</p>
+                {item.putawayLocationId ? (
+                  <p>
+                    {t(
+                      item.fullPallet === true ||
+                        cubingLocations.find(
+                          (location) => location.id === item.putawayLocationId,
+                        )?.storageClass === "pallet"
+                        ? "Full pallet zone · {{code}}"
+                        : item.fullPallet === false
+                          ? "Rack slot · {{code}}"
+                          : "Shelf slot · {{code}}",
+                      {
+                        code:
+                          cubingLocations.find(
+                            (location) => location.id === item.putawayLocationId,
+                          )?.code ?? item.putawayLocationId,
+                      },
+                    )}
+                  </p>
+                ) : null}
               </div>
               {editable && !isCasePutawayPosted(item) ? (
                 <div className="flex shrink-0 items-center gap-1">
@@ -602,6 +637,8 @@ function WorkingCaseForm({
   pallet,
   knownProducts,
   editingCase,
+  cubes,
+  shelfCube,
   onCancelEdit,
   onSaved,
 }: {
@@ -609,10 +646,13 @@ function WorkingCaseForm({
   pallet: ReceivingOrder["pallets"][number] | null;
   knownProducts: KnownProduct[];
   editingCase: CaseItem | null;
+  cubes: ItemCube[];
+  shelfCube: number;
   onCancelEdit: () => void;
   onSaved: () => void;
 }) {
   const router = useRouter();
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmLargeInput, setConfirmLargeInput] = useState(false);
@@ -633,6 +673,12 @@ function WorkingCaseForm({
     control: form.control,
     name: "quantityInCase",
   });
+  const sku = useWatch({ control: form.control, name: "sku" });
+  const cubeProfile = cubes.find((cube) => cube.sku === sku?.trim());
+  const lineCube = cubeProfile
+    ? caseCubicInches(Number(quantityInCase) || 0, cubeProfile)
+    : 0;
+  const exceedsShelf = Boolean(cubeProfile) && cubeExceeds(lineCube, shelfCube);
   const description = useWatch({ control: form.control, name: "description" });
   const generateSku = useWatch({ control: form.control, name: "generateSku" });
   const generateUpc = useWatch({ control: form.control, name: "generateUpc" });
@@ -766,6 +812,7 @@ function WorkingCaseForm({
                   confirmLargeInput,
                   confirmationQuantity,
                 ),
+                fullPallet: exceedsShelf && values.fullPallet,
               };
               const result = editingCase
                 ? await updateReceivingCase(
@@ -905,6 +952,23 @@ function WorkingCaseForm({
                   {...form.register("lengthMeters", { valueAsNumber: true })}
                 />
               </Field>
+            </div>
+          ) : null}
+          {exceedsShelf ? (
+            <div className="grid gap-1 rounded-md border border-border px-3 py-2">
+              <label className="flex items-center gap-2 text-xs font-medium">
+                <input type="checkbox" {...form.register("fullPallet")} />
+                <T>Full pallet of inventory</T>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "This line is {{line}} and a shelf slot holds {{shelf}}. Check this box if it is a full pallet so it goes to the full pallet zone. Leave it unchecked to put the line in a rack slot.",
+                  {
+                    line: formatCubicInches(lineCube),
+                    shelf: formatCubicInches(shelfCube),
+                  },
+                )}
+              </p>
             </div>
           ) : null}
           <LargeInputConfirm

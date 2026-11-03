@@ -22,6 +22,10 @@ import {
   expectedLinesFromPurchaseOrder,
 } from "@/lib/inbound/receiving-transactions";
 import { buildCubingLocations } from "@/lib/cubing/capacity";
+import { shelfSlotCube } from "@/lib/cubing/receiving-line";
+import { divisionOf } from "@/lib/divisions";
+import { primarySiteId } from "@/lib/sites/database";
+import type { InventorySystem } from "@/lib/inventory-schema";
 import {
   Card,
   CardContent,
@@ -216,6 +220,11 @@ export default async function ReceivingOrderPage({
         expectedLines={expectedLines}
         cancelMode={cancelMode}
         cubes={system.itemCubes}
+        shelfCube={shelfSlotCube(system.locations, {
+          division: divisionOf(order),
+          siteId:
+            primarySiteId(system as unknown as InventorySystem, divisionOf(order)) ?? "",
+        })}
         cubingLocations={buildCubingLocations({
           locations: system.locations,
           items: system.inventoryItems,
