@@ -45,7 +45,8 @@ import {
 
 export { NomenclatureError } from "@/lib/locations/nomenclature";
 
-const DEFAULT_BAY_CUBE_BUDGET = 48 * 18_144;
+/** Full bay face: 48 rack openings. Zoning raises this when a cube setting needs more. */
+export const DEFAULT_BAY_CUBE_BUDGET = 48 * 18_144;
 
 type WithDivision = { division?: Division | null };
 

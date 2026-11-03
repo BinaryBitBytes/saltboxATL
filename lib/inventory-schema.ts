@@ -36,6 +36,7 @@ import { DEFAULT_RACK_CUBE_CUBIC_INCHES } from "@/lib/cubing/measure";
 import {
   CUBE_SIZES,
   PHONETIC_CODENAMES,
+  PICK_HEIGHTS,
   TRAILER_STATUSES,
   VELOCITIES,
 } from "@/lib/locations/nomenclature";
@@ -656,6 +657,8 @@ export const InventoryItemSchema = z.object({
   lastMovedAt: DateTimeSchema.optional(),
   updatedAt: DateTimeSchema.optional(),
   cubeForced: z.boolean().optional(),
+  /** Warehouse zone this line is categorized into. Null means unassigned. */
+  zoneId: UuidSchema.nullable().optional(),
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
@@ -1047,6 +1050,71 @@ export const CreateStructuredLocationInputSchema = z.object({
 });
 export type CreateStructuredLocationInput = z.infer<
   typeof CreateStructuredLocationInputSchema
+>;
+
+const optionalCubeNumber = (max: number) =>
+  z.preprocess(
+    (value) => (value === "" || value == null ? undefined : value),
+    z.coerce.number().positive().max(max).optional(),
+  );
+
+const optionalZoneText = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  NonEmptyStringSchema.optional(),
+);
+
+/**
+ * One submit opens every bin in an aisle/bay range. Cube inches come from the
+ * storage-class default, a measured case, or an explicit capacity.
+ */
+export const GenerateZoneLocationsInputSchema = z.object({
+  buildingId: UuidSchema,
+  zoneId: z.preprocess(
+    (value) => (value === "" || value == null ? undefined : value),
+    UuidSchema.optional(),
+  ),
+  letter: z.preprocess((value) => {
+    if (typeof value !== "string") return value == null ? undefined : value;
+    const trimmed = value.trim().toUpperCase();
+    return trimmed === "" ? undefined : trimmed;
+  }, z.string().regex(/^[A-Z]$/, { error: "Zone must be a single letter." }).optional()),
+  itemType: optionalZoneText,
+  cubeSize: CubeSizeSchema.optional(),
+  projectId: OptionalZoneLabelSchema.optional(),
+  poNumber: OptionalZoneLabelSchema.optional(),
+  inboundVelocity: VelocitySchema.optional(),
+  outboundVelocity: VelocitySchema.optional(),
+  aisleFrom: z.coerce.number().int().min(1).max(99),
+  aisleTo: z.coerce.number().int().min(1).max(99),
+  bayFrom: z.coerce.number().int().min(1).max(99),
+  bayTo: z.coerce.number().int().min(1).max(99),
+  includePick: z.boolean(),
+  includeOverhead: z.boolean(),
+  pickHeightFrom: z.enum(PICK_HEIGHTS),
+  pickHeightTo: z.enum(PICK_HEIGHTS),
+  pickPositionFrom: z.coerce.number().int().min(1).max(9),
+  pickPositionTo: z.coerce.number().int().min(1).max(9),
+  overheadFrom: z.coerce.number().int().min(4).max(9),
+  overheadTo: z.coerce.number().int().min(4).max(9),
+  overheadSides: z.enum(["A", "B", "both"]),
+  storageClass: StorageClassSchema,
+  lengthInches: optionalCubeNumber(2_000),
+  widthInches: optionalCubeNumber(2_000),
+  heightInches: optionalCubeNumber(2_000),
+  cubeCapacityCubicInches: optionalCubeNumber(10_000_000),
+  bayCubeBudgetCubicInches: optionalCubeNumber(10_000_000),
+});
+export type GenerateZoneLocationsInput = z.infer<typeof GenerateZoneLocationsInputSchema>;
+
+export const CategorizeInventoryLinesInputSchema = z.object({
+  inventoryItemIds: z.array(UuidSchema).min(1).max(500),
+  zoneId: z.preprocess(
+    (value) => (value === "" ? null : value),
+    UuidSchema.nullable(),
+  ),
+});
+export type CategorizeInventoryLinesInput = z.infer<
+  typeof CategorizeInventoryLinesInputSchema
 >;
 
 export const CreateTrailerInputSchema = z.object({

@@ -62,6 +62,7 @@ export const PERMISSIONS = {
   adjustInventory: withSecurityRoles(["manager"]),
   reopenReceiving: withSecurityRoles(["manager"]),
   manageLocations: withSecurityRoles(["manager", "it-admin"]),
+  zoneWarehouse: withSecurityRoles(["manager"]),
   manageUsers: withSecurityRoles(["manager", "it-admin"]),
   uploadBuyerOrders: withSecurityRoles(["coordinator", "manager"]),
   viewInboundForecast: withSecurityRoles([
@@ -201,6 +202,9 @@ export function canAccessPath(
   }
   if (path === "/locations" || path.startsWith("/locations/")) {
     return hasPermission(role, "manageLocations");
+  }
+  if (path === "/zoning" || path.startsWith("/zoning/")) {
+    return hasPermission(role, "zoneWarehouse");
   }
   if (path === "/network" || path.startsWith("/network/")) {
     return hasPermission(role, "viewSiteNetwork");
