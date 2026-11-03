@@ -21,7 +21,7 @@ import {
 import { NativeSelect } from "@/frontend/client/field";
 import { TransactionTypeBadge } from "@/frontend/client/status-badge";
 import { DamageLogLegend } from "@/frontend/client/damage-highlight";
-import { damageLogHighlight } from "@/lib/inventory/damage";
+import { STOCK_LOG_TYPE_OPTIONS, stockLogHighlight } from "@/lib/inventory/stock-log";
 import { formatSignedInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ScanInput } from "@/frontend/client/scan-input";
@@ -134,20 +134,16 @@ export function TransactionsTable({
           className="max-w-xs"
         />
         <NativeSelect
-          className="w-40"
+          className="w-48"
           value={type}
           onChange={(event) => setType(event.target.value)}
         >
           <option value="all"><T>All types</T></option>
-          <option value="receiving"><T>Receiving</T></option>
-          <option value="putaway"><T>Putaway</T></option>
-          <option value="move"><T>Move</T></option>
-          <option value="shipping"><T>Shipping</T></option>
-          <option value="pick"><T>Pick</T></option>
-          <option value="overage"><T>Overage</T></option>
-          <option value="shortage"><T>Shortage</T></option>
-          <option value="damage"><T>Damage</T></option>
-          <option value="import"><T>Import</T></option>
+          {STOCK_LOG_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              <T>{option.label}</T>
+            </option>
+          ))}
         </NativeSelect>
       </div>
       <DamageLogLegend />
@@ -172,14 +168,15 @@ export function TransactionsTable({
             </TableRow>
           ) : (
             table.getRowModel().rows.map((row) => {
-              const damageHighlight = damageLogHighlight(row.original.type);
+              const highlight = stockLogHighlight(row.original.type);
               const forced = isForcedCube(row.original);
               return (
                 <TableRow
                   key={row.id}
-                  data-damage-highlight={damageHighlight ? "true" : undefined}
+                  data-stock-highlight={highlight ? row.original.type : undefined}
+                  data-damage-highlight={row.original.type === "damage" ? "true" : undefined}
                   data-cube-forced={forced ? "true" : undefined}
-                  className={cn(damageHighlight, forced && FORCED_CUBE_ROW_CLASS)}
+                  className={cn(highlight, forced && FORCED_CUBE_ROW_CLASS)}
                 >
                   {row.getAllCells().map((cell) => (
                     <TableCell key={cell.id}>

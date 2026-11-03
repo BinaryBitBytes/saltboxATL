@@ -671,8 +671,8 @@ export async function updateLocationCapacity(
   rawData: unknown,
 ): Promise<ActionResult<Location>> {
   try {
-    await requireApiPermission("manageLocations");
-    const data = await updateLocationCapacityRecord(rawData);
+    const user = await requireApiPermission("manageLocations");
+    const data = await updateLocationCapacityRecord(withCreatedBy(rawData, user));
     revalidateInventory();
     revalidatePath("/locations");
     revalidatePath("/cubing");
@@ -708,9 +708,10 @@ export async function generateZoneLocations(rawData: unknown): Promise<
   }>
 > {
   try {
-    await requireApiPermission("zoneWarehouse");
-    const data = await generateZoneLocationsRecord(rawData);
+    const user = await requireApiPermission("zoneWarehouse");
+    const data = await generateZoneLocationsRecord(rawData, user.name);
     revalidatePath("/zoning");
+    revalidatePath("/transactions");
     revalidatePath("/locations");
     revalidatePath("/inventory");
     revalidatePath("/cubing");
@@ -724,9 +725,10 @@ export async function categorizeZoneLines(
   rawData: unknown,
 ): Promise<ActionResult<{ updated: number }>> {
   try {
-    await requireApiPermission("zoneWarehouse");
-    const data = await categorizeInventoryLinesRecord(rawData);
+    const user = await requireApiPermission("zoneWarehouse");
+    const data = await categorizeInventoryLinesRecord(rawData, user.name);
     revalidatePath("/zoning");
+    revalidatePath("/transactions");
     revalidatePath("/inventory");
     return { ok: true, data: clientPayload(data) };
   } catch (error) {

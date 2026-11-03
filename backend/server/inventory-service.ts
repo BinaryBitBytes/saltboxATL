@@ -92,6 +92,7 @@ import {
   openLocationHold,
 } from "@/lib/allocation/workflow";
 import { ValidationError } from "@/lib/validation/errors";
+import { pushStockHistory, recordAllocationHistory } from "@/lib/inventory/stock-log";
 import { deleteInboundEntry, refreshExpectedLoad, updateInboundEntry } from "@/lib/inbound/entry";
 import {
   applyPartialInboundPallet,
@@ -146,7 +147,7 @@ import {
   hasPostedPutaway,
   isCasePutawayPosted,
 } from "@/lib/receiving/reopen";
-import { caseCubicInches, defaultCubeCapacity, measureCaseCube, roundCube } from "@/lib/cubing/measure";
+import { caseCubicInches, defaultCubeCapacity, formatCubicInches, measureCaseCube, roundCube } from "@/lib/cubing/measure";
 import {
   buildCubingLocations,
   committedCubeForLocation,
@@ -304,6 +305,14 @@ function appendTransactions(
   if (system.transactions.length > MAX_TRANSACTIONS) {
     system.transactions.length = MAX_TRANSACTIONS;
   }
+}
+
+function rememberAllocations(system: InventorySystem, createdBy?: string) {
+  const before = (system.allocations ?? []).map((entry) => ({
+    ...entry,
+    picks: entry.picks.map((pick) => ({ ...pick })),
+  }));
+  return () => recordAllocationHistory(system, before, nowIso(), createdBy);
 }
 
 function writeStock(
@@ -1124,8 +1133,10 @@ export async function addCaseToPallet(
       caseFromInput(system, parsed.data, {}),
     );
     pallet.cases.push(created);
+    const finishAllocations = rememberAllocations(system, order.createdBy);
     directReceivingLine(system, order, pallet, created, parsed.data.fullPallet);
     syncSlotAllocations(system.allocations, order, nowIso());
+    finishAllocations();
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -1175,8 +1186,10 @@ export async function updateCaseOnPallet(
       previousPlate,
     );
     pallet.cases[index] = updated;
+    const finishAllocations = rememberAllocations(system, order.createdBy);
     directReceivingLine(system, order, pallet, updated, parsed.data.fullPallet);
     syncSlotAllocations(system.allocations, order, nowIso());
+    finishAllocations();
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
     order.updatedAt = nowIso();
@@ -1202,7 +1215,9 @@ export async function removeCaseFromPallet(
         "That case is already on-hand and cannot be removed.",
       );
     }
+    const finishAllocations = rememberAllocations(system, order.createdBy);
     releaseSlotAllocationForCase(system.allocations, caseId, nowIso());
+    finishAllocations();
     pallet.cases.splice(index, 1);
     Object.assign(pallet, recountPallet(pallet));
     order.workingPalletId = pallet.id;
@@ -1241,6 +1256,40 @@ export async function completeReceivingOrder(
       now: nowIso(),
     });
     if (!finished.ok) throw new ServiceError(finished.error);
+    const now = nowIso();
+    for (const item of order.pallets.flatMap((pallet) => pallet.cases)) {
+      if (item.putawayPostedAt) continue;
+      pushStockHistory(system, {
+        type: "receiving",
+        sku: item.sku,
+        upc: item.upc,
+        batch: item.batch,
+        occurredAt: now,
+        quantityDelta: 0,
+        locationId: item.putawayLocationId,
+        reason: `Received ${item.quantityInCase} of ${item.sku} on ${order.orderNumber}. On-hand quantity updates at putaway.`,
+        createdBy: order.createdBy ?? order.receiverName,
+        referenceType: "receiving-order",
+        referenceId: order.id,
+        division: divisionOf(order),
+      });
+    }
+    for (const line of finished.backorderLines) {
+      const sku = line.sku.trim() || order.poNumber;
+      const short = Math.max(0, line.expectedQuantity - line.receivedQuantity);
+      pushStockHistory(system, {
+        type: "receiving",
+        sku,
+        occurredAt: now,
+        quantityDelta: 0,
+        reason: `Backorder of ${short} ${sku} recorded on ${order.orderNumber}.`,
+        createdBy: order.createdBy ?? order.receiverName,
+        referenceType: "receiving-order",
+        referenceId: order.id,
+        division: divisionOf(order),
+        notes: line.description || undefined,
+      });
+    }
     return order;
   });
 }
@@ -1264,6 +1313,17 @@ export async function reopenReceivingOrder(
         nowIso(),
         parsed.data.expectedPalletCount,
       );
+      pushStockHistory(system, {
+        type: "reopen-receiving",
+        sku: order.poNumber,
+        occurredAt: nowIso(),
+        quantityDelta: 0,
+        reason: `${actorName} reopened ${order.orderNumber} for remaining freight.`,
+        createdBy: actorName,
+        referenceType: "receiving-order",
+        referenceId: order.id,
+        division: divisionOf(order),
+      });
     } catch (error) {
       throw new ServiceError(
         error instanceof Error ? error.message : "Unable to reopen this order.",
@@ -1380,7 +1440,36 @@ function directReceivingLine(
     { ...pallet.cases[index]!, fullPallet: plan.fullPallet },
     plan.slices,
   );
+  const unchanged =
+    plan.slices.length === 1 &&
+    plan.slices[0]?.locationId === caseItem.putawayLocationId &&
+    plan.slices[0]?.quantity === caseItem.quantityInCase;
   pallet.cases.splice(index, 1, ...next);
+  if (!unchanged) {
+    const now = nowIso();
+    for (const slice of plan.slices) {
+      const place =
+        plan.route === "pallet" ? "full pallet zone" : plan.route === "rack" ? "rack slot" : "shelf slot";
+      pushStockHistory(system, {
+        type: "receiving-direct",
+        sku: caseItem.sku,
+        upc: caseItem.upc,
+        batch: caseItem.batch,
+        occurredAt: now,
+        quantityDelta: slice.quantity,
+        locationId: slice.locationId,
+        reason:
+          plan.route === "pallet"
+            ? `Full pallet of ${caseItem.sku} directed to ${slice.locationCode}.`
+            : `${slice.quantity} units of ${caseItem.sku} directed to ${place} ${slice.locationCode}.`,
+        createdBy: order.createdBy ?? order.receiverName,
+        referenceType: "receiving-order",
+        referenceId: order.id,
+        division: divisionOf(order),
+        notes: "Directed for putaway. On-hand quantity is unchanged.",
+      });
+    }
+  }
   return next;
 }
 
@@ -1482,7 +1571,9 @@ function applyCubeAllocation(
     if (index < 0) continue;
     pallet.cases.splice(index, 1, ...nextCases);
   }
+  const finishAllocations = rememberAllocations(system);
   syncSlotAllocations(system.allocations, order, nowIso());
+  finishAllocations();
   Object.assign(pallet, recountPallet(pallet));
 }
 
@@ -1581,7 +1672,9 @@ export async function completePutawayOrder(
     for (const item of pending) {
       item.putawayPostedAt = now;
     }
+    const finishAllocations = rememberAllocations(system, order.createdBy ?? order.receiverName);
     completeSlotAllocations(system.allocations, new Set(pending.map((item) => item.id)), now);
+    finishAllocations();
     order.status = "completed";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
@@ -1605,6 +1698,18 @@ export async function partialReceivingPalletRecord(
       now: nowIso(),
     });
     if (!result.ok) throw new ServiceError(result.error);
+    const pallet = order.pallets.find((entry) => entry.id === palletId);
+    pushStockHistory(system, {
+      type: "partial-pallet",
+      sku: pallet?.cases[0]?.sku || order.poNumber,
+      occurredAt: nowIso(),
+      quantityDelta: 0,
+      reason: `${partialedBy} marked pallet ${pallet?.palletNumber ?? palletId} partial on ${order.orderNumber}.`,
+      createdBy: partialedBy,
+      referenceType: "receiving-order",
+      referenceId: order.id,
+      division: divisionOf(order),
+    });
     return order;
   });
 }
@@ -1652,10 +1757,14 @@ export async function cancelReceivingOrder(
         nextId: createId,
       });
       if (!result.ok) throw new ServiceError(result.error);
+      const finishAllocations = rememberAllocations(system, actor?.id);
       releaseSlotAllocationsForOrder(system.allocations, order.id, nowIso());
+      finishAllocations();
       return { order, documentIds: result.documentIds };
     }
+    const finishAllocations = rememberAllocations(system, actor?.id);
     releaseSlotAllocationsForOrder(system.allocations, order.id, nowIso());
+    finishAllocations();
     order.status = "cancelled";
     order.workingPalletId = null;
     order.updatedAt = nowIso();
@@ -1866,9 +1975,11 @@ export async function completeCustomerOrderPickRecord(
     }
     const index = system.customerOrders.findIndex((entry) => entry.id === orderId);
     system.customerOrders[index] = result.order;
+    const finishAllocations = rememberAllocations(system, completedBy);
     for (const line of result.order.lines) {
       consumePickAllocations(system.allocations, line.inventoryItemId, line.quantity, now);
     }
+    finishAllocations();
     return result.order;
   });
 }
@@ -2025,6 +2136,16 @@ export async function saveItemCubeRecord(rawData: unknown): Promise<ItemCube> {
     if (index >= 0) system.itemCubes[index] = cube;
     else system.itemCubes.push(cube);
     system.itemCubes.sort((left, right) => left.sku.localeCompare(right.sku));
+    pushStockHistory(system, {
+      type: "cube",
+      sku: cube.sku,
+      occurredAt: cube.cubedAt,
+      quantityDelta: 0,
+      reason: `Cubed ${cube.sku} at ${formatCubicInches(cube.cubicInches)}, ${cube.unitsPerCase} per case.`,
+      createdBy: cube.cubedBy,
+      referenceType: "item-cube",
+      division: divisionOf(cube),
+    });
     return cube;
   });
 }
@@ -2044,6 +2165,22 @@ export async function updateLocationCapacityRecord(
     }
     location.storageClass = parsed.data.storageClass;
     location.cubeCapacityCubicInches = parsed.data.cubeCapacityCubicInches;
+    const actor =
+      rawData && typeof rawData === "object" && !Array.isArray(rawData)
+        ? (rawData as { createdBy?: string }).createdBy
+        : undefined;
+    pushStockHistory(system, {
+      type: "location-capacity",
+      sku: location.code,
+      occurredAt: nowIso(),
+      quantityDelta: 0,
+      locationId: location.id,
+      reason: `Set ${location.code} to ${location.storageClass} with ${formatCubicInches(location.cubeCapacityCubicInches)}.`,
+      createdBy: actor,
+      referenceType: "location",
+      referenceId: location.id,
+      division: divisionOf(location),
+    });
     return location;
   });
 }
@@ -2448,6 +2585,7 @@ export async function initiatePickAllocationRecord(
       throw new ServiceError("That inventory is not in an active location.");
     }
     if (!system.allocations) system.allocations = [];
+    const finishAllocations = rememberAllocations(system, parsed.data.createdBy);
     const plan = planPickAllocation({
       item,
       orders: system.customerOrders ?? [],
@@ -2458,6 +2596,7 @@ export async function initiatePickAllocationRecord(
       id: createId(),
     });
     if (!plan.ok) throw new ServiceError(plan.error);
+    finishAllocations();
     return plan.allocation;
   });
 }
@@ -2477,6 +2616,7 @@ export async function initiateSlottingRecord(
       throw new ServiceError("This order has no inventory waiting to be slotted.");
     }
     if (!system.allocations) system.allocations = [];
+    const finishAllocations = rememberAllocations(system, parsed.data.createdBy);
     const directed: CaseItem[] = [];
     let undirectedSku: string | null = null;
     for (const item of targets) {
@@ -2529,6 +2669,7 @@ export async function initiateSlottingRecord(
     if (results.length === 0) {
       throw new ServiceError("This order has no inventory waiting to be slotted.");
     }
+    finishAllocations();
     return results;
   });
 }
@@ -2537,8 +2678,11 @@ export async function releaseAllocationRecord(rawData: unknown): Promise<Invento
   const parsed = parseWithSchema(ReleaseAllocationInputSchema, rawData);
   if (!parsed.success) throw new ServiceError(parsed.error);
   return updateSystem((system) => {
+    const finishAllocations = rememberAllocations(system);
     try {
-      return releaseOpenAllocation(system.allocations, parsed.data.allocationId, nowIso());
+      const released = releaseOpenAllocation(system.allocations, parsed.data.allocationId, nowIso());
+      finishAllocations();
+      return released;
     } catch (error) {
       allocationError(error);
     }

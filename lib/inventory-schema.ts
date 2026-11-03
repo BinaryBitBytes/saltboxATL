@@ -664,10 +664,19 @@ export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
 export const INVENTORY_TRANSACTION_TYPES = [
   "receiving",
+  "receiving-direct",
+  "partial-pallet",
+  "reopen-receiving",
+  "allocation",
+  "allocation-release",
   "putaway",
   "move",
   "shipping",
   "pick",
+  "cube",
+  "zone",
+  "zone-locations",
+  "location-capacity",
   "overage",
   "shortage",
   "damage",
@@ -675,6 +684,9 @@ export const INVENTORY_TRANSACTION_TYPES = [
   "site-transfer",
   "transfer-outbound",
   "transfer-inbound",
+  "inbound-po-cancel",
+  "dock-freight-delete",
+  "check-in",
 ] as const;
 export type InventoryTransactionType = (typeof INVENTORY_TRANSACTION_TYPES)[number];
 

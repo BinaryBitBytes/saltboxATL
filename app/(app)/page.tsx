@@ -23,7 +23,7 @@ import {
   TransactionTypeBadge,
 } from "@/frontend/client/status-badge";
 import { formatSignedInt, uniqueSkuCount } from "@/lib/format";
-import { damageLogHighlight } from "@/lib/inventory/damage";
+import { stockLogHighlight } from "@/lib/inventory/stock-log";
 import { emptyActiveLocations } from "@/lib/locations/availability";
 
 export default async function Home() {
@@ -477,11 +477,12 @@ export default async function Home() {
               <p className="text-muted-foreground"><T>No stock movements yet. Complete putaway or post an adjustment.</T></p>
             ) : (
               transactions.slice(0, 8).map((entry) => {
-                const highlight = damageLogHighlight(entry.type);
+                const highlight = stockLogHighlight(entry.type);
                 return (
                 <div
                   key={entry.id}
-                  data-damage-highlight={highlight ? "true" : undefined}
+                  data-stock-highlight={highlight ? entry.type : undefined}
+                  data-damage-highlight={entry.type === "damage" ? "true" : undefined}
                   className={`flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 ${highlight ?? "border-border"}`}
                 >
                   <span className="min-w-0 truncate">

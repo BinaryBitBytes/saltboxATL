@@ -99,10 +99,19 @@ const transactionVariant: Record<
   "outline" | "secondary" | "default" | "destructive"
 > = {
   receiving: "secondary",
+  "receiving-direct": "secondary",
+  "partial-pallet": "outline",
+  "reopen-receiving": "outline",
+  allocation: "default",
+  "allocation-release": "outline",
   putaway: "default",
   move: "default",
   shipping: "outline",
   pick: "secondary",
+  cube: "secondary",
+  zone: "secondary",
+  "zone-locations": "outline",
+  "location-capacity": "outline",
   overage: "default",
   shortage: "destructive",
   damage: "destructive",
@@ -110,6 +119,9 @@ const transactionVariant: Record<
   "site-transfer": "default",
   "transfer-outbound": "outline",
   "transfer-inbound": "secondary",
+  "inbound-po-cancel": "destructive",
+  "dock-freight-delete": "destructive",
+  "check-in": "secondary",
 };
 
 export function TransactionTypeBadge({ type }: { type: string }) {
